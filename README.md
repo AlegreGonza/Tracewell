@@ -6,6 +6,8 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 
 > **Project status.** The analysis engine, the HTTP API, the web interface, live capture and the **desktop window** (pywebview) are working and tested; `python main.py` opens the app in its own window. Tracewell is deployed **from source** with a one-command installer ([`instalar.ps1`](instalar.ps1) / [`instalar.sh`](instalar.sh)); a packaged executable was deliberately **not** built (see [`docs/despliegue.md`](docs/despliegue.md) and [`docs/empaquetado_futuro.md`](docs/empaquetado_futuro.md)). The desktop window has only been validated on **Windows**.
 
+> **Language note.** The application UI and most of the documentation are in Spanish. This README is the English overview. The original Spanish version is kept as [`README.es.md`](README.es.md).
+
 ---
 
 ## Table of contents
@@ -42,7 +44,7 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - **Site name per session**, taken from the capture itself (DNS responses and the TLS SNI), with no external lookups.
 - **Packet detail by layers** (Ethernet, IP, TCP/UDP/ICMP, data) with a plain-language hint for every field; hovering a field highlights its bytes in the hex dump.
 - **Follow the conversation** of a TCP session (like Wireshark's *Follow TCP Stream*) and a **traffic-over-time** chart.
-- **Teaching first.** Tracewell exists to lower the barrier that makes Wireshark intimidating: a **?** help button on every section with the *Wireshark equivalent*, a searchable **glossary**, a plain-language **"In simple words"** explanation of every session with a **connection diagram** (SYN → SYN+ACK → ACK → data → FIN), a guided case built on the demo, and a [Wireshark ↔ Tracewell equivalence table](docs/guia_didactica.md).
+- **Teaching first.** Tracewell exists to lower the barrier that makes Wireshark intimidating: a **?** help button on every section with the *Wireshark equivalent*, a searchable **glossary**, a plain-language **"In simple words"** explanation of every session with a **connection diagram** (SYN → SYN+ACK → ACK → data → FIN), a guided case built on the demo, and a [Wireshark ↔ Tracewell equivalence table](docs/guia_didactica.md) (in Spanish).
 - **Understand the capture:** a **MITRE ATT&CK map** of your alerts, a **hosts** view with a "who talks to whom" graph (an icon per host type, and the range owner such as Google or Cloudflare from a small offline table, shown as a hint and never overriding names found in the capture), a **DNS** table (NXDOMAIN, random-looking names), a plaintext **HTTP** analyzer that extracts files and reports their **SHA-256** and real type, and **TLS** details with the **JA4** client fingerprint and the server certificate (TLS ≤ 1.2).
 - **Network support → System (read-only):** a separate screen, reachable from the top menu, that shows the machine Tracewell runs on: resource summary, running processes (RAM, CPU, path, parent, connections, SHA-256 and code signature on demand), open ports with who can reach them, active connections with the program that owns each one, services and startup programs. It never changes anything: there is no kill/disable button and every route is a `GET`. Windows and Linux; the Linux paths are not tested on a real Linux machine.
 - **Network support → Network (read-only):** network configuration, a layer-by-layer *Is the Internet down?* check, latency, devices on the local network (with vendor by MAC when `data/oui.csv` is provided), Wi-Fi status and disconnection history, a background **outage monitor** with a timeline, and small tools (ping, continuous ping, traceroute, port check, RDP reachability, clock offset, duplicate IP). Nothing changes the machine: when a problem is found the fix is shown as text only. Tests that reach out (Internet check, latency, clock) run only when you press their button.
@@ -50,7 +52,7 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - Exports the analysis to JSON.
 - **Demo mode** with a bundled synthetic capture that triggers all three rules.
 
-**Out of scope for the MVP:** device discovery, asset inventory, JA4 fingerprinting, PDF reports, code signing.
+**Out of scope for the MVP:** device discovery, asset inventory, PDF reports, code signing.
 
 ---
 
@@ -80,7 +82,7 @@ Linux / macOS:
 ./iniciar.sh --serve-only
 ```
 
-Full details, requirements and troubleshooting: [`docs/despliegue.md`](docs/despliegue.md). The manual steps below do the same thing by hand.
+Full details, requirements and troubleshooting: [`docs/despliegue.md`](docs/despliegue.md) (in Spanish). The manual steps below do the same thing by hand.
 
 ### Download only the app (no tests)
 
@@ -192,17 +194,17 @@ You can also run the API on its own, without `main.py`:
 
 **Traffic over time.** A bar chart of packets (or bytes) per interval, with the peak called out in text. Spikes, silences and regular rhythms stand out.
 
-**Jump from an alert.** Expand an alert and press *Ver las sesiones de [IP]* to filter the sessions table by that source IP.
+**Jump from an alert.** Expand an alert and press *Ver las sesiones de [IP]* (see the sessions of [IP]) to filter the sessions table by that source IP.
 
 **Site name.** When a session has a known name (from a DNS answer or the TLS server name in the capture) a **Site** column appears. It is a hint, not proof: a shared IP (CDN) can serve many names, and with encrypted DNS or ECH the name is not visible.
 
 **Packet layers.** Selecting a packet shows its hex dump and a layer tree below it. Hover or focus a field to highlight its bytes; click to pin the highlight. Hints such as "TTL 128: typical of Windows" are indicative, not proof.
 
-**Follow the conversation.** For a TCP session, *Ver la conversación* rebuilds what each side said, in order, dropping retransmissions and marking missing bytes. With plaintext protocols (FTP, HTTP, Telnet) it shows the content as is, **passwords included**, just like Wireshark. TLS sessions are reported as encrypted.
+**Follow the conversation.** For a TCP session, *Ver la conversación* (view the conversation) rebuilds what each side said, in order, dropping retransmissions and marking missing bytes. With plaintext protocols (FTP, HTTP, Telnet) it shows the content as is, **passwords included**, just like Wireshark. TLS sessions are reported as encrypted.
 
 **Triage.** In a session's detail you can write a note and mark it *reviewed*; the table shows a ✓ and a *nota* tag. Notes live only in memory for the current analysis (they are not written to disk and disappear when you open another capture). The **Indicators (IOC)** panel loads a text file with one IP, CIDR network or domain per line (`#` for comments); matching sessions get an **IOC** badge. Domains are matched against the site names above.
 
-**Leaving a capture.** With something loaded, the toolbar shows **Salir del demo** (or **Cerrar captura** for any other analysis). It discards the analysis, on the server too, and returns to the start screen; the IOC list is kept, notes are dropped. In the desktop window, downloads (*Export JSON*, *Informe HTML*) open the system **Save as** dialog (pywebview cancels downloads unless `ALLOW_DOWNLOADS` is enabled, which `main.py` does).
+**Leaving a capture.** With something loaded, the toolbar shows **Salir del demo** (leave the demo) or **Cerrar captura** (close capture) for any other analysis. It discards the analysis, on the server too, and returns to the start screen; the IOC list is kept, notes are dropped. In the desktop window, downloads (*Export JSON*, *Informe HTML*) open the system **Save as** dialog (pywebview cancels downloads unless `ALLOW_DOWNLOADS` is enabled, which `main.py` does).
 
 **Table colors.** Protocols get a colored tag (TCP, UDP, ICMP), each process gets its own color dot (assigned in order of first appearance, so the first eight never share a color), rows that match an IOC are tinted red and reviewed rows are dimmed. The text is always shown: color only helps, it is never the only signal.
 
@@ -290,7 +292,7 @@ tracewell/
 │       └── lib/                  # formatters and help texts
 ├── rules/                        # YAML detection rules
 ├── samples/                      # demo.pcap and generate_demo.py (synthetic traffic)
-├── docs/                         # decisiones.md, guia_didactica.md, checklist_hardware.md, ...
+├── docs/                         # decisiones.md, guia_didactica.md, checklist_hardware.md, ... (Spanish)
 └── pyproject.toml, requirements*.txt, crear_zip.ps1
 ```
 
@@ -455,11 +457,11 @@ npm test
 
 There are more than 1,200 Python tests and more than 190 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
 
-**Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](docs/checklist_hardware.md).
+**Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](docs/checklist_hardware.md) (in Spanish).
 
 ### Static analysis (optional)
 
-`mypy` (with `--check-untyped-defs`) passes with no issues. A quality report with recommended tools (ruff, mypy, pip-audit, ESLint) and performance measurements is in [`docs/informe_calidad.md`](docs/informe_calidad.md). These tools are **not** added to `pyproject.toml` yet.
+`mypy` (with `--check-untyped-defs`) passes with no issues. A quality report with recommended tools (ruff, mypy, pip-audit, ESLint) and performance measurements is in [`docs/informe_calidad.md`](docs/informe_calidad.md) (in Spanish). These tools are **not** added to `pyproject.toml` yet.
 
 ### Regenerating the demo capture
 
@@ -508,15 +510,17 @@ These are deliberate MVP trade-offs.
 - [x] Live capture validated on real Windows hardware and on Linux (root)
 - [ ] Final run of the full test suite in a clean environment
 - [ ] Desktop window on Linux and macOS
-- Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` in case it is revisited.
+- Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` (in Spanish) in case it is revisited.
 
 ---
 
 ## Further documentation
 
-- [`docs/guia_didactica.md`](docs/guia_didactica.md) — how Tracewell teaches, and a Wireshark ↔ Tracewell equivalence table (written in Spanish).
-- [`docs/despliegue.md`](docs/despliegue.md) — installation, update, uninstall and troubleshooting (written in Spanish).
-- [`docs/empaquetado_futuro.md`](docs/empaquetado_futuro.md) — researched PyInstaller plan, kept for later (written in Spanish).
-- [`docs/decisiones.md`](docs/decisiones.md) — every design decision and why, step by step (written in Spanish).
+All of these are in Spanish:
+
+- [`docs/guia_didactica.md`](docs/guia_didactica.md) — how Tracewell teaches, and a Wireshark ↔ Tracewell equivalence table.
+- [`docs/despliegue.md`](docs/despliegue.md) — installation, update, uninstall and troubleshooting.
+- [`docs/empaquetado_futuro.md`](docs/empaquetado_futuro.md) — researched PyInstaller plan, kept for later.
+- [`docs/decisiones.md`](docs/decisiones.md) — every design decision and why, step by step.
 - [`docs/checklist_hardware.md`](docs/checklist_hardware.md) — manual live-capture validation.
 - [`docs/informe_calidad.md`](docs/informe_calidad.md) — static analysis and performance report.
