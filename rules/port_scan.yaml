@@ -1,0 +1,14 @@
+id: port_scan
+name: Escaneo de puertos
+description: >
+  Una misma IP envió intentos de conexión (SYN) a muchos puertos distintos
+  de un mismo destino en poco tiempo, patrón típico de reconocimiento.
+severity: high
+detector: port_scan
+mitre:
+  technique: T1046
+  name: Network Service Discovery
+  tactic: Discovery
+params:
+  min_ports: 15        # puertos distintos para disparar
+  window_seconds: 60   # ventana de tiempo

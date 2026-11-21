@@ -1,0 +1,16 @@
+id: large_upload
+name: Subida grande de datos
+description: >
+  Mucho más tráfico saliente que entrante hacia un mismo destino externo. Puede ser
+  exfiltración de datos, pero también una copia de seguridad, una videollamada o la
+  subida de un archivo: confirmá el destino y el proceso.
+severity: medium
+detector: large_upload
+mitre:
+  technique: T1048
+  name: "Exfiltration Over Alternative Protocol"
+  tactic: Exfiltration
+params:
+  min_bytes: 10000000
+  min_ratio: 5
+  external_only: true

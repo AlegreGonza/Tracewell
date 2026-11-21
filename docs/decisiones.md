@@ -1,0 +1,336 @@
+# Decisiones de diseño
+
+## Paso 0: estructura del proyecto
+- `core/` contiene la lógica pura (pcap, sesiones, reglas, export). No importa FastAPI ni React.
+  Por qué: se puede testear sin servidor ni UI, y reutilizar desde CLI o ventana.
+- `api/` solo traduce peticiones HTTP a llamadas a `core`.
+- Los tests viven en `tests/` dentro de cada módulo (con `__init__.py` para evitar choques de nombres en pytest).
+- La captura en vivo queda aislada en `backend/domain/pcap/live.py`; no se prueba contra red real en CI.
+
+## Paso 1: lector de pcap (backend/domain/pcap/reader.py)
+- **dpkt** (dependencia #1): lee pcap y pcapng en streaming, es pura Python (sin compilar, simplifica PyInstaller) y es liviana.
+- Streaming con generadores: memoria constante aunque el pcap pese GB.
+- Formato detectado por *magic number*, no por extensión.
+- `PcapError(ValueError)`: `core` oculta las excepciones de dpkt; los llamadores solo conocen la nuestra.
+- Limitación conocida: si el payload del ÚLTIMO paquete está cortado, dpkt entrega el buffer más corto sin avisar (no expone caplen). Si la cabecera del paquete está cortada, sí falla y lo reportamos como `PcapError`.
+- Entorno: venv en `.venv`, dependencias de desarrollo en `[project.optional-dependencies].dev` (pytest, pytest-cov).
+
+## Paso 1 (revisión): detectar truncamiento y snaplen — opción A+
+**Problema:** dpkt, en pcap clásico, entrega el payload del último paquete aunque llegue más corto que su `caplen`, y descarta `caplen`/`origlen`. No sabemos si el archivo está cortado ni si el paquete quedó limitado por snaplen.
+
+**Teoría:** `origlen` = largo en el cable; `snaplen` = tope de captura configurado por quien captura; `caplen = min(origlen, snaplen)` = bytes guardados.
+- Archivo cortado: llegan menos bytes que `caplen` → archivo DAÑADO.
+- Limitado por snaplen: `caplen < origlen` → archivo SANO, pero con payload incompleto.
+
+**Por qué importa (SOC):** una regla que busca `USER`/`PASS` en un payload recortado por snaplen puede no encontrarlo aunque estuviera en el cable (falso negativo). El analista debe poder ver "paquete truncado" y no leer ausencia de evidencia como evidencia de ausencia.
+
+**Opciones evaluadas** (investigadas por el subagente investigador, leyendo el código de dpkt 1.9.8):
+- A: wrapper del archivo que detecta lecturas cortas. Cubre solo archivo cortado.
+- **A+ (elegida):** el mismo wrapper (`_TapFile`) además parsea con `struct` los 16 bytes de cabecera que dpkt le pide por `read(16)`, y así recupera `origlen`. Un solo lector, sin dependencias nuevas.
+- B: parsear cabeceras con un segundo lector en paralelo. Más código, riesgo de desincronizarse.
+- C: otra librería (scapy, pcapy-ng). Dependencia pesada, no mejora este caso.
+
+**Por qué A+:** cubre ambos casos con el menor costo, y es mejor cambiar el contrato ahora (antes de tener reglas y API encima) que después.
+
+**Contrato nuevo:** `iter_packets` devuelve `Packet(ts, data, origlen)` con propiedad `snaplen_limited`. Paquete con payload cortado en archivo → `PcapError` antes de entregarlo (los anteriores ya salieron).
+
+**Límites conocidos:**
+- Depende del patrón de lecturas de dpkt (`read(24)`, `read(16)`, `read(caplen)`); los tests de caracterización avisan si cambia.
+- pcapng: `origlen` es `None` (dpkt no lo expone); el truncamiento por archivo cortado ya lo detecta dpkt con `NeedData`.
+- Magics "modificados" de pcap: `origlen = None`.
+
+- Pendiente (a resolver al empezar el Paso 2): con magic de nanosegundos dpkt devuelve el timestamp como decimal.Decimal, no float; hay que normalizar a float en Packet.ts (con su test) antes de calcular duraciones de sesión.
+
+## Paso 2: sesiones (backend/domain/sessions/grouper.py)
+- **Sesión = flujo bidireccional por 5-tupla** (IP origen, puerto origen, IP destino, puerto destino, protocolo). La clave ordena los dos extremos para que petición y respuesta caigan en la misma sesión.
+- **Iniciador:** `src` es quien envió el primer paquete visto; en una captura que arranca a mitad de conversación puede no ser el cliente real (limitación aceptada).
+- **Memoria:** guardamos un resumen por sesión (contadores y tiempos), no los paquetes. Costo O(sesiones), no O(tamaño del archivo).
+- **bytes** suma `origlen` (lo que viajó) y si no existe, `len(data)`. Se apoya en la decisión A+ del Paso 1.
+- **Paquetes sin sesión:** no-IP (ARP, etc.) se cuentan en `non_ip`; IP/TCP/UDP ilegible o fragmento IPv4 no inicial (sin puertos) en `malformed`. Nunca inventamos puertos.
+- **Solo Ethernet (linktype 1)** por ahora; otros lanzan `UnsupportedLinktype`.
+- **Sin dependencias nuevas** (dpkt ya cubre Ethernet/IP/TCP/UDP).
+- Resuelto: `Packet.ts` ahora es siempre `float` (con nanosegundos dpkt devolvía `Decimal`).
+- Bug hallado por fuzzing en el Paso 2: IPv6 con ESP (cifrado) no tiene `ip.p` en dpkt y tumbaba el agrupado con `AttributeError`. Corregido: se usa la última cabecera de extensión (o `nxt`) como protocolo (`IP-50` para ESP). Cubierto con test de regresión. Se reemplazó `ip.off` (deprecado) por `ip.offset`.
+
+## Paso 3: filtros y estadísticas (backend/domain/sessions/query.py)
+- **Un solo módulo `query.py`** con `filter_sessions` y `compute_stats`: ambos son consultas sobre sesiones ya resumidas, nunca sobre el pcap (baratas y repetibles cuando el usuario cambia un filtro).
+- **Filtros combinados con AND**; un criterio en `None` no filtra. `ip` y `port` coinciden con origen O destino (la sesión es bidireccional).
+- **IP comparada como objeto `ipaddress`**, no como texto: `::1` y `0:0:0:0:0:0:0:1` son la misma dirección.
+- **Validación antes de recorrer**: un filtro inválido lanza `InvalidFilter` (hereda de ValueError) en vez de devolver una lista vacía que parezca "no hay tráfico". `bool` se rechaza como puerto.
+- **`compute_stats` acepta `GroupingResult` o lista de sesiones**: así las estadísticas pueden seguir al filtro. `non_ip` y `malformed` se informan aparte para que el total no esconda tráfico.
+- Sin dependencias nuevas (`ipaddress` es de la biblioteca estándar).
+- **Endurecimiento de `filter_sessions` (hallazgos del fuzzing del subagente de tests):** `protocol` vacío, `ip`/`protocol` que no son texto, e IPv6 con zona (`fe80::1%eth0`) ahora lanzan `InvalidFilter`. Criterio: un filtro mal escrito debe fallar ruidosamente; devolver `[]` se lee como "no hay tráfico" (falso negativo). Se deja igual (decisión consciente): `::ffff:10.0.0.1` no equivale a `10.0.0.1`; y no se protege contra sesiones con IP corrupta porque el agrupado ya garantiza IPs válidas.
+
+## Paso 4: motor de reglas (backend/domain/rules/engine.py + rules/*.yaml)
+- **Regla = dato (YAML), detector = código.** El YAML fija nombre, severidad, técnica MITRE y umbrales; el detector (Python) sabe buscar el patrón. Se ajustan umbrales sin tocar código y un archivo nunca ejecuta código (`yaml.safe_load`).
+- **Dependencia #2: PyYAML.** Formato legible para analistas; `safe_load` evita ejecución arbitraria.
+- **Validación estricta al cargar:** campos desconocidos (typos como `severty`), params fuera de rango, ids duplicados y técnicas MITRE mal formadas lanzan `RuleError` con el nombre del archivo. Misma filosofía que los filtros: fallar fuerte, no ignorar en silencio.
+- **Una sola pasada:** cada paquete se decodifica una vez y se ofrece a todos los detectores. Memoria acotada por detector.
+- **Detectores:**
+  - `port_scan`: SYN puros (sin ACK) a ≥ `min_ports` puertos distintos de un mismo destino en `window_seconds`. Una alerta por par origen/destino.
+  - `ftp_cleartext`: USER/PASS en el puerto 21. **La alerta no guarda la contraseña** (solo su largo): los reportes se comparten.
+  - `dns_suspicious`: label largo (> `max_label_length`) o de alta entropía de Shannon (≥ `min_entropy` con label ≥ `entropy_min_label`). Típico de túneles DNS/DGA.
+- **Mapeo MITRE (a revisar por el analista):** port_scan → T1046 (Discovery); ftp_cleartext → T1040 Network Sniffing (Credential Access, la exposición que permite el sniffing); dns_suspicious → T1071.004 (Command and Control). Son decisiones de criterio, no verdades absolutas.
+- **Límites conocidos:** FTP con USER/PASS partidos en varios segmentos TCP no se detecta; el DNS solo se mira por UDP/53; heurísticas con umbrales fijos pueden dar falsos positivos (CDNs con nombres largos).
+- Un paquete ilegible nunca tumba el análisis (tráfico malicioso a veces está malformado a propósito).
+
+## Paso 5: exportación JSON (backend/domain/export/json_export.py)
+- **Contrato versionado:** `schema_version` = 1; un test fija el conjunto exacto de claves para que un cambio accidental falle.
+- **Privacidad:** `source` guarda solo el nombre del archivo, no la ruta (el reporte se comparte y la ruta filtraría usuario y carpetas).
+- **Estricto:** `allow_nan=False` (NaN no es JSON válido), `ensure_ascii=False` (evidencia legible), escritura atómica (`.tmp` + `os.replace`).
+- Reportes filtrados: los ids conservan el índice del análisis completo; las stats se calculan sobre lo filtrado.
+- Pendiente menor: si `os.replace` falla (disco lleno, archivo bloqueado en Windows) puede quedar un `.tmp` huérfano.
+
+## Paso 6: API (backend/api/app.py) y piezas de core que la sostienen
+- **La API solo traduce.** La lógica de "analizar una captura" vive en `backend/domain/analysis/analyzer.py` (carpeta nueva con su `tests/`, aprobada) para que una CLI o la ventana la reutilicen sin levantar un servidor.
+- **Dependencias #3 y #4: FastAPI + Uvicorn** (validación de parámetros, docs automáticas, estándar) y **httpx** solo como dependencia de desarrollo (lo requiere `TestClient`).
+- **Un análisis en memoria** (app de escritorio, un usuario). Sin análisis cargado → 409.
+- **Errores de core → HTTP:** archivo inexistente 404, pcap inválido/linktype no soportado/filtro inválido 422, carpeta 400, permisos 403, estado inválido 409, driver/captura 503. Los mensajes no incluyen rutas del usuario.
+- **Paquetes de una sesión sin guardarlos:** `Session.key` permite releer el pcap y filtrar. Costo O(archivo) por consulta; a cambio, memoria constante. Si duele, se construye un índice de offsets más adelante.
+- **Dos pasadas** (sesiones, luego reglas): cada consumidor queda simple. Se unifica si el costo duele en capturas enormes.
+- **Hex dump** en `backend/domain/pcap/hexdump.py`; `get_packet` en `reader.py`.
+- **Modo demo:** `samples/generate_demo.py` genera `samples/demo.pcap` (tráfico sintético determinista que dispara las 3 reglas).
+- La API se enlaza solo a 127.0.0.1 (lo fija `main.py` en el Paso 9): `/api/analyze` lee rutas locales.
+
+## Paso 7: captura en vivo (backend/domain/pcap/live.py)
+- **Scapy en vez de pcapy-ng (dependencia #5).** Instala con pip en Windows/Linux/macOS sin compilar (pcapy-ng pide headers de libpcap / Npcap SDK) y lista interfaces de forma portable. Costo: es pesada para el ejecutable; por eso se **importa de forma perezosa** y solo desde `live.py`: la app arranca aunque Scapy/Npcap no estén.
+- **La captura en vivo es un productor de .pcap.** Escribe un archivo normal y todo lo demás (sesiones, reglas, API, export) lo analiza como cualquier pcap. Cero código especial aguas abajo.
+- **Interfaz simulada:** `PacketSource` es un protocolo mínimo (`start(on_packet)`, `stop()`); los tests inyectan una fuente falsa. Nada de red real en CI; validación real en `docs/checklist_hardware.md`.
+- **Hilos:** la fuente llama a `on_packet` desde su hilo; un hilo monitor es el único que detiene la fuente y cierra el archivo (detener desde el hilo del sniffer podría bloquearse esperándose a sí mismo).
+- **Límites por defecto** (1.000.000 paquetes, 600 s, 200 MB): una captura olvidada no llena el disco.
+- **Solo Ethernet** (linktype 1): paquetes de otra capa 2 (p. ej. loopback) se descartan y se cuentan en vez de escribir datos corruptos.
+- **Privilegios:** requiere administrador/root (y Npcap en Windows); el error es `PermissionDenied` con un mensaje accionable.
+
+## Estado al cerrar el Paso 7
+- Suite completa: 593 tests, 0 fallos. Cobertura: core 99%, backend/api/app.py 100%, live.py 97% (solo falta el cuerpo de `_scapy_list_interfaces`, que exige Scapy real).
+- Bugs hallados y corregidos por los tests en esta etapa: límites `NaN`/infinito pasaban la validación de `LiveCapture`; una excepción en `source.stop()` salía como traceback del hilo monitor (ahora se guarda en `LiveCapture.error`).
+- Pendientes: `.tmp` huérfano en `write_json` si falla `os.replace`; validación real en hardware (`docs/checklist_hardware.md`); ejecución final de todos los tests en un entorno limpio (Paso 10).
+
+## Paso 8: interfaz React (frontend/)
+- **Dependencias de runtime mínimas: `react` y `react-dom`.** Sin librería de UI, de estado ni de rutas: la app es una sola pantalla con estado simple (un análisis, filtros, una sesión seleccionada) y CSS propio con variables (modo claro/oscuro automático por `prefers-color-scheme`).
+- **Dependencias de desarrollo:** `vite` + `@vitejs/plugin-react` (compilar a estáticos que sirve FastAPI) y `vitest` + `jsdom` + Testing Library (probar lógica y componentes sin navegador).
+- **Mismo origen en producción:** FastAPI sirve `frontend/dist`, así que no hay CORS. En desarrollo (`npm run dev`) Vite reenvía `/api` a `127.0.0.1:8000`.
+- **Un solo cliente de API (`src/api.js`):** ningún componente llama a `fetch`. Normaliza los errores de FastAPI (texto o lista de validación) y distingue "no se pudo conectar" (status 0).
+- **Datos de red hostiles → siempre texto.** Evidencia de alertas, hex dump y nombres vienen de tráfico que puede ser malicioso: React los escapa y nunca se usa `dangerouslySetInnerHTML`. Los enlaces externos llevan `rel="noopener noreferrer"`.
+- **Un filtro inválido nunca se muestra como "sin resultados".** La tabla muestra el error del filtro en su lugar (misma lógica que `InvalidFilter` en el backend: una tabla vacía se lee como "no hay tráfico", un falso negativo).
+- **Los filtros se aplican al enviar el formulario**, no por tecla: evita una petición (y un error de IP inválida) por cada carácter.
+- **Los paquetes sin sesión (`non_ip`) y dañados (`malformed`) se muestran siempre**, aunque sean 0.
+- **Severidad con texto + color**, nunca solo color. Horas en UTC (cruzar capturas con logs de otros equipos exige una hora sin ambigüedad).
+- **Exportar = enlace de descarga del servidor** con los filtros activos en la URL: se exporta lo que el analista está viendo.
+- **Al recargar la página se retoma el análisis** que el servidor ya tiene (409 = nada cargado, caso normal).
+- **Gancho para el Paso 9:** si existe `window.pywebview.api.pick_file`, aparece el botón "Examinar…" con el diálogo nativo; en el navegador se escribe la ruta.
+- **Captura en vivo:** el sondeo (1 s) detecta si terminó sola por un límite y pide el análisis automáticamente, una sola vez.
+- **Verificado en el navegador:** modo demo, alertas con evidencia (contraseña oculta), filtros, detalle de sesión con hex dump, error de IP inválida, ancho de 375 px sin desborde horizontal, e interfaces reales listadas. NO se inició una captura real (va en `docs/checklist_hardware.md`).
+- **Bugs del frontend hallados por los tests y corregidos (Paso 8):** `formatBytes(1048575)` mostraba "1024.0 KB" y `formatDuration` mostraba "1000 ms" / "60.00 s" en los bordes (se redondeaba después de elegir la unidad); `SessionsTable` pedía por un instante la página vieja con filtros nuevos (un efecto aparte reseteaba la página). Ahora la página queda atada a los filtros con los que se eligió.
+- **Estado al cerrar el Paso 8:** Python 593 tests pasan; frontend 159 tests (Vitest) pasan. Pendiente de la entrega final: ejecutar todo desde cero en un entorno limpio (Paso 10).
+
+## Endurecimiento tras el informe de calidad (docs/informe_calidad.md)
+Aplicados a pedido ("los que pueden romper todo"); los de mayor costo de código quedan para discutirse aparte.
+- **Hallazgo 1, memoria acotada.** `group_packets(max_sessions=500_000)`: al alcanzar el tope se descartan las sesiones NUEVAS (las existentes siguen actualizándose) y el resultado queda `truncated` con `untracked_packets`; la UI muestra un aviso de análisis parcial. Los detectores usan `_LRU` (`MAX_TRACKED = 100_000` por estructura). `port_scan` guarda `{puerto: último ts}` por par (repetir un puerto no crece la memoria; ≤ `min_ports` entradas por par) y `min_ports` se acota a 2..65535. **Costo asumido:** con más de 100.000 pares distintos se "olvida" a los menos recientes; un escaneo lento repartido entre tantos pares podría pasar inadvertido.
+- **Hallazgo 3, páginas externas contra la API.** `TrustedHostMiddleware` (solo `127.0.0.1`/`localhost`: frena DNS rebinding) y rechazo 403 de cualquier `Origin` no local (frena CSRF). Sin `Origin` se permite (curl, tests). El bind a `127.0.0.1` lo fija `main.py` en el Paso 9.
+- **Hallazgo 4, captura en vivo.** `source.stop()` corre en un hilo con `STOP_TIMEOUT = 10 s`: si no vuelve, se cierra el archivo igual y el cuelgue queda en `LiveCapture.error`. La carpeta temporal se recuerda en `temp_dir` y se borra con `cleanup()`; con `live_dir` cada captura usa un archivo nuevo (`live-<ns>.pcap`).
+- **Hallazgo 5, `/api/live/stop` idempotente:** la primera llamada detiene y analiza; las siguientes devuelven el mismo resultado sin reanalizar ni pisar un análisis abierto después. Al reemplazarse el análisis (o cerrar la app) se borra la carpeta temporal de la captura.
+- **Hallazgo 7, tipos.** `mypy` (con `--check-untyped-defs`) pasa de 12 errores a 0.
+- Estado: Python 723 tests pasan (+2 xfail documentados), cobertura core+api 99%; frontend 164 tests pasan.
+- **Tres puntos resueltos tras la revisión (a pedido):** (1) un reporte exportado con filtros, y `/api/stats` filtrado, conservan `truncated`/`untracked_packets` de la CAPTURA (un reporte filtrado de un análisis parcial no puede decir que fue completo); (2) `CaptureSummary.warning` y `status()["warning"]` informan si la fuente no se detuvo a tiempo, falló al detenerse o hubo error de escritura, y la UI lo muestra ("Atención: …"); (3) un `Origin` ilegible (`http://[::1`) devuelve 403, no 500.
+- Estado: Python 749 tests pasan, cobertura core+api 99%, `mypy` 0 errores; frontend 171 tests pasan.
+- Pendiente menor: `/api/live/status` sin captura (estado idle) no incluye la clave `warning` (sí la incluye con captura). Inconsistencia de forma, sin impacto funcional.
+
+## Limitaciones de rendimiento aceptadas para el MVP (decisión del dueño del proyecto)
+- **Hallazgo 2 del informe de calidad (índice de offsets):** ver los paquetes de una sesión relee el pcap completo (~6 s con 500.000 paquetes). Se acepta: un pcap de triaje típico es chico y el MVP es un proyecto propio.
+- **Hallazgo 6 (decodificar una sola vez):** el análisis decodifica cada paquete dos veces (~30.000 paquetes/s). Se acepta por la misma razón. Si algún día hiciera falta, hacer solo "una sola pasada" y NO un decodificador propio (más rápido, pero una fuente nueva de errores en una herramienta de seguridad).
+
+## Refactor: funciones chicas (hallazgo 9, a pedido)
+- **Regla:** cada función hace una o, como máximo, dos cosas; ~20 líneas de cuerpo; complejidad ciclomática <= 6 (lo peor que queda es 7). Una función larga se parte en helpers que se llaman entre sí; el patrón repetido vive en una sola función.
+- **Resultado medido:** 168 funciones de producción, ninguna supera 20 líneas (la mayor tiene 19: `create_app`). `_parse_rule` pasó de CC 22 a 11 líneas, `filter_sessions` de 60 líneas / CC 19 a 9 líneas, `create_app` de 85 líneas / CC ~32 a 19 líneas.
+- **Patrones unificados:** la decodificación Ethernet -> IP -> chequeo de fragmento (`ip_layer`, en `backend/domain/sessions/grouper.py`) la usan grouper y engine. Las validaciones "entero / rango / texto no vacío" quedaron con un helper por módulo (los mensajes de error difieren; compartirlos obligaba a parametrizarlos).
+- **`api/` en módulos chicos** dentro de la carpeta existente: `app.py` (orquestador), `state.py`, `errors.py`, `security.py`, `routes_analysis.py`, `routes_live.py`. Se apoya en la documentación de FastAPI (Bigger Applications, Lifespan, Dependencies) y Starlette (TrustedHostMiddleware).
+- **Comportamiento idéntico:** los ~750 tests previos pasan sin modificarse; mypy limpio. Se agregaron tests directos de los helpers nuevos.
+- **Criterio propio (no respaldado literalmente por la documentación):** el contexto compartido viaja en `app.state.ctx`, y `analyze` se resuelve en el global de `backend.api.app` al llamar para que los tests puedan seguir parcheándolo.
+
+## Observaciones de los tests de helpers (pendientes de decisión)
+- `_check_page_args` acepta `limit=True` (bool es int en Python) y `offset=True`/`limit=1.5`; con `offset="1"` o `limit=None` lanza `TypeError` y no `ValueError`. Solo afecta llamadas internas: la API valida con `Query(ge, le)` antes.
+- `ip_layer` con una cabecera IPv4 truncada devuelve `None` (dpkt deja bytes crudos): el paquete cuenta como `non_ip` y no como `malformed`.
+- `_make_capture` arma el nombre con `time.time_ns()`, que en Windows puede repetirse en dos llamadas seguidas; en el flujo real no ocurre (`/live/start` exige que la anterior haya terminado).
+
+## Paso 9: ventana de escritorio (main.py, backend/api/server.py)
+- **Dependencia #6: pywebview** (importación perezosa, solo en `main.py`). Usa el motor web del sistema (WebView2 en Windows): no empaqueta un navegador entero, a diferencia de Electron. En Windows instala `pythonnet` como dependencia. `main.py --serve-only` funciona sin ella.
+- **La API corre en un hilo, no en un proceso aparte**, y solo en `127.0.0.1`. El puerto lo elige el sistema (puerto 0) y el socket se le entrega YA ABIERTO a uvicorn: así no hay una carrera entre "buscar un puerto libre" y que otro proceso lo tome antes de usarlo. La lógica vive en `backend/api/server.py` (dentro de la carpeta existente `api/`); `main.py` queda como pegamento delgado.
+- **Cerrar la ventana apaga todo:** `main.py` llama a `handle.stop()` en un `finally`, lo que dispara el `lifespan` de la API (detiene una captura en curso y borra las carpetas temporales).
+- **`text_select=True`:** pywebview lo desactiva por defecto; un analista necesita copiar evidencia y volcado hexadecimal.
+- **Selector de archivos nativo:** `DesktopApi.pick_file` (expuesto como `window.pywebview.api.pick_file`). pywebview inyecta ese objeto DESPUÉS de cargar la página y lo avisa con el evento `pywebviewready`; el `Toolbar` escucha ese evento, porque leer `window.pywebview` una sola vez al renderizar llegaría tarde y el botón "Examinar…" nunca aparecería.
+- **`--self-test`:** abre la ventana OCULTA, comprueba dentro de la ventana real que la interfaz carga, que el selector nativo está disponible y que el modo demo muestra las alertas, imprime un JSON y sale con 0/1. Es la verificación de integración de la ventana (los tests unitarios usan fakes y nunca abren una ventana real). Verificado en Windows: `{"ok": true, ...}` en ~5 s.
+- **Solo validado en Windows** (WebView2). Linux/macOS usan otros backends de pywebview, sin probar (ver `docs/checklist_hardware.md`).
+- **Tres correcciones previas (a pedido):** `_check_page_args` rechaza con `ValueError` todo lo que no sea un entero real (bool, str, None, float); `ip_layer` trata una cabecera IP ilegible bajo un ethertype IPv4/IPv6 como paquete DAÑADO (`malformed`) y no como "sin IP" (`non_ip`); el nombre del pcap de cada captura usa `uuid4` en vez de `time.time_ns()` (que en Windows puede repetirse).
+
+## Política de manejo de errores
+1. **Excepciones específicas.** `except Exception` solo en los bordes (hilos, handler global, cierre/limpieza, ventana de `main.py`) y siempre registrando o guardando el error. Fuente: https://docs.python.org/3/tutorial/errors.html
+2. **Nunca `pass` mudo.** Se registra con `logging.getLogger("tracewell")` (stdlib) o lleva un comentario del porqué. `core` no configura handlers: los configura la aplicación. Fuente: https://docs.python.org/3/howto/logging.html (sección de bibliotecas; `Logger.exception`/`exc_info` solo desde un manejador).
+3. **`core` traduce errores de terceros a los propios** (PcapError, RuleError, InvalidFilter, CaptureError...) y `backend/api/errors.py` los traduce a HTTP. Fuente: https://fastapi.tiangolo.com/tutorial/handling-errors/
+4. **Handler global en la API:** excepción inesperada -> 500 con `{"detail": "error interno"}` (sin rutas ni trazas); el traceback va al log del servidor. Starlette responde con el handler de `Exception` pero vuelve a lanzar el error para que el servidor lo registre. Fuente: https://www.starlette.dev/exceptions/
+5. **Los hilos no mueren en silencio:** capturan y guardan el error (`LiveCapture.error`); `threading.excepthook` (https://docs.python.org/3/library/threading.html#threading.excepthook) queda como último recurso. El cierre del pcap no puede dejar a `stop()` esperando para siempre.
+6. **Recursos con `with`/`finally`** (socket de `start_in_thread`, carpeta temporal en `_shutdown`, `handle.stop()` en `main`).
+7. **Frontend:** cada handler async tiene `try/catch` con aviso (`onError`), porque una promesa sin manejar solo genera `unhandledrejection` (https://developer.mozilla.org/en-US/docs/Web/API/Window/unhandledrejection_event, https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/catch). Un `ErrorBoundary` de clase envuelve `<App/>` y muestra "Recargar" en vez de pantalla en blanco; no atrapa errores de eventos ni async. Fuente: https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary
+8. **`main.py`:** puerto validado en `parse_args`, cualquier error de ventana -> mensaje que sugiere `--serve-only`, código 1, `handle.stop()` en `finally`.
+
+## Estado antes del empaquetado (verificado)
+- **Python:** 1255 tests pasan; cobertura de producción 99% (grouper, engine, server, errors, app: 100%; live.py 98%; main.py 99%). **Frontend:** 192 tests (Vitest) pasan; `npm run build` compila. **mypy** (`--check-untyped-defs`): sin problemas en 23 archivos. **radon:** ninguna función de producción con complejidad C o peor.
+- **Ventana real:** `python main.py --self-test` -> `{"ok": true, ...}` (la ventana oculta carga la interfaz, el selector nativo está disponible y el modo demo muestra las alertas).
+- **Pendientes de decisión resueltos:** el `try/catch` de `browse()` en `Toolbar` y el `try/finally` de `_self_test` se aplicaron y sus tests se actualizaron. `DesktopApi.pick_file()` sin `bind()` sigue lanzando `AttributeError` a propósito: es inalcanzable porque `_create_window` siempre hace `bind`.
+- **Nota del Error Boundary:** no tiene reset interno; tras un error de render se recupera con "Recargar" (o remontando con otra `key`).
+- **Orden acordado:** primero se prueba a mano (este documento + README), después la ejecución desde cero en un entorno limpio y, al final, el empaquetado (Paso 10, aún NO hecho).
+
+## Cierre de esta etapa
+- Correcciones finales: el mensaje de truncado ya no termina con el motivo vacío; al arrancar, `main.py` borra restos de capturas (`tracewell_*`, más de 24 h, solo con `live.pcap`) que dejó un cierre abrupto; `cleanup_stale_temp_dirs` rechaza `max_age` no finito (con NaN borraba también las carpetas recientes).
+- NO hecho (decisión del dueño del proyecto): empaquetado con PyInstaller (Paso 10) y ejecución en entorno limpio.
+
+## Mejoras posteriores (a pedido) y pruebas en Linux
+- **Regla DNS con `ignore_suffixes`:** lista de dominios de confianza en el YAML (el dominio exacto y todo lo que cuelga de él, con límite de label: `notelb.amazonaws.com` NO coincide con `elb.amazonaws.com`). La regla incluye `elb.amazonaws.com` para evitar el falso positivo de WPS Office. Costo asumido: un atacante con un balanceador propio en ese dominio no alertaría; es el precio de omitir un dominio entero.
+- **Captura en vivo:** las interfaces virtuales (Miniport, loopback, Hyper-V, VMware, Docker, Bluetooth, etc.) se ordenan al final y la interfaz preseleccionada es la primera real. La heurística es por nombre/descripción: puede equivocarse y el usuario siempre puede elegir otra.
+- **Filtro inválido:** el error se muestra una sola vez, junto al filtro (se quitó el banner global duplicado).
+- **Pantallas anchas:** el contenido principal tiene ancho máximo (100 rem) y queda centrado.
+- **pcapng cortado:** dpkt termina en silencio si el archivo se corta en un bloque que no es paquete. `_BlockTap` vigila las lecturas (cabecera de 8 bytes + resto del bloque) y ahora se informa como captura truncada. Un fin de archivo limpio entre bloques sigue siendo válido. Supuesto frágil, igual que `_TapFile`: depende del patrón de lecturas de dpkt (hay tests de caracterización).
+- **Linux (Docker, python:3.12-slim):** 1298 de 1299 tests pasaban; captura en vivo como root: 57 paquetes en Tracewell = 57 al releer = 57 con Scapy. Dos hallazgos, corregidos a pedido:
+  1. **Export con ruta de estilo Windows en Linux:** `Path(...).name` no separa `C:\Users\x\cap.pcap` en Linux y el reporte filtraba la carpeta del usuario. Ahora `_file_name` usa `PureWindowsPath`, que entiende `\` y `/` en cualquier sistema. Costo: un archivo POSIX con `\` en su nombre se recorta (aceptable: es más seguro recortar de más).
+  2. **Captura sin permisos en Linux "terminaba bien" con 0 paquetes y sin aviso:** `AsyncSniffer.start()` vuelve enseguida y el `PermissionError` ocurre después, dentro de su hilo. Ahora `ScapySource.start()` pasa `started_callback`, espera (máx. `START_TIMEOUT` = 5 s) a que Scapy abra el socket y relanza el error del hilo: `PermissionDenied` (la API responde 403) o `CaptureError` con la interfaz (503). Verificado en Linux con un usuario sin privilegios y con una interfaz inexistente. Límite conocido: si el hilo muere o se agota el plazo SIN error visible, `start()` vuelve normalmente.
+  La ventana de pywebview no se probó en Linux ni en macOS.
+- **Estado verificado tras estas mejoras:** Python 1410 tests pasan en Windows (1 omitido) y 1411 en Linux; frontend 195 pasan; `npm run build` compila; mypy limpio; autoprueba de la ventana OK. Captura en vivo en Linux como root: 64 paquetes = 64 al releer.
+- **Captura en vivo en hardware real (Windows 11, Npcap, PowerShell como administrador):** interfaz por defecto = Wi-Fi (las `WAN Miniport`, Hyper-V y Bluetooth quedaron después). 209 paquetes en Tracewell = 209 al releer el pcap = 209 con Scapy; 23 sesiones (16 TCP, 6 UDP, 1 IP-2 = IGMP); `warning` vacío. El fallo de DNS de `example.com` fue de la red de prueba, no de Tracewell.
+
+## Despliegue sin empaquetado (decisión del dueño)
+- **Se descarta el Paso 10 (PyInstaller).** Tracewell se despliega desde el código fuente con un instalador de un solo comando: `instalar.ps1` (Windows) e `instalar.sh` (Linux/macOS), más `iniciar.ps1` / `iniciar.sh` para abrirlo. Motivo: simplicidad para programadores y técnicos, y evita las obligaciones de licencia de distribuir un ejecutable con Scapy (GPL-2.0). Costo asumido: hace falta Python 3.11+ en el equipo.
+- **Qué hace `instalar.ps1`:** detecta Python (prefiere 3.12/3.13 sobre "el más nuevo", porque 3.14 no se probó), crea `.venv`, instala `requirements.txt`, compila la interfaz solo si falta `frontend\dist`, comprueba WebView2 y Npcap y corre la autoprueba de la ventana. Instala con `winget` solo previa confirmación (o con `-Yes`); `-Check` no instala nada. Es idempotente.
+- **Qué NO hace, a propósito:** no instala Npcap (la licencia de su edición gratuita no permite instalarlo en silencio ni redistribuirlo); no cambia la política de ejecución de PowerShell (se usa `-ExecutionPolicy Bypass` solo para ese comando); no usa `sudo` en Linux/macOS.
+- **`requirements.txt` sin versiones fijas**, igual que `pyproject.toml`: se instalan las últimas. Riesgo asumido; si una versión futura rompe algo, se fija. `pyproject.toml` y `requirements.txt` listan las mismas dependencias y hay que mantenerlos en sincronía a mano.
+- **Probado:** en una copia temporal del proyecto sin `.venv`, `instalar.ps1 -Yes` creó el entorno, instaló los paquetes y la autoprueba dio `ok: true`; `-Check` informó correctamente; `iniciar.ps1` sin `.venv` indica qué hacer. Se encontró y corrigió un fallo real: en PowerShell 5.1, `2>$null` sobre un programa externo que falla es un error fatal con `$ErrorActionPreference = "Stop"` (afectaba a la comprobación de imports en un `.venv` nuevo). Las rutas de `winget` (instalar Python, Node, WebView2) y `instalar.sh` no se ejecutaron en una máquina sin esas piezas; `instalar.sh` solo se revisó con `bash -n`.
+- **Documentación:** `docs/despliegue.md` (guía y solución de problemas) y `docs/empaquetado_futuro.md` (investigación de PyInstaller guardada por si se retoma).
+- **Zip "solo para usar" (`crear_zip.ps1`):** para quien solo quiere usar la app, un `.zip` con el código sin tests, reglas, demo, interfaz ya compilada, docs y scripts (42 archivos, unos 170 KB) más su `.sha256`. Se armó con .NET (`ZipFile`) y rutas con `/` porque `Compress-Archive` de PowerShell 5.1 escribe `\` y el zip no se descomprime bien en Linux/macOS. La investigación en internet no mostró una norma sobre excluir tests de un release (se resuelve en el script de empaquetado); sí hay consenso en que los wheels no llevan tests. Se descartó por ahora `pipx install git+...` (más simple para el usuario) porque el proyecto no es un paquete instalable: `core`, `api`, `rules`, `samples` y `frontend/dist` se ubican por rutas relativas y habría que reestructurarlo. Verificado: el zip descomprimido en una carpeta temporal se instaló desde cero y la autoprueba dio `ok: true`; el hash coincide; `-Dev` en el zip da un error claro. Limitaciones: los `.sh` salen sin permiso de ejecución (se usa `bash instalar.sh`) y el zip no se probó en Linux/macOS.
+
+## Rediseño de la pantalla de inicio (a pedido)
+- **Problema:** la bienvenida era una tarjeta chica y pegada a la izquierda con texto plano, perdida en un fondo vacío; además mostraba una línea de "terminal" (`$ tracewell --sin-captura`) con una opción que no existe.
+- **Cambio:** componente nuevo `Welcome.jsx`, centrado, con un título, una frase que explica qué hace Tracewell y tres tarjetas numeradas (probar con un ejemplo, abrir un archivo, capturar tráfico). La primera trae un botón **"Cargar el ejemplo"** que llama al mismo `api.demo` que el botón de la barra: el camino más corto ya no exige buscar el botón arriba. Se agregó la nota "el análisis es local". Se eliminó la línea de terminal falsa.
+- **Decisiones de detalle:** el botón nuevo NO se llama "Modo demo" para no duplicar el nombre accesible del botón de la barra (los tests y la autoprueba de `main.py` lo buscan por ese nombre); el título "Empezá analizando una captura" se conserva; `ErrorBoundary` sigue usando las clases viejas `welcome`/`welcome-body`, que se dejaron en `styles.css`. Se reusan los colores de la identidad "Sonda", así que el modo claro y el oscuro salen del mismo conjunto de variables.
+- **Verificado a la vista** en el navegador integrado: oscuro, claro y 375 px (sin scroll horizontal), y el clic en el botón carga el demo (32 sesiones, 45 paquetes, 3 alertas). Frontend: 207 tests pasan (12 nuevos de esta pantalla), build compila, autoprueba de la ventana OK.
+
+## Captura en vivo como barra inferior (a pedido)
+- **Problema:** el panel de captura en vivo estaba arriba de todo, entre la barra de herramientas y el contenido; abierto, empujaba el análisis hacia abajo y quitaba espacio útil.
+- **Cambio:** `<LivePanel>` sale de `<main>` y queda como último hijo de `.app`: una barra fija abajo (`position: sticky; bottom: 0`), plegada por defecto. Al abrirla crece hacia arriba (máximo 50 % de la altura, con scroll propio). `.app` pasó a columna flex con `main` creciendo, para que la barra quede abajo incluso cuando hay poco contenido. El panel de detalle de sesión descuenta la altura de la barra (variable CSS `--dock-h`, más alta cuando la barra está abierta gracias a `:has()`), así no queda tapado.
+- **Defecto encontrado al verlo en 375 px:** el nombre largo de la interfaz (`Wi-Fi — Realtek 8821CE…`) ensanchaba la barra a 488 px y cortaba el texto. Se corrigió con `grid-template-columns: minmax(0, 1fr)` y un `select` flexible.
+- **Alcance de los tests:** jsdom no calcula el layout, así que los tests fijan la ESTRUCTURA (la barra está fuera de `<main>`, después de él y es el último hijo de `.app`; colapsada por defecto; los errores siguen apareciendo dentro de `<main>`). Lo visual (sticky, alturas, desborde) se verificó a mano en el navegador integrado en oscuro, claro y 375 px. Frontend: 219 tests (12 nuevos).
+
+## Proceso dueño de cada sesión (a pedido)
+- **Qué es:** una columna **Proceso** en la tabla de sesiones y una línea en el detalle (`chrome.exe`, PID), solo para la **captura en vivo**. Un `.pcap` no guarda qué programa generó cada paquete y Windows reutiliza los PID, así que atribuir procesos a un archivo ya cerrado sería inventar: con archivos la columna ni se ofrece.
+- **Cómo:** `backend/domain/pcap/processes.py`. Mientras dura la captura, un hilo (`ProcessSampler`) le pide al sistema cada segundo las conexiones abiertas con su PID (`psutil.net_connections`) y las anota en una `ProcessTable`. Al detener la captura se toma una última muestra y cada sesión se busca en la tabla: primero por la conexión exacta (en cualquier orientación) y, para sockets sin conexión (UDP), por el puerto local solo del extremo que es de esta máquina.
+- **Decisiones de detalle:** gana la **primera** observación (un puerto reutilizado después no reetiqueta sesiones anteriores); tope de 50.000 entradas por tabla; los nombres de proceso se piden dentro de cada muestra (los PID se reutilizan entre muestras); si el nombre no se puede leer se muestra `PID n`; en la API, la clave `process` solo existe si hay datos (ausente = "no aplica", `null` = "no identificado", se muestra como "—").
+- **`psutil` es opcional:** import perezoso; sin él, o si la lectura falla, la captura sigue igual y la columna no se ofrece (`state.processes` queda en `None` si ninguna muestra salió bien). Nada de esto puede tumbar la captura: los errores del hilo se cuentan y se registran una sola vez.
+- **Exportación:** el reporte JSON NO incluye procesos por defecto, porque se comparte; se piden con `/api/export?processes=true`. No se agregó un control en la interfaz.
+- **Defecto encontrado probando con `psutil` de verdad:** Windows informa las conexiones en cierre (TIME_WAIT) con PID 0, y salían atribuidas a `System Idle Process` (1.957 de 2.111 conexiones). Etiquetar sesiones así habría sido mentir; ahora el PID 0 se descarta y la sesión queda como "—". `psutil` sin administrador leyó 2.111 conexiones en unos 29 ms con nombres reales.
+- **Límites conocidos (iguales a los de README):** foto cada segundo (una conexión más corta puede salir como "—"), UDP sin conexión identificado solo por puerto local, muchos servicios de Windows aparecen como `svchost.exe`. En macOS y Linux, ver procesos de otros usuarios exige root; sin permiso el nombre sale como `PID n` o la columna no aparece. Sin probar todavía en Linux ni macOS.
+- **Validado con una captura en vivo real (Windows 11, Wi-Fi, administrador):** de 12 sesiones, 11 quedaron con su proceso (`chrome.exe`, `claude.exe`, `python.exe`) y la restante era IGMP (sin puertos, correcto). La prueba abrió una conexión propia (puerto 60817) mantenida abierta 3 s y quedó asignada a `python.exe`. Una primera corrida mostró el límite documentado: una conexión propia que se abrió y cerró en menos de un segundo salió como "—" (el fallo de esa corrida fue de mi script de prueba, no de Tracewell). Las consultas DNS (UDP/53, también por IPv6) se atribuyeron a `svchost.exe`.
+
+## Herramientas de triaje y análisis (a pedido, en 4 etapas)
+**Etapa 1: triaje**
+- **Alerta → sesiones:** el botón "Ver las sesiones de [IP]" filtra la tabla por la IP de origen de la alerta. Se eligió la IP de origen (y no las dos) porque el filtro admite una sola IP.
+- **Notas y "revisada":** viven SOLO en memoria (`state.notes`) y se borran al cargar otro análisis (los ids de sesión cambian). No se escriben a disco: una nota puede contener datos sensibles. Tope de 5.000 notas de 2.000 caracteres. En la API, `note`/`reviewed` aparecen únicamente en las sesiones anotadas.
+- **Informe HTML (`backend/domain/export/html_report.py`):** una sola página sin scripts ni recursos externos, con CSP, todo escapado con `html.escape`, solo el NOMBRE del archivo. Incluye alertas con evidencia, coincidencias de IOC, notas y las 10 sesiones más pesadas (no todas: podrían ser cientos de miles). Los procesos solo van con `?processes=true`, igual que en el JSON.
+- **Lista de IOC (`backend/domain/rules/iocs.py`):** archivo local, una IP, red CIDR o dominio por línea (`#` comenta). Valida con número de línea, rechaza `/0`, limita a 100.000 entradas y 5.000 redes (cada IP distinta se compara una vez contra las redes), 5 MB y UTF-8. Sobrevive al cambio de análisis. Nada se consulta afuera: mandar IP de una red a un tercero filtra datos. Un valor cuyo último label es numérico (`256.1.1.1`, `1.2.3`) se rechaza como "IP mal escrita" en vez de guardarse como un dominio que nunca coincide (defecto hallado por los tests).
+**Etapa 2: nombres y capas**
+- **Nombre del sitio (`backend/domain/analysis/names.py`):** de las respuestas DNS (IP → nombre PEDIDO, no el canónico de un CNAME) y del SNI del ClientHello de TLS. Gana el primer nombre visto; con CDN una IP puede tener muchos. No se ve con ECH ni DNS cifrado, y un ClientHello partido en varios segmentos puede perder el SNI. Un SNI cortado dentro del nombre se descarta (devolver un pedazo daría un sitio y un IOC falsos; defecto hallado por los tests). Es una tercera pasada por el archivo (costo asumido, junto con la limitación de varias pasadas).
+- **IOC por dominio:** se compara contra los nombres de la sesión (igualdad o subdominio con límite de label; `notevil.com` no coincide con `evil.com`).
+- **Detalle por capas (`backend/domain/pcap/layers.py`):** decodificación manual con `struct` (dpkt no informa en qué byte empieza cada campo) con el rango `start:end` de cada campo para resaltarlo en el hex dump. Nunca lanza: un paquete cortado devuelve las capas legibles y una nota. Invariante `0 <= start <= end <= largo` (la interfaz depende de él; los tests encontraron dos casos que lo rompían). Las pistas ("TTL 128 típico de Windows", "el checksum suele ser inválido por offload") son orientativas. En la interfaz el hex dump queda fijo arriba mientras se recorren las capas, porque si no el resaltado ocurriría fuera de pantalla.
+**Etapa 3: gráfico y reglas nuevas**
+- **Gráfico en el tiempo (`backend/domain/analysis/timeline.py`):** solo usa instante y largo (no decodifica), comparte la tercera pasada con los nombres, y se reagrupa a lo sumo en 120 barras (si hay más de 20.000 intervalos finos, duplica el intervalo y fusiona). Verificado con 3 días de capturas sintéticas: el total se conserva.
+- **Reglas nuevas (`backend/domain/rules/extra_detectors.py`):** `beaconing`, `syn_flood`, `suspicious_ports`, `dns_unusual_resolver`, `large_upload`. Van en otro archivo para que `engine.py` no siga creciendo; se registran al final de `engine.py` (con `getattr`, porque importarlas primero deja el módulo a medio cargar) y también al final del propio archivo. Se probó en ambos órdenes de importación. Decisiones: el beaconing ignora intervalos menores a 5 s (un keep-alive de 1 s, como el de `claude.exe`, no es un beacon) y los puertos regulares por diseño (DNS, NTP, mDNS...); `suspicious_ports` mira solo el SYN (las respuestas van al puerto efímero del cliente, que podría coincidir); `dns_unusual_resolver` trata como normales los destinos privados y no cuenta el multicast como "externo"; `large_upload` decide al vuelo, así que una transferencia que después se equilibre puede alertar igual.
+- **No se hizo la suplantación ARP:** el motor de reglas solo recibe paquetes TCP/UDP decodificados y ARP no tiene capa IP. Habría que darle al motor otro camino de decodificación.
+- **Efecto en el demo:** con las reglas nuevas el demo sigue dando exactamente 3 alertas, y la captura real `prueba.pcapng` ya no da la alerta de DNS (el dominio `elb.amazonaws.com` está en la lista de confianza) ni ninguna de las nuevas.
+**Etapa 4: seguir la conversación (`backend/domain/analysis/stream.py`)**
+- Reconstruye una sesión TCP por turnos: descarta retransmisiones, recorta solapamientos, marca los huecos ("faltan N bytes") y resuelve el número de secuencia relativo a la base (un SYN ocupa un número; si la captura empieza a mitad de la conexión, el primer segmento define la base). Un salto de secuencia mayor a 1 MB se toma como otra conexión que reutiliza el puerto. Topes: 1 MB de datos y 50.000 paquetes (`truncated`). Si el primer dato parece un registro TLS, se informa "cifrada" y no se muestra contenido.
+- **Sensibilidad:** con protocolos en claro muestra el contenido tal cual, contraseñas incluidas (igual que Wireshark y que el hex dump). Se muestra siempre como texto (`·` para lo no imprimible). Los informes NO incluyen conversaciones.
+- Un segmento que llega desordenado después de un hueco se muestra tal como llegó (límite conocido).
+
+## Entender la captura y enseñar (alcance acordado: solo esto)
+**Objetivo del proyecto:** bajar la barrera de dificultad de Wireshark. Cada función nueva se diseñó para explicar, no solo para mostrar.
+- **`.pcap` de una sesión o de un filtro (`backend/domain/export/pcap_export.py`):** guarda solo esos paquetes para abrirlos en Wireshark o adjuntarlos a un ticket. Topes de 500.000 paquetes y 100 MB; si se alcanza uno, el archivo sale completo hasta ahí y lo dice (`X-Tracewell-Truncated`). No conserva el «largo original» de un paquete recortado por snaplen (dpkt no lo permite).
+- **Mapa MITRE ATT&CK:** 14 tácticas en orden de ataque, las que dispararon alertas se iluminan, con una frase simple por táctica. Se calcula en el navegador a partir de las alertas.
+- **Ayuda contextual y glosario (`help.js`, `HelpTip`, `Glossary`):** un «?» por sección con «En Wireshark: …». El contenido es texto fijo, nunca datos de la captura; `HelpTip` usa `Object.hasOwn` (un tema como `constructor` no existe; lo encontró un test).
+- **Equipos y grafo (`backend/domain/analysis/hosts.py`):** una fila por IP y un grafo con la red local a la izquierda e internet a la derecha (sin física: determinista y accesible, con tabla equivalente). Cada sesión cuenta para sus DOS extremos. **Defecto encontrado probando con una captura real:** si la captura empieza a mitad de la conversación, el «origen» (quien mandó el primer paquete visto) está invertido, y un cliente quedaba con el nombre y los servicios del servidor. Ahora el servidor se decide por el puerto (uno bajo, como 443, es un servicio) y, si no alcanza, por estar fuera de la red local.
+- **Tabla de DNS (`backend/domain/analysis/dns_log.py`):** una fila por nombre y tipo, con consultas, respuestas, códigos (NXDOMAIN...), respuestas y TTL, más pistas (nombre aparentemente aleatorio, TTL bajo). Solo DNS sobre UDP. Un test de fuzzing existente encontró que una respuesta con una dirección de largo inválido lanzaba un error: ahora se ignora ese registro.
+- **HTTP y archivos (`backend/domain/analysis/http.py`, `http_scan.py`):** HTTP/1.x en claro sobre los bytes reconstruidos de cada sentido. **Nunca se guardan valores de contraseñas ni tokens:** de un formulario solo los NOMBRES de campos sensibles, y de Basic solo el usuario. Los archivos se identifican por SHA-256 y por su tipo REAL (primeros bytes), el nombre se sanea (`..\..\setup.exe` → `setup.exe`) y la descarga es siempre `.bin` con confirmación. La tabla de toda la captura mira solo los puertos habituales de HTTP (una pasada, con topes).
+- **Explicación en palabras simples y diagrama (`backend/domain/analysis/explain.py`):** frases a partir de las banderas y tamaños de los paquetes (saludo de 3 pasos, RST, keep-alive...) y un diagrama de pasos (el «Flow Graph»). El nombre del sitio se pega al SERVIDOR, no siempre al destino.
+- **TLS (`backend/domain/analysis/tls.py`):** huella **JA4** del cliente, versión y cifrado acordados y certificado del servidor con un lector X.509 mínimo propio (sujeto, emisor, validez, nombres alternativos, autofirmado, SHA-256), sin sumar dependencias. En TLS 1.3 el certificado va cifrado y la interfaz lo explica. **Verificación:** los 249 certificados raíz del almacén de Windows se leyeron bien (242 autofirmados) y un vencido se detecta; la parte de cifrados de JA4 coincide con el valor publicado para Chrome (`8daaf6152771`); un ClientHello real de Python se leyó completo y los cortes en cada largo no lanzan. **Limitación declarada:** se intentó instalar la implementación de referencia (`ja4plus`) en un entorno temporal para comparar las otras dos partes de la huella, pero el permiso fue denegado y no se reintentó; esas partes siguen la especificación pública pero NO están contrastadas contra la referencia.
+- **Caso guiado del demo (`GuidedCase`):** siete pasos con botones que llevan a cada sección, y una guía de equivalencias con Wireshark en `docs/guia_didactica.md`.
+
+## Ajustes tras la primera prueba del dueño
+- **Colores en la tabla de sesiones:** chip por protocolo (TCP teal, UDP azul, ICMP ámbar, otros gris), punto de color por proceso, fila con IOC en rojo tenue y filas revisadas atenuadas. El texto siempre está: el color no es la única señal. Los colores de proceso se asignan por ORDEN DE APARICIÓN con una paleta de 8 y no con un cálculo sobre el nombre: al probarlo con un hash, dos procesos distintos (`OneDrive.exe` y `wpscloudsvr.exe`) cayeron en el mismo color. Así los primeros 8 nunca chocan y cada uno conserva su color mientras la app está abierta; del noveno en adelante se reutilizan. Cada tema (claro y oscuro) trae sus 8 tonos para mantener el contraste.
+- **No había cómo salir del modo demo:** botón "Salir del demo" / "Cerrar captura" y `DELETE /api/capture` (`clear_analysis`). Descarta el análisis TAMBIÉN en el servidor: si solo se limpiara la interfaz, recargar la página lo traería de vuelta. Borra la carpeta temporal si era una captura en vivo. La lista de IOC se conserva; las notas, los procesos y la selección se descartan.
+- **"Informe HTML" y "Exportar JSON" no hacían nada en la ventana de escritorio:** el servidor respondía bien (200 con `Content-Disposition`), pero pywebview CANCELA las descargas por defecto (`ALLOW_DOWNLOADS: False`). `main.py` las activa antes de crear la ventana; con eso pywebview muestra el diálogo nativo "Guardar como" con el nombre sugerido. Si una versión de pywebview no tiene esa opción, no falla: las descargas quedan como estaban. No se pudo probar el diálogo de forma automática (necesita una persona); se verificó leyendo el código de pywebview y con tests del llamado.
+- **Estado verificado:** 2.143 tests de Python y 476 de frontend pasan, `mypy` limpio, build compila y la autoprueba de la ventana da `ok: true`.
+
+## Íconos y dueños de IP en el grafo de equipos
+
+- **Problema:** el grafo mostraba solo IP. En una captura sin DNS ni TLS para esos destinos no hay nombre que mostrar, y un junior no reconoce `142.251.134.197`.
+- **Decisión:** `backend/domain/analysis/owners.py` asigna a cada IP un **rol** (equipo de tu red, IPv6 local, multicast, servidor en internet) y, para unos pocos proveedores grandes, el **dueño del rango** (Google, Cloudflare, Microsoft, AWS, Fastly, Akamai, Meta, Apple, GitHub, Anthropic, DNS públicos). También nombra direcciones especiales (mDNS, IGMP, SSDP…). El grafo dibuja un ícono por rol y una leyenda.
+- **Sin red a propósito:** la tabla va incluida. Consultar DNS inverso o RDAP le diría a un tercero qué IP se está investigando, y Tracewell trabaja 100 % local.
+- **Es una pista, no una prueba:** la nube se alquila (una IP de AWS puede ser de cualquiera) y los rangos cambian. Por eso el nombre sale en gris y el tooltip lo aclara. **El nombre sacado de la captura (DNS/TLS) siempre le gana al de la tabla.**
+- **Tabla conservadora:** solo rangos de los que hay certeza razonable; una IP que no esté en la tabla muestra solo su IP, no una suposición. Los rangos no se cotejaron contra los registros oficiales (RIR) en esta sesión: hay que revisarlos de vez en cuando.
+- **Seguridad:** los íconos son formas SVG fijas; los datos de la captura solo se muestran como texto.
+
+## Soporte de red → Sistema (etapa 1, solo lectura)
+
+- **Qué es:** una pantalla nueva, aparte de «Capturas» (que no se tocó), con un menú arriba. La primera sección, **Sistema**, muestra el equipo donde corre Tracewell: resumen (RAM, procesador, disco, tiempo encendido), procesos, puertos abiertos, conexiones activas, servicios y programas de inicio. La idea es que quien aprende vea lo que su propio equipo hace en la red, y que quien da soporte tenga a mano lo que otras herramientas esconden.
+- **Solo lectura, a propósito.** No hay ningún botón que termine un proceso, active/desactive un servicio ni cambie configuración. Se decidió así para mantener la herramienta simple y sin riesgos: ante un problema se muestra la pista, y arreglarlo queda en manos de la persona. Las rutas de la API son todas `GET`.
+- **Pistas, no veredictos.** Un proceso se marca si corre desde una carpeta temporal o de descargas, si tiene nombre de proceso de Windows pero vive en otra carpeta, o si su archivo fue borrado. Cada pista explica por qué mirarla y no afirma que sea malicioso.
+- **Huella y firma del archivo, a pedido.** El SHA-256 y la firma digital (Windows, `Get-AuthenticodeSignature`) se calculan solo al apretar el botón, porque tardan. La ruta del archivo sale del propio sistema y viaja al comando en una variable de entorno, no dentro del texto del comando. Nada se envía a ningún servicio externo (no se consulta VirusTotal: se muestra el hash).
+- **Permisos:** sin administrador, algunos procesos del sistema o de otros usuarios no dejan ver ruta ni detalles; se muestran como «—» y la pantalla avisa. Tracewell no pide elevar permisos.
+- **Plataformas:** Windows y Linux. Los servicios y programas de inicio de Linux (`systemctl`, `~/.config/autostart`) están escritos pero **no se probaron en un Linux real**. En otros sistemas esas secciones dicen que no están disponibles.
+- **Estructura:** el paquete `backend/domain/system/` (psutil con import perezoso), `backend/api/routes/system.py` y, en el frontend, `Shell.jsx` (menú) con `components/support/`. `App.jsx` no se modificó: el menú es un marco por fuera y las dos pantallas quedan montadas una vez abiertas, así cambiar de una a otra no pierde el análisis cargado.
+- **Próximas etapas:** herramientas de soporte de red de solo lectura (configuración de red, chequeo de Internet, dispositivos de la red, Wi-Fi, ping/tracert) y la identificación pasiva de equipos desde una captura.
+
+## Soporte de red → Red (etapa 2, solo lectura)
+
+- **Qué es:** el segundo grupo de la pantalla Soporte de red (junto a «Sistema»): configuración de red, «¿hay Internet?», latencia, dispositivos de la red, Wi-Fi (estado e historial), monitoreo de cortes y unas herramientas sueltas (ping, ping continuo, tracert, puertos, RDP, hora, IP duplicada).
+- **Solo lectura, sin excepciones.** Se descartaron a propósito las acciones que modifican el sistema (renovar IP, limpiar DNS, reparar DHCP, corregir la hora, saltear la verificación de RDP). Cuando se detecta un problema, el resultado trae el comando como **texto** («si querés, podés ejecutarlo vos») y Tracewell no lo ejecuta. Un test lee el código fuente y falla si aparece un comando que modifique algo.
+- **Lo que sale de la máquina,** y solo cuando la persona aprieta el botón: «¿Hay Internet?» abre una conexión corta a 1.1.1.1 y 8.8.8.8 y resuelve nombres conocidos; la latencia mide contra el servidor elegido; la hora consulta un servidor SNTP público (3 permitidos). Cada pantalla lo dice. No se consulta el ISP ni se hace el test de descarga: ambos necesitan un servicio externo y se dejaron fuera.
+- **Entrada del usuario:** todo nombre de equipo pasa por `valid_host` (empieza con letra o número, sin espacios ni caracteres de shell) y los comandos se ejecutan **sin shell**, con los argumentos como lista. Los guiones de PowerShell son fijos y de lectura (`Get-…`).
+- **Texto de comandos con acentos:** `netsh` escribe en UTF-8 y `ping`/`ipconfig` en la página de códigos del sistema; se prueba UTF-8 estricto y, si falla, la del sistema. Los nombres de los campos de `netsh wlan` se reconocen en español e inglés (sin acentos); en otro idioma se muestra la salida cruda.
+- **«¿Hay Internet?» y falsos positivos:** con un solo nombre de prueba (`example.com`) el chequeo daba «falla el DNS» en una red donde ese nombre no resolvía y los demás sí. Ahora prueba varios y basta con que uno resuelva.
+- **Dispositivos:** el barrido de pings solo recorre la red con puerta de enlace (no las virtuales de WSL o VirtualBox) y la configuración de red se guarda 8 s en caché, porque leerla llama a PowerShell (~5 s). La **marca** sale de la lista oficial de la IEEE (`data/oui.csv`), que **no se incluye** en el repositorio: sin ese archivo no se muestra marca y la pantalla lo explica. Las MAC privadas (bit «administrada localmente») no tienen marca.
+- **Monitoreo de cortes:** un hilo de fondo (daemon) mide router, Internet y DNS cada 1–10 s. Un corte se abre tras 2 fallos seguidos y se cierra cuando vuelve todo; se anota la capa que falló y la señal Wi-Fi. Todo queda en memoria y se detiene al cerrar la aplicación.
+- **Límites:** la sonda de IP duplicada necesita Npcap y administrador; el historial de Wi-Fi depende de lo que Windows haya registrado y puede requerir administrador; en Linux las herramientas (`ip`, `nmcli`, `traceroute`) están escritas y probadas solo con salidas de ejemplo, **no en un Linux real**.
+
+## Reorganización: vista, controlador y API
+
+- **Por qué:** con el crecimiento del proyecto las carpetas quedaron mezcladas: `core/` con módulos sueltos, `api/` con las rutas planas y la lógica adentro, y `frontend/src/components/` con más de cien archivos juntos.
+- **Cómo quedó:** una sola carpeta `backend/` con tres capas, y `frontend/` como vista.
+  - `backend/api/` (HTTP): `app`, `server`, `security`, `errors` y `routes/` con un router fino por área.
+  - `backend/controllers/`: los casos de uso. Sacan de las rutas la lógica que no es HTTP (armar sesiones, procesos, IOC, la captura en vivo) y guardan el análisis actual (`state.py`).
+  - `backend/domain/` (antes `core/`): Python puro, sin FastAPI. Los módulos sueltos pasaron a su paquete: `names` y `dns_log` a `analysis/`, `iocs` a `rules/`.
+  - `frontend/src/`: `views/` (pantallas), `components/{captures,support,common}/`, `controllers/` (los hooks `useLoad` y `useAction`), `api/` (cliente HTTP) y `lib/` (formatos y textos de ayuda).
+- **Cómo se hizo sin romper nada:** scripts que mueven los archivos y reescriben los imports, con copia de seguridad previa. La suite completa dio exactamente los mismos resultados antes y después de mover (3671 de backend y 1176 de frontend).
+- **Atajo que se deja a propósito:** los controladores lanzan `HTTPException` para los casos de «no existe» o «conflicto», en vez de definir errores propios. Es menos puro pero evita un cambio grande de comportamiento.
+- **Lo que no se movió:** `iniciar.*`, `instalar.*` y `crear_zip.ps1` siguen en la raíz porque son lo que la persona ejecuta. `rules/` y `samples/` tampoco.
+
+## Rediseño visual
+
+- **Problema:** casi toda la interfaz era el mismo verde-agua sobre negro, con poca jerarquía y gráficos débiles (una barra de protocolos con etiquetas que se pisaban y una línea de tiempo sin escala).
+- **Qué se hizo:** paleta nueva (acento azul; severidad crítica/alta/media/baja con colores propios y una **forma** además del color: ◆ ▲ ● ▼; el verde-agua queda como color de datos), fondos con más contraste entre sí, tarjetas separadas con borde y sombra, métricas del Resumen con número grande e ícono, dona de protocolos con leyenda, línea de tiempo con degradé, grilla, escala y pico destacado, alertas con barra y fondo teñido por severidad, ATT&CK con lo vacío atenuado, telaraña con halo en los equipos con alertas, y en Soporte estados claros, medidores con degradé y esqueletos de carga.
+- **Sin librerías nuevas:** se evaluó una librería de componentes o de gráficos, pero el problema era de diseño y no de herramientas: una librería obligaba a reescribir 58 componentes y sus tests. Los gráficos nuevos son SVG a mano, sin dependencias y fáciles de probar. Si más adelante hacen falta gráficos con zoom o tooltips, se puede sumar una librería solo para eso.
+- **Cuidado con los tests:** los cambios son casi todos de CSS y los gráficos nuevos son decorativos (`aria-hidden`), así que no cambian textos ni roles; los 1176 tests pasan sin tocarlos.
+
+## Mantine para la interfaz (reemplaza la decisión anterior de «sin librerías»)
+
+- **Qué cambió:** se agregó Mantine 9 (`@mantine/core`, `@mantine/hooks`, `@mantine/charts`, con `recharts` por debajo) y los íconos de `@tabler/icons-react`. Se evaluaron shadcn/ui con Tailwind y MUI; se eligió Mantine porque trae componentes, modo oscuro, gráficos y tablas pensadas para paneles de datos, y el resto del proyecto ya estaba en React 19, que Mantine 9 exige.
+- **Cómo se adoptó:** de a poco. El `MantineProvider` envuelve toda la aplicación (`main.jsx`, tema en `src/theme.js` con la misma paleta de `styles.css`) y las superficies de Mantine siguen nuestras variables de color. Hoy usan Mantine las pestañas de Soporte de red, los íconos de las tarjetas del Resumen, la dona de protocolos (`DonutChart`) y la línea de tiempo (`BarChart`, con ejes, tooltip y pico destacado). El resto sigue con CSS propio y se puede migrar por pantallas.
+- **Tests:** `src/test/setup.js` simula lo que Mantine necesita en jsdom (`matchMedia`, `ResizeObserver`) y renderiza todo dentro del proveedor, sin globales de estilo para no ensuciar el DOM. Los gráficos de Recharts no dibujan barras en jsdom, así que los tests del gráfico mockean `@mantine/charts` y verifican las props recibidas.
+- **Costo:** la carpeta compilada (`frontend/dist`) pasó de ~380 KB a ~1,2 MB. Vite avisa de un chunk grande; es aceptable en una aplicación de escritorio local, y se puede partir con carga diferida si molesta.
+- **Regla anterior:** la regla de «dependencias mínimas» se mantiene como criterio, pero esta es una excepción justificada: reemplaza cientos de líneas de CSS y de SVG a mano.
+
+## Rediseño completo: consola con barra lateral, tres paletas y más gráficos
+
+- **Qué cambió:** la aplicación pasó de una página larga con un menú arriba a una **consola**: cabecera (marca, chip con el archivo cargado, menú «Apariencia») y **barra lateral** con una sección por pantalla. «Capturas» se divide en Panorama, Alertas y ATT&CK, Equipos, DNS y HTTP, Sesiones e Indicadores (IOC); «Soporte de red» cuelga de la misma barra (Sistema y Red desplegables). Cada sección muestra solo sus tarjetas, y navegar entre ellas conserva lo cargado.
+- **Entrada renovada:** la pantalla de inicio ahora tiene ícono, tres tarjetas de acción con íconos de color y una sección «Qué vas a encontrar».
+- **Paletas:** `src/tokens.css` define esmeralda (por defecto), violeta y terracota, cada una en claro y oscuro. Se eligen desde «Apariencia» (se recuerda en el navegador) o siguen al sistema en modo Auto. Reglas: el acento marca foco y acciones; la severidad tiene su escala propia y una **forma** (◆ ▲ ● ▼); los colores de datos (`--data-*`) distinguen protocolos y categorías, nunca severidad.
+- **Panorama nuevo:** tarjetas del Resumen con íconos, dona de protocolos y línea de tiempo con ejes (Mantine Charts), **puntaje de riesgo** de 0 a 100 y **quién más habla**. El puntaje es la suma de pesos por severidad (crítica 35, alta 25, media 12, baja 5, tope 100) y la tarjeta muestra qué suma cada alerta: es una guía para saber por dónde empezar, no un veredicto.
+- **Telaraña de equipos con formas:** círculo = equipo de tu red, cuadrado = multicast, rombo = servidor en internet, hexágono = proveedor conocido; halo rojo en los que tienen alertas.
+- **Cómo se hizo sin rehacer todo:** la estructura cambió (marco, secciones, entrada, riesgo, formas), pero los componentes de análisis conservaron su lógica y sus tests; `CapturesView` sigue aceptando `section="all"` para mostrar todo como antes. Los tests de lo que cambió de estructura se reescribieron.
+- **Pendiente:** pasar a Mantine las tablas, los botones y los campos que siguen con CSS propio, un buscador de comandos (Ctrl+K) y más gráficos (mapa de calor por hora, flujo entre equipos).

@@ -1,0 +1,21 @@
+[project]
+name = "tracewell"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dpkt",      # lectura de pcap/pcapng y decodificación de capas
+    "pyyaml",    # reglas
+    "fastapi",   # API
+    "uvicorn",   # servidor de la API
+    "scapy",     # SOLO captura en vivo (backend/domain/pcap/live.py, import perezoso)
+    "pywebview", # SOLO la ventana de escritorio (main.py, import perezoso)
+    "psutil",    # OPCIONAL: columna "Proceso" en la captura en vivo (backend/domain/pcap/processes.py)
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "httpx"]  # httpx: lo usa TestClient de FastAPI
+
+[tool.pytest.ini_options]
+# Los tests viven dentro de cada módulo; pythonpath "." permite `import backend...`.
+testpaths = ["backend"]
+pythonpath = ["."]

@@ -1,0 +1,17 @@
+id: beaconing
+name: Conexiones periódicas (posible beaconing)
+description: >
+  Intentos de conexión (o datagramas) hacia un mismo destino a intervalos muy
+  regulares. Un malware que "llama a casa" suele hacerlo cada N segundos con poca
+  variación; una persona o una app normal navegan de forma irregular. Puede ser un
+  falso positivo (actualizadores, sincronizadores, monitoreo): verificá el proceso y el destino.
+severity: medium
+detector: beaconing
+mitre:
+  technique: T1071
+  name: "Application Layer Protocol"
+  tactic: Command and Control
+params:
+  min_events: 8
+  min_interval_seconds: 5
+  max_jitter: 0.15

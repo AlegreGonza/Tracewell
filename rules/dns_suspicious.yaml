@@ -1,0 +1,19 @@
+id: dns_suspicious
+name: Consulta DNS sospechosa
+description: >
+  Consulta DNS con un nombre inusualmente largo o de alta entropía, típico de
+  túneles DNS o dominios generados algorítmicamente (DGA).
+severity: medium
+detector: dns_suspicious
+mitre:
+  technique: T1071.004
+  name: "Application Layer Protocol: DNS"
+  tactic: Command and Control
+params:
+  max_label_length: 40
+  min_entropy: 3.5
+  entropy_min_label: 20
+  # Dominios de confianza que se omiten (el dominio exacto y todo lo que cuelga de él).
+  # Los balanceadores de AWS generan nombres largos y legibles que parecen DGA.
+  ignore_suffixes:
+    - elb.amazonaws.com

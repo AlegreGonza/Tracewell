@@ -1,0 +1,5 @@
+# Ejecución + desarrollo (tests).
+-r requirements.txt
+pytest
+pytest-cov
+httpx       # lo usa TestClient de FastAPI

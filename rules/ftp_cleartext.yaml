@@ -1,0 +1,13 @@
+id: ftp_cleartext
+name: Credenciales FTP en texto claro
+description: >
+  Se observaron comandos USER/PASS de FTP sin cifrar. Cualquiera en el camino
+  de red puede leer el usuario y la contraseña. La alerta no guarda la contraseña.
+severity: medium
+detector: ftp_cleartext
+mitre:
+  technique: T1040
+  name: Network Sniffing
+  tactic: Credential Access
+params:
+  ports: [21]

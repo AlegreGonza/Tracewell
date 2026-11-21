@@ -1,0 +1,15 @@
+id: syn_flood
+name: Inundación SYN
+description: >
+  Una cantidad enorme de intentos de conexión (SYN) hacia un mismo destino y puerto en
+  muy pocos segundos. Es la firma de una denegación de servicio; también puede verse con
+  pruebas de carga legítimas.
+severity: high
+detector: syn_flood
+mitre:
+  technique: T1498
+  name: "Network Denial of Service"
+  tactic: Impact
+params:
+  min_syns: 200
+  window_seconds: 10

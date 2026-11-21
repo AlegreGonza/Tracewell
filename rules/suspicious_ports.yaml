@@ -1,0 +1,14 @@
+id: suspicious_ports
+name: Conexión a un puerto sospechoso
+description: >
+  Intento de conexión a un puerto que usan con frecuencia herramientas de ataque o
+  puertas traseras (por ejemplo 4444, el puerto por defecto de Metasploit). Un servicio
+  legítimo también puede usarlos: confirmá qué proceso o equipo lo origina.
+severity: medium
+detector: suspicious_ports
+mitre:
+  technique: T1571
+  name: "Non-Standard Port"
+  tactic: Command and Control
+params:
+  ports: [4444, 31337, 1337, 12345, 54321, 9001]
