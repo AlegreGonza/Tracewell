@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/tracewell-header.png" alt="Tracewell: network traffic analysis for SOC triage" width="900">
+</p>
+
 # Tracewell
 
 A desktop-oriented **network traffic analysis tool for SOC triage**, built as an MVP for a junior SOC analyst.
