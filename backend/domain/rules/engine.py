@@ -49,6 +49,11 @@ class Rule:
     mitre_tactic: str
     params: Dict[str, Any]
     source: str = ""  # archivo del que salió, para mensajes de error
+    # Campos explicativos OPCIONALES del YAML: ayudan al analista a decidir. Solo se muestran en la
+    # interfaz; NO viajan en el JSON exportado (el contrato schema_version 1 no cambia).
+    false_positives: Tuple[str, ...] = ()
+    investigation_steps: Tuple[str, ...] = ()
+    wireshark_filter: str = ""
 
 
 @dataclass
@@ -418,7 +423,8 @@ DETECTORS: Dict[str, Type[Detector]] = {
 
 # ------------------------------------------------------------------- carga
 
-_TOP_KEYS = {"id", "name", "description", "severity", "detector", "mitre", "params"}
+_OPTIONAL_KEYS = {"false_positives", "investigation_steps", "wireshark_filter"}
+_TOP_KEYS = {"id", "name", "description", "severity", "detector", "mitre", "params"} | _OPTIONAL_KEYS
 _REQUIRED = {"id", "name", "severity", "detector", "mitre"}
 
 
@@ -494,6 +500,28 @@ def _build_params(data: dict, detector_cls: Type[Detector], source: str) -> Dict
     return params
 
 
+def _text_list(data: dict, key: str, source: str) -> Tuple[str, ...]:
+    """Lista de textos no vacíos de un campo opcional (ausente = vacía); falla si el tipo no es una lista de texto."""
+    value = data.get(key)
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(_is_text(v) for v in value):
+        _fail(source, f"'{key}' debe ser una lista de textos no vacíos")
+    return tuple(v.strip() for v in value)
+
+
+def _optional_fields(data: dict, source: str) -> Dict[str, Any]:
+    """Campos explicativos opcionales ya validados, listos para construir la `Rule`."""
+    wireshark = data.get("wireshark_filter")
+    if wireshark is not None and not _is_text(wireshark):
+        _fail(source, "'wireshark_filter' debe ser texto no vacío")
+    return {
+        "false_positives": _text_list(data, "false_positives", source),
+        "investigation_steps": _text_list(data, "investigation_steps", source),
+        "wireshark_filter": wireshark.strip() if wireshark else "",
+    }
+
+
 def _parse_rule(data: Any, source: str) -> Rule:
     _check_keys(data, source)
     _check_text_fields(data, source)
@@ -506,7 +534,7 @@ def _parse_rule(data: Any, source: str) -> Rule:
         id=data["id"], name=data["name"], description=str(data.get("description", "")).strip(),
         severity=data["severity"], detector=data["detector"],
         mitre_technique=mitre["technique"], mitre_name=mitre["name"], mitre_tactic=mitre["tactic"],
-        params=params, source=source,
+        params=params, source=source, **_optional_fields(data, source),
     )
 
 

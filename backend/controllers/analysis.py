@@ -66,10 +66,24 @@ def _add_processes(ctx: Ctx, a: Analysis, report: dict) -> None:
         item["process"] = _process_of(ctx, by_id[item["id"]])
 
 
-def _alert_item(alert) -> dict:
-    """Alerta serializada para la API. `wireshark_filter` es una clave EXTRA (no está en el JSON exportado)
-    y se omite si las IP de la alerta no son válidas, en vez de romper la lista entera."""
+def _rule_guide(rule) -> dict:
+    """Campos explicativos de la regla (falsos positivos, pasos, filtro). Solo los que la regla define."""
+    guide = {
+        "false_positives": list(rule.false_positives),
+        "investigation_steps": list(rule.investigation_steps),
+        "wireshark_filter": rule.wireshark_filter,
+    }
+    return {k: v for k, v in guide.items() if v}
+
+
+def _alert_item(alert, rules=()) -> dict:
+    """Alerta serializada para la API. `wireshark_filter` y `guide` son claves EXTRA (no están en el JSON
+    exportado). El filtro se omite si las IP de la alerta no son válidas, en vez de romper la lista entera."""
     item = asdict(alert)
+    rule = next((r for r in rules if r.id == alert.rule_id), None)
+    guide = _rule_guide(rule) if rule is not None else {}
+    if guide:
+        item["guide"] = guide
     try:
         item["wireshark_filter"] = alert_filter(alert.src_ip, alert.dst_ip, alert.evidence)
     except ValueError:

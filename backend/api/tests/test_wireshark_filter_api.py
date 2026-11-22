@@ -58,3 +58,20 @@ def test_filtro_por_ip_sin_parametro_422(demo):
 def test_filtro_por_ip_no_necesita_captura():
     client = TestClient(create_app(sampler_factory=None))
     assert client.get("/api/wireshark-filter?ip=1.2.3.4").status_code == 200
+
+
+# ---------------------------------------------- guía de la regla en la alerta (tarea 4)
+def test_alerta_de_port_scan_trae_la_guia_de_la_regla(demo):
+    scan = next(a for a in demo.get("/api/alerts").json() if a["rule_id"] == "port_scan")
+    g = scan["guide"]
+    assert g["false_positives"] and g["investigation_steps"] and g["wireshark_filter"].startswith("tcp.flags.syn")
+
+
+def test_alerta_sin_campos_en_su_regla_no_trae_guia(demo):
+    others = [a for a in demo.get("/api/alerts").json() if a["rule_id"] != "port_scan"]
+    assert others and all("guide" not in a for a in others)
+
+
+def test_la_guia_no_va_al_json_exportado(demo):
+    j = demo.get("/api/export").json()
+    assert all("guide" not in a and "false_positives" not in a for a in j["alerts"])

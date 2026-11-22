@@ -128,3 +128,45 @@ describe("AlertsTable: filtro de Wireshark", () => {
     expect(screen.queryByRole("button", { name: "Copiar filtro Wireshark" })).toBeNull();
   });
 });
+
+describe("AlertsTable: guía de la regla", () => {
+  const guide = {
+    false_positives: ["Escáner autorizado"],
+    investigation_steps: ["Ver las sesiones del origen", "Abrir el filtro en Wireshark"],
+    wireshark_filter: "tcp.flags.syn==1 && tcp.flags.ack==0",
+  };
+
+  it("muestra falsos positivos, pasos y filtro de la regla", async () => {
+    api.alerts.mockResolvedValue([alert({ guide })]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    expect(screen.getByRole("heading", { name: "Posibles falsos positivos" })).toBeInTheDocument();
+    expect(screen.getByText("Escáner autorizado")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cómo investigarla" })).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").some((li) => li.textContent === "Abrir el filtro en Wireshark")).toBe(true);
+    expect(screen.getByText("tcp.flags.syn==1 && tcp.flags.ack==0")).toBeInTheDocument();
+  });
+
+  it("sin guía no muestra esas secciones", async () => {
+    api.alerts.mockResolvedValue([alert()]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    expect(screen.queryByText("Posibles falsos positivos")).toBeNull();
+    expect(screen.queryByText("Cómo investigarla")).toBeNull();
+  });
+
+  it("muestra solo las partes que la regla define", async () => {
+    api.alerts.mockResolvedValue([alert({ guide: { investigation_steps: ["Paso único"] } })]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    expect(screen.getByText("Paso único")).toBeInTheDocument();
+    expect(screen.queryByText("Posibles falsos positivos")).toBeNull();
+  });
+
+  it("el texto de la guía no se interpreta como HTML", async () => {
+    api.alerts.mockResolvedValue([alert({ guide: { false_positives: ["<img src=x onerror=alert(1)>"] } })]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    expect(document.querySelector("img")).toBeNull();
+  });
+});

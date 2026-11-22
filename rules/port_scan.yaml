@@ -12,3 +12,15 @@ mitre:
 params:
   min_ports: 15        # puertos distintos para disparar
   window_seconds: 60   # ventana de tiempo
+
+# Campos explicativos OPCIONALES: se muestran en la alerta de la interfaz (no van en el JSON exportado).
+false_positives:
+  - Un escáner de vulnerabilidades o de inventario autorizado (Nessus, OpenVAS, nmap del equipo de TI).
+  - Herramientas de descubrimiento de red o de monitoreo que prueban muchos puertos a propósito.
+  - Un equipo con un programa que reintenta puertos distintos tras un fallo (poco común; revisar el proceso).
+investigation_steps:
+  - Confirmar si el origen es un equipo de escaneo autorizado (inventario, ticket de cambio).
+  - Ver las sesiones del origen y fijarse en cuáles recibieron respuesta (SYN+ACK) y cuáles un RST.
+  - Abrir el filtro en Wireshark y revisar qué puertos quedaron abiertos en el destino.
+  - Buscar al mismo origen en otras alertas (acceso remoto, subidas grandes) antes de contener.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0

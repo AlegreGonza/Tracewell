@@ -145,7 +145,7 @@ def alerts(ctx: CtxDep, severity: Optional[str] = None):
     a = current(ctx)
     if severity is not None and severity not in SEVERITIES:
         raise HTTPException(422, f"severity debe ser una de {list(SEVERITIES)}")
-    return [_alert_item(x) for x in a.alerts if severity is None or x.severity == severity]
+    return [_alert_item(x, a.rules) for x in a.alerts if severity is None or x.severity == severity]
 
 
 @router.get("/sessions/{session_id}/packets")

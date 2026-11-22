@@ -6,6 +6,40 @@ import CopyFilterButton from "./CopyFilterButton.jsx";
 
 const SEV_LEVEL = { low: 1, medium: 2, high: 3, critical: 4 };
 
+// Guía opcional de la regla (falsos positivos, pasos y filtro). Todo texto: viene de un YAML local, nunca HTML.
+function RuleGuide({ guide }) {
+  if (!guide) return null;
+  return (
+    <div className="rule-guide">
+      {guide.false_positives?.length > 0 && (
+        <>
+          <h3>Posibles falsos positivos</h3>
+          <ul>
+            {guide.false_positives.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {guide.investigation_steps?.length > 0 && (
+        <>
+          <h3>Cómo investigarla</h3>
+          <ol>
+            {guide.investigation_steps.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ol>
+        </>
+      )}
+      {guide.wireshark_filter && (
+        <p>
+          Filtro de Wireshark de la regla: <code className="mono">{guide.wireshark_filter}</code>
+        </p>
+      )}
+    </div>
+  );
+}
+
 // `onViewSessions(alerta)`: salta a las sesiones de la IP de origen de la alerta.
 export default function AlertsTable({ refreshKey, onError, onViewSessions }) {
   const [alerts, setAlerts] = useState(null);
@@ -85,6 +119,7 @@ export default function AlertsTable({ refreshKey, onError, onViewSessions }) {
                     </a>{" "}
                     — {a.mitre_name} ({a.mitre_tactic})
                   </p>
+                  <RuleGuide guide={a.guide} />
                   <h3>Evidencia</h3>
                   {/* Texto plano dentro de <pre>: la evidencia viene de tráfico
                       que puede ser hostil, así que nunca se interpreta como HTML. */}
