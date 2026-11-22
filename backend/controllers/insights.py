@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.controllers.state import Ctx, CtxDep, current
 from backend.domain.analysis.hosts import build_graph, build_hosts
+from backend.domain.analysis.wireshark_filter import session_filter
 from fastapi import APIRouter, HTTPException, Query
 
 
@@ -21,3 +22,8 @@ def _session(ctx: Ctx, session_id: int, tcp_only: bool = False):
     if tcp_only and s.protocol != "TCP":
         raise HTTPException(422, "solo las sesiones TCP tienen este análisis")
     return a, s
+
+
+def _session_filter(s) -> str:
+    """Filtro de Wireshark de una sesión (se arma con sus extremos y su protocolo)."""
+    return session_filter(s.protocol, s.src_ip, s.src_port, s.dst_ip, s.dst_port)

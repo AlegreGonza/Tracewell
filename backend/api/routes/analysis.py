@@ -22,6 +22,7 @@ from backend.controllers.state import VERSION, CtxDep, clear_analysis, current, 
 from backend.controllers.analysis import (  # noqa: F401  (los tests parchean estos nombres desde la ruta)
     _add_processes,
     _add_triage,
+    _alert_item,
     _analyze_path,
     _json_attachment,
     _process_of,
@@ -144,7 +145,7 @@ def alerts(ctx: CtxDep, severity: Optional[str] = None):
     a = current(ctx)
     if severity is not None and severity not in SEVERITIES:
         raise HTTPException(422, f"severity debe ser una de {list(SEVERITIES)}")
-    return [asdict(x) for x in a.alerts if severity is None or x.severity == severity]
+    return [_alert_item(x) for x in a.alerts if severity is None or x.severity == severity]
 
 
 @router.get("/sessions/{session_id}/packets")

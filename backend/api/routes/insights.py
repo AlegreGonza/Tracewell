@@ -17,12 +17,14 @@ from backend.domain.analysis.http import http_body, http_exchanges
 from backend.domain.analysis.http_scan import scan_http
 from backend.domain.analysis.stream import raw_directions
 from backend.domain.analysis.tls import analyze_tls, parse_client_hello
+from backend.domain.analysis.wireshark_filter import ip_filter
 
 from backend.controllers.analysis import _process_of
 from backend.controllers.state import CtxDep, current
 from backend.controllers.insights import (  # noqa: F401  (los tests parchean estos nombres desde la ruta)
     _hosts,
     _session,
+    _session_filter,
 )
 
 router = APIRouter(prefix="/api")
@@ -58,7 +60,18 @@ def explain(session_id: int, ctx: CtxDep):
     """La sesión contada en palabras simples, más los pasos de la conexión (como un Flow Graph)."""
     a, s = _session(ctx, session_id)
     process = _process_of(ctx, s) if ctx.state.processes is not None else None
-    return explain_session(s, packets_of_sessions(a, [s]), a.names, process)
+    result = explain_session(s, packets_of_sessions(a, [s]), a.names, process)
+    result["wireshark_filter"] = _session_filter(s)
+    return result
+
+
+@router.get("/wireshark-filter")
+def wireshark_filter_of_ip(ip: str = Query(..., min_length=1, max_length=64)):
+    """Filtro de visualización de Wireshark para una IP (`ip.addr==X`). No necesita una captura cargada."""
+    try:
+        return {"ip": ip, "wireshark_filter": ip_filter(ip)}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 # ------------------------------------------------------------------ HTTP y archivos

@@ -109,3 +109,22 @@ describe("AlertsTable", () => {
     await vi.waitFor(() => expect(api.alerts).toHaveBeenCalledTimes(2));
   });
 });
+
+describe("AlertsTable: filtro de Wireshark", () => {
+  it("la alerta expandida ofrece copiar su filtro", async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    api.alerts.mockResolvedValue([alert({ wireshark_filter: "ip.addr==10.0.0.5 && ip.addr==8.8.8.8" })]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copiar filtro Wireshark" }));
+    expect(writeText).toHaveBeenCalledWith("ip.addr==10.0.0.5 && ip.addr==8.8.8.8");
+  });
+
+  it("sin filtro en la alerta no muestra el botón", async () => {
+    api.alerts.mockResolvedValue([alert()]);
+    render(<AlertsTable refreshKey={0} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: /DNS tunneling/ }));
+    expect(screen.queryByRole("button", { name: "Copiar filtro Wireshark" })).toBeNull();
+  });
+});

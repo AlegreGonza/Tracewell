@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from backend.controllers.state import VERSION, Ctx, CtxDep, _session_id, clear_analysis, current, set_analysis, summary
 from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
+from backend.domain.analysis.wireshark_filter import alert_filter
 from backend.domain.export.json_export import build_report, session_to_dict, to_json
+from dataclasses import asdict
 from fastapi.responses import Response
 from pathlib import Path
 from typing import Annotated, Optional
@@ -62,3 +64,14 @@ def _add_processes(ctx: Ctx, a: Analysis, report: dict) -> None:
     by_id = {_session_id(a, s): s for s in a.result.sessions}
     for item in report["sessions"]:
         item["process"] = _process_of(ctx, by_id[item["id"]])
+
+
+def _alert_item(alert) -> dict:
+    """Alerta serializada para la API. `wireshark_filter` es una clave EXTRA (no está en el JSON exportado)
+    y se omite si las IP de la alerta no son válidas, en vez de romper la lista entera."""
+    item = asdict(alert)
+    try:
+        item["wireshark_filter"] = alert_filter(alert.src_ip, alert.dst_ip, alert.evidence)
+    except ValueError:
+        pass
+    return item

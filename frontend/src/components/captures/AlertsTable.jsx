@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatEndpoint, formatTime, severityLabel } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
+import CopyFilterButton from "./CopyFilterButton.jsx";
 
 const SEV_LEVEL = { low: 1, medium: 2, high: 3, critical: 4 };
 
@@ -88,6 +89,11 @@ export default function AlertsTable({ refreshKey, onError, onViewSessions }) {
                   {/* Texto plano dentro de <pre>: la evidencia viene de tráfico
                       que puede ser hostil, así que nunca se interpreta como HTML. */}
                   <pre className="mono">{JSON.stringify(a.evidence, null, 2)}</pre>
+                  {a.wireshark_filter && (
+                    <p className="alert-actions">
+                      <CopyFilterButton filter={a.wireshark_filter} onError={onError} />
+                    </p>
+                  )}
                   {onViewSessions && (
                     <p className="alert-actions">
                       <button type="button" onClick={() => onViewSessions(a)}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatBytes, formatEndpoint, formatTime } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
+import CopyFilterButton from "./CopyFilterButton.jsx";
 import ExplainView from "./ExplainView.jsx";
 import SessionHttp from "./SessionHttp.jsx";
 import TlsView from "./TlsView.jsx";
@@ -300,6 +301,8 @@ export default function SessionDetail({ session, onClose, onError, onNoteSaved }
           Descargar .pcap de esta sesión
         </a>
         <HelpTip topic="pcap" />
+        {/* Mismo tráfico en Wireshark: el filtro lo arma el servidor al pedirlo. */}
+        <CopyFilterButton load={() => api.explain(session.id).then((r) => r.wireshark_filter)} onError={onError} />
       </p>
       <NoteForm session={session} onNoteSaved={onNoteSaved} onError={onError} />
       <ExplainView session={session} onError={onError} />

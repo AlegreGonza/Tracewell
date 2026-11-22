@@ -146,3 +146,15 @@ describe("SessionDetail", () => {
     expect(screen.queryByRole("button", { name: /#10/ })).toBeNull();
   });
 });
+
+describe("SessionDetail: filtro de Wireshark", () => {
+  it("copia el filtro de la sesión que arma el servidor", async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    api.sessionPackets.mockResolvedValue({ items: [], has_more: false });
+    api.explain.mockResolvedValue({ protocol: "TCP", outcome: null, summary: [], steps: [], wireshark_filter: "ip.addr==10.0.0.1 && ip.addr==10.0.0.2 && tcp.port==80" });
+    render(<SessionDetail session={session} onClose={vi.fn()} onError={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Copiar filtro Wireshark" }));
+    expect(writeText).toHaveBeenCalledWith("ip.addr==10.0.0.1 && ip.addr==10.0.0.2 && tcp.port==80");
+  });
+});

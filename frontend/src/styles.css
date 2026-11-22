@@ -670,3 +670,7 @@ tbody tr:hover { background: var(--row-hover); }
 .timeline-plot::before { content: none; }
 .timeline-plot { padding: 0.4rem 0.2rem 0; }
 .support-groups { margin-bottom: 0.4rem; }
+
+/* Botón «Copiar filtro Wireshark»: el filtro copiado queda a la vista, con salto de línea si es largo. */
+.copy-filter { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.copy-filter-text { overflow-wrap: anywhere; user-select: all; }
