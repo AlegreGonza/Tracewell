@@ -684,3 +684,42 @@ tbody tr:hover { background: var(--row-hover); }
 .case-timeline .case-body { display: grid; min-width: 0; overflow-wrap: anywhere; }
 .case-timeline .case-detail { font-size: .9em; }
 @media (max-width: 600px) { .case-timeline li { grid-template-columns: 1fr; } }
+
+/* ======== Pulido: piezas nuevas (filtro copiado, guía de regla, roles, cronología, acceso remoto) ======== */
+.copy-filter button { min-height: 2rem; }
+.copy-filter-text { display: block; max-width: 100%; padding: .3rem .55rem; border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--code-bg); color: var(--text); font-size: .85em; line-height: 1.4; }
+.copy-filter-text:hover { border-color: var(--accent); }
+.copy-filter [role="status"] { font-size: .85em; }
+
+.rule-guide { margin: .75rem 0; padding: .75rem 1rem; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius); background: var(--surface-2); display: grid; gap: .35rem; }
+.rule-guide h3 { margin: .35rem 0 0; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.rule-guide h3:first-child { margin-top: 0; }
+.rule-guide ul, .rule-guide ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .25rem; }
+.rule-guide p { margin: .35rem 0 0; overflow-wrap: anywhere; }
+.rule-guide code { display: inline-block; max-width: 100%; padding: .15rem .45rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--code-bg); overflow-wrap: anywhere; }
+
+.host-roles { margin-top: .35rem; }
+.host-roles .badge { display: inline-block; padding: .1rem .45rem; border: 1px dashed var(--border-strong); border-radius: 999px; background: var(--code-bg); color: var(--text); font-size: .78rem; font-weight: 500; }
+
+.case-timeline li { border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); background: var(--surface); transition: background .12s; }
+.case-timeline li:hover, .case-timeline li:focus-within { background: var(--row-hover); }
+.case-timeline time { color: var(--muted); font-size: .85em; white-space: nowrap; }
+.case-timeline .badge { display: inline-block; min-width: 4.5rem; text-align: center; border: 1px solid var(--border-strong); background: var(--code-bg); color: var(--text); font-weight: 600; }
+.case-timeline .badge::before { font-size: .7rem; margin-right: .3rem; }
+.case-timeline .case-alerta { border-left-style: solid; } .case-timeline .case-alerta .badge { border-radius: 2px; } .case-timeline .case-alerta .badge::before { content: "\25B2"; }
+.case-timeline .case-dns { border-left-style: dashed; } .case-timeline .case-dns .badge { border-radius: 999px; } .case-timeline .case-dns .badge::before { content: "\25CF"; }
+.case-timeline .case-ioc { border-left-style: double; } .case-timeline .case-ioc .badge { border-radius: 2px; border-width: 2px; } .case-timeline .case-ioc .badge::before { content: "\25C6"; }
+.case-timeline .case-sesion { border-left-style: dotted; } .case-timeline .case-sesion .badge { border-radius: 6px; } .case-timeline .case-sesion .badge::before { content: "\25A0"; }
+.case-timeline button.link { text-align: left; white-space: normal; }
+
+tr.row-flag > td { background: color-mix(in srgb, var(--sev-high) 12%, transparent); }
+tr.row-flag > td:first-child { box-shadow: inset 4px 0 0 var(--sev-high); }
+tr.row-flag:hover > td { background: color-mix(in srgb, var(--sev-high) 20%, var(--surface)); }
+
+td, th { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .copy-filter { display: flex; width: 100%; }
+  .copy-filter button { min-height: 2.5rem; }
+  .case-timeline li { gap: .3rem; }
+  .rule-guide { padding: .6rem .75rem; }
+}
