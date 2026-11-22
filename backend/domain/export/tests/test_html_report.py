@@ -206,3 +206,83 @@ def test_proceso_solo_si_viene_en_extras():
     assert "chrome.exe" not in build_html(rep)
     assert "chrome.exe" in build_html(rep, {0: {"process": {"name": "chrome.exe", "pid": 4}}})
     assert "<th>Proceso</th>" in build_html(rep)  # la columna existe aunque esté vacía
+
+
+# ------------------------------------------------------------ Para el ticket
+import html as _html
+
+from backend.domain.export.html_report import build_ticket_text
+
+
+def ticket_of(h):
+    m = re.search(r'<pre class="ticket">(.*?)</pre>', h, re.S)
+    assert m, "falta el bloque del ticket"
+    return _html.unescape(m.group(1))
+
+
+def test_ticket_tiene_las_cinco_partes_y_es_texto_plano():
+    h = build_html(report_of(), {0: {"ioc": ["ip:10.0.0.2"], "note": "visto"}}, ioc_source="iocs.txt")
+    assert "<h2>Para el ticket</h2>" in h
+    t = ticket_of(h)
+    for title in ("RESUMEN EJECUTIVO", "LÍNEA DE TIEMPO", "IOC CONFIRMADOS", "EVIDENCIA CLAVE", "RECOMENDACIÓN DE CONTENCIÓN"):
+        assert title in t
+    assert "<" not in t and "Captura cap.pcap" in t
+    assert "1 Alta" in t and "ip:10.0.0.2" in t
+
+
+def test_ticket_timeline_en_orden_cronologico_con_sesiones_marcadas():
+    alerts = [mk_alert(name="Tardía", first_ts=300.0), mk_alert(name="Temprana", first_ts=100.0)]
+    sessions = [mk_session()]
+    sessions[0].first_ts = 200.0
+    t = build_ticket_text(report_of(sessions=sessions, alerts=alerts), {0: {"reviewed": True}})
+    assert t.index("Temprana") < t.index("SESIÓN #0") < t.index("Tardía")
+    assert "1970-01-01 00:01:40 UTC" in t
+
+
+def test_ticket_escapa_datos_hostiles_en_el_html():
+    alert = mk_alert(name=XSS, evidence={"q": XSS}, src_ip=XSS)
+    h = build_html(report_of(alerts=[alert]), {0: {"note": XSS, "ioc": [XSS]}}, ioc_source=XSS)
+    assert "<script" not in h.lower()
+    assert _html.unescape(re.search(r'<pre class="ticket">(.*?)</pre>', h, re.S).group(1)).count(XSS) >= 1
+
+
+def test_ticket_un_dato_hostil_no_puede_fingir_lineas():
+    alert = mk_alert(evidence={"q": "a\nRECOMENDACIÓN DE CONTENCIÓN falsa\r\nb"})
+    t = build_ticket_text(report_of(alerts=[alert]), {})
+    # el dato queda dentro de UNA línea de evidencia: ninguna línea nueva empieza con el título falso
+    assert sum(1 for l in t.splitlines() if l.startswith("RECOMENDACIÓN DE CONTENCIÓN")) == 1
+    assert len(t.splitlines()) == len(build_ticket_text(report_of(alerts=[mk_alert(evidence={"q": "ab"})]), {}).splitlines())
+
+
+def test_ticket_sin_alertas_ni_ioc():
+    t = build_ticket_text(report_of(alerts=[]), {})
+    assert "Sin alertas." in t and "Sin eventos." in t and "No se cargó una lista de IOC." in t
+    assert "no hay acciones de contención" in t
+
+
+def test_ticket_ioc_sin_coincidencias():
+    t = build_ticket_text(report_of(), {}, ioc_source="x.txt")
+    assert "Ninguna sesión coincide" in t
+
+
+def test_ticket_recomendacion_por_regla_y_por_severidad():
+    t = build_ticket_text(report_of(alerts=[mk_alert(rule_id="port_scan", name="Escaneo"), mk_alert(rule_id="nueva", severity="critical", name="Otra")]), {})
+    assert "bloquear el origen del escaneo" in t and "Aislar de inmediato" in t
+
+
+def test_ticket_limita_eventos_y_evidencia():
+    alerts = [mk_alert(first_ts=float(i), name=f"A{i}") for i in range(60)]
+    t = build_ticket_text(report_of(alerts=alerts), {})
+    assert "… y 20 evento(s) más" in t
+    evidence = t.split("EVIDENCIA CLAVE")[1].split("RECOMENDACIÓN")[0]
+    assert evidence.count("\n- ") == 5
+
+
+def test_ticket_acota_el_largo_de_un_valor():
+    t = build_ticket_text(report_of(alerts=[mk_alert(evidence={"x": "z" * 5000})]), {})
+    assert "z" * 200 not in t and "…" in t
+
+
+def test_ticket_analisis_parcial_y_hora_invalida():
+    t = build_ticket_text(report_of(truncated=True, untracked_packets=5, alerts=[mk_alert(first_ts=float("1e30"))]), {})
+    assert "análisis parcial" in t and "hora desconocida" in t
