@@ -47,6 +47,16 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - **Network support → System (read-only):** a separate screen, reachable from the top menu, that shows the machine Tracewell runs on: resource summary, running processes (RAM, CPU, path, parent, connections, SHA-256 and code signature on demand), open ports with who can reach them, active connections with the program that owns each one, services and startup programs. It never changes anything: there is no kill/disable button and every route is a `GET`. Windows and Linux; the Linux paths are not tested on a real Linux machine.
 - **Network support → Network (read-only):** network configuration, a layer-by-layer *Is the Internet down?* check, latency, devices on the local network (with vendor by MAC when `data/oui.csv` is provided), Wi-Fi status and disconnection history, a background **outage monitor** with a timeline, and small tools (ping, continuous ping, traceroute, port check, RDP reachability, clock offset, duplicate IP). Nothing changes the machine: when a problem is found the fix is shown as text only. Tests that reach out (Internet check, latency, clock) run only when you press their button.
 - **Take it with you:** download just one session (or an IP's traffic) as a new `.pcap` for Wireshark or a ticket.
+- **Novedades de triaje SOC** (texto en español; el resto de este archivo sigue en inglés, ver nota en `docs/decisiones.md`):
+  - **Filtro de Wireshark** por sesión, IP o alerta: botón «Copiar filtro Wireshark» en el detalle de sesión y en cada alerta (`ip.addr`/`ipv6.addr` más `tcp.port`/`udp.port`; en las alertas se deriva de la evidencia). `GET /api/wireshark-filter?ip=` da el filtro de una IP.
+  - **Bloque «Para el ticket»** en el informe HTML: texto plano copiable con resumen ejecutivo, línea de tiempo, IOC confirmados, evidencia clave y recomendación de contención. Todo escapado.
+  - **Importar IOC desde CSV y STIX 2.1** además de una línea por indicador. El formato se detecta por extensión o contenido y valen las mismas validaciones (red /0 rechazada, IP mal escrita, topes).
+  - **Campos explicativos en las reglas YAML:** `false_positives`, `investigation_steps` y `wireshark_filter` (opcionales). Se ven en la alerta y no van al JSON exportado; `rules/port_scan.yaml` es el ejemplo.
+  - **Dirección del flujo:** Interno→Externo, Externo→Interno, Interno→Interno (lateral) y Externo→Externo (y Multicast), de cliente a servidor.
+  - **Perfil de host:** roles inferidos (cliente DNS, servidor web, emisor de escaneos, top talker) solo con lo observado. Agrupar por MAC queda pendiente: las sesiones no guardan la MAC.
+  - **Acceso remoto:** SSH, Telnet, SMB, RDP, WinRM y VNC agrupados por servicio, con RST y reintentos de SYN señalados. `GET /api/remote-access?service=`.
+  - **Cronología del caso:** alertas, DNS sospechoso, sesiones marcadas e IOC en orden de tiempo, con filtro opcional por equipo. `GET /api/case-timeline?host=&limit=`. No reemplaza al gráfico de paquetes por intervalo.
+  - **Para más adelante** (cambian el contrato del JSON o el estado de las vistas): confianza separada de la severidad, silenciar o lista blanca temporal, exportar a TheHive o MISP.
 - Exports the analysis to JSON.
 - **Demo mode** with a bundled synthetic capture that triggers all three rules.
 

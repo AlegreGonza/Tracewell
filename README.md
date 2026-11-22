@@ -53,6 +53,14 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - **Network support → System (read-only):** a separate screen, reachable from the top menu, that shows the machine Tracewell runs on: resource summary, running processes (RAM, CPU, path, parent, connections, SHA-256 and code signature on demand), open ports with who can reach them, active connections with the program that owns each one, services and startup programs. It never changes anything: there is no kill/disable button and every route is a `GET`. Windows and Linux; the Linux paths are not tested on a real Linux machine.
 - **Network support → Network (read-only):** network configuration, a layer-by-layer *Is the Internet down?* check, latency, devices on the local network (with vendor by MAC when `data/oui.csv` is provided), Wi-Fi status and disconnection history, a background **outage monitor** with a timeline, and small tools (ping, continuous ping, traceroute, port check, RDP reachability, clock offset, duplicate IP). Nothing changes the machine: when a problem is found the fix is shown as text only. Tests that reach out (Internet check, latency, clock) run only when you press their button.
 - **Take it with you:** download just one session (or an IP's traffic) as a new `.pcap` for Wireshark or a ticket.
+- **Wireshark display filters:** a **Copy Wireshark filter** button on every session and every alert (`ip.addr`/`ipv6.addr` plus `tcp.port`/`udp.port`; for alerts it is derived from the evidence: scanned ports, DNS name, destination port, or the victim of a SYN flood). `GET /api/wireshark-filter?ip=` gives the filter for an IP.
+- **"For the ticket" block in the HTML report:** plain, copyable text with an executive summary, a chronological timeline of alerts and marked sessions, confirmed IOC matches, key evidence and a containment suggestion. Values from the traffic are collapsed to one line and HTML-escaped.
+- **IOC import from CSV and STIX 2.1:** besides one indicator per line, a CSV/TSV with a value column (`value`, `valor`, `indicator`, `ioc`, `ip`, `domain`...) or a STIX 2.1 JSON bundle (`ipv4-addr`, `ipv6-addr`, `domain-name`, `network-traffic` indicators). The format is detected from the extension or the content, and the same validations apply (a `/0` network is rejected, misspelled IPs fail with the line or object).
+- **Explain-why fields in rules:** optional `false_positives`, `investigation_steps` and `wireshark_filter` in a rule YAML, shown in the alert detail (`port_scan.yaml` is the example). They are never part of the JSON export.
+- **Flow direction:** every session is labeled *Internal→External*, *External→Internal*, *Internal→Internal (lateral)* or *External→External* (and *Multicast*), client → server, correcting a reversed origin when a capture starts mid-conversation.
+- **Host profile:** inferred roles per host (DNS client, web server, scan sender, top talker), using only what the capture shows.
+- **Remote access:** a section grouping SSH, Telnet, SMB, RDP, WinRM and VNC sessions by service, with RST packets and repeated SYNs (retries) highlighted. `GET /api/remote-access?service=`.
+- **Case timeline:** alerts, suspicious DNS queries, marked sessions and IOC matches in one chronological thread, optionally limited to one host. It is a new view; the packets-per-interval chart is unchanged.
 - Exports the analysis to JSON.
 - **Demo mode** with a bundled synthetic capture that triggers all three rules.
 
@@ -356,7 +364,15 @@ mitre:
 params:
   min_ports: 15               # 2..65535
   window_seconds: 60
+# Optional explain-why fields (shown in the alert detail, never exported to JSON):
+false_positives:              # list of non-empty texts
+  - An authorized vulnerability scanner.
+investigation_steps:          # list of non-empty texts
+  - Confirm whether the source is an approved scanning host.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0   # non-empty text
 ```
+
+`GET /api/alerts` adds two extra keys to each alert: `wireshark_filter` (derived from the evidence) and, when the rule defines any of the optional fields, `guide`. The JSON export keeps its exact `schema_version: 1` shape.
 
 ### Rule validation is strict
 
@@ -392,7 +408,10 @@ All routes are under `/api`. Errors use `{"detail": "..."}`.
 | `POST /api/support/monitor/start` · `/stop` · `/clear` | Start, stop or clear the in-memory outage monitor (it measures; it changes nothing on the machine). |
 | `GET /api/dns` | DNS table (`?q=` filters by name): queries, responses, result codes, hints. |
 | `GET /api/http` | Plaintext HTTP requests of the whole capture (sessions to the usual HTTP ports). |
-| `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps. |
+| `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps and a `wireshark_filter`. |
+| `GET /api/wireshark-filter` | Query `ip`. Display filter for an IP (`ip.addr==X` / `ipv6.addr==X`); `422` if it is not an IP. Needs no loaded capture. |
+| `GET /api/remote-access` | SSH, Telnet, SMB, RDP, WinRM and VNC sessions grouped by service, with RST and SYN retries. Optional `service` (`422` if unknown). |
+| `GET /api/case-timeline` | Alerts, suspicious DNS, marked sessions and IOC matches in chronological order. Optional `host` (IP) and `limit` (1–2000, default 500). |
 | `GET /api/sessions/{id}/http` | HTTP exchanges of a TCP session; `/http/{n}/body` downloads the file as `.bin` (it may be malware). |
 | `GET /api/sessions/{id}/tls` | JA4 fingerprint, negotiated version and server certificate (when visible). |
 | `GET /api/sessions/{id}/pcap` / `GET /api/pcap` | A new `.pcap` with one session, or with the sessions matching `protocol`/`ip`/`port`. |
@@ -496,6 +515,9 @@ These are deliberate MVP trade-offs.
 - **JA4:** implemented by hand from the public spec. The cipher-list part was checked against a published value; the extension/signature-algorithm part follows the spec but was **not cross-checked against the reference implementation** (the verification library could not be installed in this environment). Treat it as a strong hint, not as a certified match.
 - **Extracted files can be malware.** Only the SHA-256 and the real type are shown by default; downloading saves a `.bin` after a confirmation. Never open it.
 - **The explanations are orientative.** They describe what the capture shows; they do not prove intent.
+- **"Internal" means a private address.** Flow direction and host classification use Python's private-address check, so documentation ranges such as `203.0.113.0/24` count as internal. The real topology is not known.
+- **Host roles are hints.** A host that does not show a role may still have it outside the capture. Grouping hosts by MAC address is **not done**: sessions do not keep the MAC, so it would need a change in the session grouper.
+- **Remote-access signals are hints.** An RST can be a closed port or a normal cut, and repeated SYNs can be packet loss rather than brute force. Retries are counted per session (same 5-tuple); a brute force that opens a new source port each time shows as many sessions instead.
 - **No packaged executable.** Deployment is from source with the installer scripts. Installing Python (3.11+) is therefore required.
 
 ---
@@ -514,6 +536,7 @@ These are deliberate MVP trade-offs.
 - [x] Live capture validated on real Windows hardware and on Linux (root)
 - [ ] Final run of the full test suite in a clean environment
 - [ ] Desktop window on Linux and macOS
+- [ ] Later (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP
 - Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` (in Spanish) in case it is revisited.
 
 ---
