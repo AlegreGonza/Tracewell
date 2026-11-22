@@ -263,7 +263,7 @@ def build_mac_groups(hosts: Iterable[Host]) -> List[Dict[str, Any]]:
     for h in hosts:
         if h.mac:
             groups.setdefault(h.mac, []).append(h)
-    rows = [
+    rows: List[Dict[str, Any]] = [
         {
             "mac": mac, "ips": sorted(h.ip for h in members), "names": sorted({h.name for h in members if h.name}),
             "sessions": sum(h.sessions for h in members), "bytes": sum(h.bytes for h in members),

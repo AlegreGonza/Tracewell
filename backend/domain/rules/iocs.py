@@ -100,7 +100,9 @@ class _Collector:
     """Junta indicadores validados y aplica los topes, sea cual sea el formato de origen."""
 
     def __init__(self) -> None:
-        self.ips, self.networks, self.domains = set(), [], set()
+        self.ips: set = set()
+        self.networks: list = []
+        self.domains: set = set()
 
     def add(self, text: str, number: int, where: Optional[str] = None) -> None:
         kind, value = _parse_entry(text, number, where)
@@ -233,8 +235,9 @@ def _object_values(obj: dict) -> List[str]:
     kind = obj.get("type")
     if kind == "indicator":
         pattern = obj.get("pattern")
-        usable = obj.get("pattern_type", "stix") == "stix" and isinstance(pattern, str) and obj.get("revoked") is not True
-        return _pattern_values(pattern) if usable else []
+        if not isinstance(pattern, str) or obj.get("pattern_type", "stix") != "stix" or obj.get("revoked") is True:
+            return []
+        return _pattern_values(pattern)
     if kind in _STIX_VALUE_TYPES and isinstance(obj.get("value"), str):
         return [obj["value"]]
     return []
