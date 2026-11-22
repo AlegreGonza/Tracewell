@@ -75,3 +75,15 @@ def test_alerta_sin_campos_en_su_regla_no_trae_guia(demo):
 def test_la_guia_no_va_al_json_exportado(demo):
     j = demo.get("/api/export").json()
     assert all("guide" not in a and "false_positives" not in a for a in j["alerts"])
+
+
+# ------------------------------------------------------------ dirección (tarea 5)
+def test_cada_sesion_trae_su_direccion(demo):
+    items = demo.get("/api/sessions?limit=100").json()["items"]
+    valid = {"Interno→Externo", "Externo→Interno", "Interno→Interno (lateral)", "Externo→Externo", "Multicast"}
+    assert items and all(i["direction"] in valid for i in items)
+
+
+def test_la_direccion_no_va_al_json_exportado(demo):
+    j = demo.get("/api/export").json()
+    assert all("direction" not in s for s in j["sessions"])

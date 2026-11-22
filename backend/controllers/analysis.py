@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.controllers.state import VERSION, Ctx, CtxDep, _session_id, clear_analysis, current, set_analysis, summary
 from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
+from backend.domain.analysis.direction import session_direction
 from backend.domain.analysis.wireshark_filter import alert_filter
 from backend.domain.export.json_export import build_report, session_to_dict, to_json
 from dataclasses import asdict
@@ -39,6 +40,7 @@ def _session_item(ctx: Ctx, a: Analysis, s) -> dict:
     """Sesión serializada. La clave `process` solo existe si hay datos de procesos
     (captura en vivo): su ausencia significa "no aplica", y `null`, "no identificado"."""
     item = session_to_dict(_session_id(a, s), s)
+    item["direction"] = session_direction(s)  # clave EXTRA de la API: el JSON exportado no la lleva
     if ctx.state.processes is not None:
         item["process"] = _process_of(ctx, s)
     host = a.names.best_name(s)  # nombre del sitio (SNI o DNS de la propia captura); ausente si no se conoce

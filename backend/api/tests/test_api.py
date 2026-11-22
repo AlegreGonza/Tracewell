@@ -396,7 +396,8 @@ def test_export_con_filtros(loaded):
     assert len(j["sessions"]) == 4 < 32
     assert j["stats"]["sessions"] == 4
     full = {x["id"]: x for x in loaded.get("/api/sessions?limit=1000").json()["items"]}
-    assert all(full[s["id"]] == s for s in j["sessions"])
+    # `direction` es una clave extra de la API: el JSON exportado no la lleva (contrato schema_version 1)
+    assert all({k: v for k, v in full[s["id"]].items() if k != "direction"} == s for s in j["sessions"])
     assert len(j["alerts"]) == 3  # las alertas no se filtran
 
 

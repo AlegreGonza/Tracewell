@@ -270,6 +270,11 @@ export default function SessionDetail({ session, onClose, onError, onNoteSaved }
         <p className="muted">
           {session.packets} paquetes · {formatBytes(session.bytes)}
         </p>
+        {session.direction && (
+          <p>
+            Dirección: <strong>{session.direction}</strong>
+          </p>
+        )}
         {session.host && (
           <p>
             Sitio: <strong className="mono">{session.host}</strong>

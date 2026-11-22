@@ -99,6 +99,7 @@ export default function SessionsTable({
   }
 
   const set = (k) => (e) => setDraft({ ...draft, [k]: e.target.value });
+  const showDirection = (data?.items ?? []).some((s) => s.direction); // la columna solo aparece si la API manda la dirección
   const showHost = (data?.items ?? []).some((s) => s.host); // la columna solo aparece si hay algún nombre conocido
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -165,6 +166,9 @@ export default function SessionsTable({
                 <th scope="col">Protocolo</th>
                 <th scope="col">Origen</th>
                 <th scope="col">Destino</th>
+                {showDirection && (
+                  <th scope="col" title="De quién a quién, respecto de tu red (cliente → servidor)">Dirección</th>
+                )}
                 {showHost && <th scope="col">Sitio</th>}
                 {showProcess && <th scope="col">Proceso</th>}
                 <th scope="col" className="num">Paquetes</th>
@@ -197,6 +201,7 @@ export default function SessionsTable({
                   </td>
                   <td className="mono">{formatEndpoint(s.src_ip, s.src_port)}</td>
                   <td className="mono">{formatEndpoint(s.dst_ip, s.dst_port)}</td>
+                  {showDirection && <td>{s.direction ?? "—"}</td>}
                   {showHost && (
                     <td className="mono" title="Nombre sacado de las respuestas DNS o del saludo TLS (SNI) de la captura">
                       {s.host ?? <span className="muted">—</span>}

@@ -237,3 +237,13 @@ describe("SessionsTable", () => {
     expect(screen.queryByText(/No se pudo aplicar/)).toBeNull();
   });
 });
+
+describe("SessionsTable: dirección del flujo", () => {
+  it("muestra la columna Dirección con la etiqueta de cada sesión", async () => {
+    api.sessions.mockResolvedValue({ total: 2, items: [sess(1, { direction: "Interno→Externo" }), sess(2)] });
+    render(<Harness />);
+    expect(await screen.findByRole("columnheader", { name: "Dirección" })).toBeInTheDocument();
+    expect(screen.getByText("Interno→Externo")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0); // la sesión sin la clave (API vieja)
+  });
+});

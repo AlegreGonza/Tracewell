@@ -158,3 +158,11 @@ describe("SessionDetail: filtro de Wireshark", () => {
     expect(writeText).toHaveBeenCalledWith("ip.addr==10.0.0.1 && ip.addr==10.0.0.2 && tcp.port==80");
   });
 });
+
+describe("SessionDetail: dirección del flujo", () => {
+  it("muestra la dirección en el detalle", async () => {
+    api.sessionPackets.mockResolvedValue({ items: [], has_more: false });
+    render(<SessionDetail session={{ ...session, direction: "Interno→Interno (lateral)" }} onClose={vi.fn()} onError={vi.fn()} />);
+    expect(await screen.findByText("Interno→Interno (lateral)")).toBeInTheDocument();
+  });
+});
