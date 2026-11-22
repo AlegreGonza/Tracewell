@@ -677,3 +677,10 @@ tbody tr:hover { background: var(--row-hover); }
 
 /* Perfil de host: roles como chips pequeños bajo el tipo. */
 .host-roles { display: flex; flex-wrap: wrap; gap: .25rem; margin: .25rem 0 0; padding: 0; list-style: none; }
+
+/* Cronología del caso: una fila por hecho, con hora, tipo y detalle. */
+.case-timeline { list-style: none; margin: .75rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.case-timeline li { display: grid; grid-template-columns: auto auto 1fr auto; gap: .6rem; align-items: baseline; padding: .4rem .6rem; border-left: 4px solid var(--border, #c1c9c5); }
+.case-timeline .case-body { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.case-timeline .case-detail { font-size: .9em; }
+@media (max-width: 600px) { .case-timeline li { grid-template-columns: 1fr; } }

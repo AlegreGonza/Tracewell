@@ -1,5 +1,5 @@
 import { ThemeIcon } from "@mantine/core";
-import { IconAlertTriangle, IconListDetails, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww } from "@tabler/icons-react";
+import { IconAlertTriangle, IconHistory, IconListDetails, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww } from "@tabler/icons-react";
 
 // Qué muestra cada sección y con qué ícono. Se usa cuando todavía no hay una captura cargada.
 export const EMPTY_SECTIONS = {
@@ -7,6 +7,7 @@ export const EMPTY_SECTIONS = {
   equipos: { icon: IconTopologyStar3, color: "teal", title: "Equipos", shows: "quién habló con quién, con el dueño de cada IP, el programa que abrió cada conexión y un grafo de conversaciones" },
   trafico: { icon: IconWorldWww, color: "violet", title: "DNS y HTTP", shows: "las consultas DNS y los pedidos HTTP sin cifrar, con los archivos que viajaron y su huella SHA-256" },
   remoto: { icon: IconPlugConnected, color: "grape", title: "Acceso remoto", shows: "quién se conectó por SSH, Telnet, SMB, RDP, WinRM o VNC, agrupado por servicio, con los rechazos (RST) y reintentos" },
+  cronologia: { icon: IconHistory, color: "indigo", title: "Cronología del caso", shows: "las alertas, el DNS sospechoso, tus sesiones marcadas y los IOC en un solo hilo de tiempo, para contar el caso de principio a fin" },
   sesiones: { icon: IconListDetails, color: "cyan", title: "Sesiones", shows: "todas las conversaciones de la captura, con su explicación en palabras simples, los paquetes y la conversación completa" },
   indicadores: { icon: IconShieldSearch, color: "pink", title: "Indicadores (IOC)", shows: "la lista de IP, redes y dominios maliciosos que cargues, para marcar las sesiones que coincidan" },
 };

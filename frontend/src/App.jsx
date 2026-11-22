@@ -3,7 +3,7 @@ import { AppShell, Badge, Burger, Group, Menu, NavLink, SegmentedControl, Text, 
 import { useDisclosure } from "@mantine/hooks";
 import {
   IconActivity, IconAlertTriangle, IconCheck, IconCpu, IconFile, IconLayoutDashboard, IconListDetails, IconNetwork,
-  IconPalette, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww,
+  IconHistory, IconPalette, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww,
 } from "@tabler/icons-react";
 import { PALETTES } from "./theme.js";
 import CapturesView from "./views/CapturesView.jsx";
@@ -16,6 +16,7 @@ export const CAPTURE_SECTIONS = [
   { id: "equipos", label: "Equipos", icon: IconTopologyStar3 },
   { id: "trafico", label: "DNS y HTTP", icon: IconWorldWww },
   { id: "remoto", label: "Acceso remoto", icon: IconPlugConnected },
+  { id: "cronologia", label: "Cronología del caso", icon: IconHistory },
   { id: "sesiones", label: "Sesiones", icon: IconListDetails },
   { id: "indicadores", label: "Indicadores (IOC)", icon: IconShieldSearch },
 ];

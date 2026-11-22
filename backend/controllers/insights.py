@@ -3,6 +3,8 @@ cuando se puede). Las rutas solo traducen HTTP <-> estas funciones."""
 from __future__ import annotations
 
 from backend.controllers.state import Ctx, CtxDep, current
+from backend.controllers.triage import _ioc_by_session
+from backend.domain.analysis.case_timeline import build_case_timeline
 from backend.domain.analysis.hosts import build_graph, build_hosts
 from backend.domain.analysis.remote_access import UnknownService, remote_access
 from backend.domain.analysis.wireshark_filter import session_filter
@@ -36,4 +38,16 @@ def _remote_access(ctx: Ctx, service):
     try:
         return remote_access(a.result.sessions, service)
     except UnknownService as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+def _case_timeline(ctx: Ctx, host, limit: int):
+    """Cronología unificada (alertas, DNS sospechoso, sesiones marcadas e IOC); 422 si `host` no es una IP."""
+    a = current(ctx)
+    try:
+        return build_case_timeline(
+            a.alerts, a.names.dns_log.rows(None, 1000), a.result.sessions,
+            dict(ctx.state.notes), _ioc_by_session(ctx, a), host, limit,
+        )
+    except ValueError as exc:
         raise HTTPException(422, str(exc)) from None

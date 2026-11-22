@@ -58,7 +58,7 @@ describe("Shell: marco y navegación", () => {
   it("marca Tracewell, barra lateral con los dos grupos y todas las secciones", () => {
     render(<Shell />);
     expect(screen.getByText("Tracewell")).toBeInTheDocument();
-    expect(CAPTURE_SECTIONS.map((s) => s.id)).toEqual(["panorama", "alertas", "equipos", "trafico", "remoto", "sesiones", "indicadores"]);
+    expect(CAPTURE_SECTIONS.map((s) => s.id)).toEqual(["panorama", "alertas", "equipos", "trafico", "remoto", "cronologia", "sesiones", "indicadores"]);
     ["Panorama", "Alertas y ATT&CK", "Equipos", "DNS y HTTP", "Sesiones", "Indicadores (IOC)"].forEach((l) =>
       expect(item(l)).toHaveAttribute("type", "button")
     );

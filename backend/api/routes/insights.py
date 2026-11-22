@@ -22,6 +22,7 @@ from backend.domain.analysis.wireshark_filter import ip_filter
 from backend.controllers.analysis import _process_of
 from backend.controllers.state import CtxDep, current
 from backend.controllers.insights import (  # noqa: F401  (los tests parchean estos nombres desde la ruta)
+    _case_timeline,
     _hosts,
     _remote_access,
     _session,
@@ -51,6 +52,19 @@ def graph(ctx: CtxDep, limit: int = Query(24, ge=2, le=60)):
 def remote_access_overview(ctx: CtxDep, service: Optional[str] = Query(None, max_length=20)):
     """Sesiones de SSH, Telnet, SMB, RDP, WinRM y VNC agrupadas por servicio (filtro opcional `service`)."""
     return _remote_access(ctx, service)
+
+
+# --------------------------------------------------------- cronología del caso
+
+@router.get("/case-timeline")
+def case_timeline(
+    ctx: CtxDep,
+    host: Optional[str] = Query(None, max_length=64),
+    limit: int = Query(500, ge=1, le=2000),
+):
+    """Alertas, DNS sospechoso, sesiones marcadas e IOC en orden cronológico (opcional: solo los de una IP).
+    Es una vista NUEVA: no reemplaza a `/api/timeline` (paquetes por intervalo)."""
+    return _case_timeline(ctx, host, limit)
 
 
 # ------------------------------------------------------------------------ DNS
