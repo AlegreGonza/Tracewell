@@ -57,7 +57,7 @@ export default function IocPanel({ refreshKey, onChange, onError }) {
           type="text"
           value={path}
           onChange={(e) => setPath(e.target.value)}
-          placeholder="Ruta de un archivo de texto: una IP, red (CIDR) o dominio por línea"
+          placeholder="Ruta de un archivo: texto (un indicador por línea), CSV con columna value o STIX 2.1 (.json)"
           disabled={busy}
           autoComplete="off"
           spellCheck={false}
