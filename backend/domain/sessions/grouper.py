@@ -26,6 +26,8 @@ DEFAULT_MAX_SESSIONS = 500_000
 _IP_ETHERTYPES = (dpkt.ethernet.ETH_TYPE_IP, dpkt.ethernet.ETH_TYPE_IP6)
 _PROTO_NAMES = {1: "ICMP", 6: "TCP", 17: "UDP", 58: "ICMPv6"}
 _PORT_PROTOS = (6, 17)  # solo TCP y UDP tienen puertos
+_TCP = 6
+_TCP_SYN, _TCP_RST, _TCP_ACK = 0x02, 0x04, 0x10
 
 
 class UnsupportedLinktype(ValueError):
@@ -47,10 +49,19 @@ class Session:
     # Clave bidireccional de la sesión. Sirve para volver a encontrar sus
     # paquetes más tarde sin guardarlos en memoria. Interna: no se exporta.
     key: Optional[Tuple] = field(default=None, repr=False, compare=False)
+    # Banderas TCP contadas por sesión (0 en UDP/ICMP). Sirven para ver rechazos y reintentos (acceso
+    # remoto, escaneos). Internas: NO van al JSON exportado, que arma sus claves a mano.
+    syn_packets: int = 0  # SYN puros (intentos de abrir conexión), contando los reenviados
+    rst_packets: int = 0  # paquetes con RST (corte o rechazo)
 
     @property
     def duration(self) -> float:
         return self.last_ts - self.first_ts
+
+    @property
+    def syn_retries(self) -> int:
+        """SYN reenviados: más de un SYN puro en la misma sesión es un reintento de conexión."""
+        return max(self.syn_packets - 1, 0)
 
 
 @dataclass
@@ -118,8 +129,8 @@ def _l4_ports(ip, proto):
     return l4.sport, l4.dport
 
 
-def _endpoints(data: bytes):
-    """Extrae (ip_src, sport, ip_dst, dport, proto) o None si no es IP.
+def _endpoints_flags(data: bytes):
+    """((ip_src, sport, ip_dst, dport, proto), flags TCP) o None si no es IP (flags = 0 si no es TCP).
 
     Lanza dpkt.UnpackError si el paquete está dañado.
     """
@@ -129,11 +140,17 @@ def _endpoints(data: bytes):
     ip, family = layer
     proto = _protocol_number(ip)
     sport, dport = _l4_ports(ip, proto)
-    return (
-        socket.inet_ntop(family, ip.src), sport,
-        socket.inet_ntop(family, ip.dst), dport,
-        proto,
-    )
+    ends = (socket.inet_ntop(family, ip.src), sport, socket.inet_ntop(family, ip.dst), dport, proto)
+    return ends, (ip.data.flags if proto == _TCP else 0)
+
+
+def _endpoints(data: bytes):
+    """Extrae (ip_src, sport, ip_dst, dport, proto) o None si no es IP.
+
+    Lanza dpkt.UnpackError si el paquete está dañado.
+    """
+    found = _endpoints_flags(data)
+    return None if found is None else found[0]
 
 
 def _key(src, sport, dst, dport, proto) -> Tuple:
@@ -180,9 +197,13 @@ def _new_session(ends, key, ts: float) -> Session:
     )
 
 
-def _record_packet(sess: Session, pkt: Packet) -> None:
-    """Suma el paquete a los contadores de su sesión."""
+def _record_packet(sess: Session, pkt: Packet, flags: int = 0) -> None:
+    """Suma el paquete a los contadores de su sesión (y las banderas TCP que importan)."""
     sess.packets += 1
+    if flags & _TCP_SYN and not flags & _TCP_ACK:
+        sess.syn_packets += 1
+    if flags & _TCP_RST:
+        sess.rst_packets += 1
     # origlen = bytes reales en el cable; len(data) puede ser menos si hubo
     # snaplen. Para "cuánto tráfico fue" importa lo que viajó, no lo guardado.
     sess.bytes += pkt.origlen if pkt.origlen is not None else len(pkt.data)
@@ -191,15 +212,22 @@ def _record_packet(sess: Session, pkt: Packet) -> None:
 
 def _classify(pkt: Packet, result: GroupingResult):
     """(ends, key) del paquete; si no es una sesión cuenta el descarte y da None."""
+    found = _classify_flags(pkt, result)
+    return None if found is None else found[:2]
+
+
+def _classify_flags(pkt: Packet, result: GroupingResult):
+    """(ends, key, flags TCP) del paquete; si no es una sesión cuenta el descarte y da None."""
     try:
-        ends = _endpoints(pkt.data)
+        found = _endpoints_flags(pkt.data)
     except dpkt.UnpackError:  # incluye NeedData
         result.malformed += 1
         return None
-    if ends is None:
+    if found is None:
         result.non_ip += 1
         return None
-    return ends, _key(*ends)
+    ends, flags = found
+    return ends, _key(*ends), flags
 
 
 def group_packets(
@@ -219,10 +247,10 @@ def group_packets(
     sessions: Dict[Tuple, Session] = {}
     result = GroupingResult()
     for pkt in packets:
-        classified = _classify(pkt, result)
+        classified = _classify_flags(pkt, result)
         if classified is None:
             continue
-        ends, key = classified
+        ends, key, flags = classified
         sess = sessions.get(key)
         if sess is None and len(sessions) >= max_sessions:
             result.truncated = True
@@ -230,6 +258,6 @@ def group_packets(
             continue
         if sess is None:
             sess = sessions[key] = _new_session(ends, key, pkt.ts)
-        _record_packet(sess, pkt)
+        _record_packet(sess, pkt, flags)
     result.sessions = list(sessions.values())  # orden de aparición
     return result

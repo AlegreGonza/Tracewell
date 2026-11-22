@@ -23,6 +23,7 @@ from backend.controllers.analysis import _process_of
 from backend.controllers.state import CtxDep, current
 from backend.controllers.insights import (  # noqa: F401  (los tests parchean estos nombres desde la ruta)
     _hosts,
+    _remote_access,
     _session,
     _session_filter,
 )
@@ -42,6 +43,14 @@ def hosts(ctx: CtxDep, limit: int = Query(50, ge=1, le=500)):
 def graph(ctx: CtxDep, limit: int = Query(24, ge=2, le=60)):
     a, found = _hosts(ctx)
     return build_graph(a.result.sessions, found, limit)
+
+
+# ------------------------------------------------------------- acceso remoto
+
+@router.get("/remote-access")
+def remote_access_overview(ctx: CtxDep, service: Optional[str] = Query(None, max_length=20)):
+    """Sesiones de SSH, Telnet, SMB, RDP, WinRM y VNC agrupadas por servicio (filtro opcional `service`)."""
+    return _remote_access(ctx, service)
 
 
 # ------------------------------------------------------------------------ DNS

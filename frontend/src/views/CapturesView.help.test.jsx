@@ -10,7 +10,7 @@ vi.mock("../api/client.js", () => ({
     explain: vi.fn(() => Promise.resolve({ protocol: "TCP", outcome: null, summary: [], steps: [] })),
     sessionHttp: vi.fn(() => Promise.resolve({ exchanges: [], incomplete: false })),
     sessionTls: vi.fn(() => Promise.resolve({ tls: false })),
-    httpOverview: vi.fn(() => Promise.resolve({ scanned: 0, capped: false, items: [] })),
+    remoteAccess: vi.fn(() => Promise.resolve({ total: 0, services: [] })), httpOverview: vi.fn(() => Promise.resolve({ scanned: 0, capped: false, items: [] })),
     httpBodyUrl: vi.fn((id, i) => `/api/sessions/${id}/http/${i}/body`),
     demo: vi.fn(), analyze: vi.fn(), capture: vi.fn(), sessions: vi.fn(), alerts: vi.fn(), timeline: vi.fn(),
     sessionPackets: vi.fn(), packet: vi.fn(), stream: vi.fn(), interfaces: vi.fn(), liveStart: vi.fn(),

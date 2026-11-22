@@ -9,7 +9,7 @@ vi.mock("../api/client.js", () => ({
     liveStatus: vi.fn(), liveStop: vi.fn(), exportUrl: vi.fn(() => "/api/export"), closeCapture: vi.fn(),
     iocs: vi.fn(), loadIocs: vi.fn(), clearIocs: vi.fn(), saveNote: vi.fn(), reportUrl: vi.fn(() => "/api/report"),
     sessionPcapUrl: vi.fn((id) => `/api/sessions/${id}/pcap`), filteredPcapUrl: vi.fn((f = {}) => `/api/pcap?${new URLSearchParams(f)}`),
-    hosts: vi.fn(), graph: vi.fn(), dns: vi.fn(), explain: vi.fn(), sessionHttp: vi.fn(), sessionTls: vi.fn(), httpOverview: vi.fn(),
+    hosts: vi.fn(), graph: vi.fn(), dns: vi.fn(), explain: vi.fn(), sessionHttp: vi.fn(), sessionTls: vi.fn(), remoteAccess: vi.fn(() => Promise.resolve({ total: 0, services: [] })), httpOverview: vi.fn(),
     httpBodyUrl: vi.fn((id, i) => `/api/sessions/${id}/http/${i}/body`),
   },
 }));
@@ -326,5 +326,22 @@ describe("App: secciones, onNavigate y onCapture", () => {
     render(<App section="panorama" onNavigate={onNavigate} />);
     await userEvent.click(await screen.findByRole("button", { name: "Ir a DNS" }));
     expect(onNavigate).toHaveBeenCalledWith("trafico");
+  });
+});
+
+describe("CapturesView: sección de acceso remoto", () => {
+  it("la sección «remoto» muestra la tarjeta de acceso remoto y no las demás", async () => {
+    api.remoteAccess.mockResolvedValue({ total: 0, services: [] });
+    render(<App section="remoto" />);
+    // «Acceso remoto» también es el título de la pantalla vacía: se espera a la tarjeta real
+    expect(await screen.findByText(/No hay conexiones de acceso remoto/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Alertas" })).toBeNull();
+    expect(api.remoteAccess).toHaveBeenCalled();
+  });
+
+  it("las demás secciones no piden el acceso remoto", async () => {
+    render(<App section="alertas" />);
+    await screen.findByRole("heading", { name: "Alertas" });
+    expect(api.remoteAccess).not.toHaveBeenCalled();
   });
 });

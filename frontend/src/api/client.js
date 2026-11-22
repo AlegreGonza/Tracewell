@@ -81,6 +81,7 @@ export const api = {
   sessionTls: (id, signal) => request(`/api/sessions/${encodeURIComponent(id)}/tls`, { signal }),
   httpOverview: (signal) => request("/api/http", { signal }),
   httpBodyUrl: (id, index) => `/api/sessions/${encodeURIComponent(id)}/http/${encodeURIComponent(index)}/body`,
+  remoteAccess: (service, signal) => request(`/api/remote-access${buildQuery({ service })}`, { signal }),
   alerts: (severity, signal) => request(`/api/alerts${buildQuery({ severity })}`, { signal }),
   sessionPackets: (id, params, signal) =>
     request(`/api/sessions/${encodeURIComponent(id)}/packets${buildQuery(params)}`, { signal }),

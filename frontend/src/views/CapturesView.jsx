@@ -15,6 +15,7 @@ import TopTalkers from "../components/captures/TopTalkers.jsx";
 import HostsView from "../components/captures/HostsView.jsx";
 import DnsView from "../components/captures/DnsView.jsx";
 import HttpView from "../components/captures/HttpView.jsx";
+import RemoteAccessView from "../components/captures/RemoteAccessView.jsx";
 import Glossary from "../components/common/Glossary.jsx";
 import GuidedCase from "../components/captures/GuidedCase.jsx";
 import EmptySection from "../components/captures/EmptySection.jsx";
@@ -159,6 +160,7 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
                 {show("equipos") && <HostsView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
                 {show("trafico") && <DnsView refreshKey={version} onError={fail} />}
                 {show("trafico") && <HttpView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
+                {show("remoto") && <RemoteAccessView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
                 {show("indicadores") && <IocPanel refreshKey={version} onChange={refreshTriage} onError={fail} />}
                 {show("sesiones") && (
                 <SessionsTable

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.controllers.state import Ctx, CtxDep, current
 from backend.domain.analysis.hosts import build_graph, build_hosts
+from backend.domain.analysis.remote_access import UnknownService, remote_access
 from backend.domain.analysis.wireshark_filter import session_filter
 from fastapi import APIRouter, HTTPException, Query
 
@@ -27,3 +28,12 @@ def _session(ctx: Ctx, session_id: int, tcp_only: bool = False):
 def _session_filter(s) -> str:
     """Filtro de Wireshark de una sesión (se arma con sus extremos y su protocolo)."""
     return session_filter(s.protocol, s.src_ip, s.src_port, s.dst_ip, s.dst_port)
+
+
+def _remote_access(ctx: Ctx, service):
+    """Acceso remoto del análisis actual, agrupado por servicio; 422 si el servicio pedido no existe."""
+    a = current(ctx)
+    try:
+        return remote_access(a.result.sessions, service)
+    except UnknownService as exc:
+        raise HTTPException(422, str(exc)) from None
