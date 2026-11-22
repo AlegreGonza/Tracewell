@@ -53,6 +53,11 @@ class Session:
     # remoto, escaneos). Internas: NO van al JSON exportado, que arma sus claves a mano.
     syn_packets: int = 0  # SYN puros (intentos de abrir conexión), contando los reenviados
     rst_packets: int = 0  # paquetes con RST (corte o rechazo)
+    # MAC de cada extremo, leídas del PRIMER paquete de la sesión (Ethernet). Solo dicen algo del equipo si
+    # está en la misma red local: tras un router, la MAC de un extremo remoto es la del router.
+    # Internas: NO van al JSON exportado.
+    src_mac: Optional[str] = None
+    dst_mac: Optional[str] = None
 
     @property
     def duration(self) -> float:
@@ -187,13 +192,18 @@ def _check_group_args(linktype: int, max_sessions) -> None:
         raise ValueError(f"max_sessions debe ser un entero positivo, recibí {max_sessions!r}")
 
 
-def _new_session(ends, key, ts: float) -> Session:
-    """Crea la sesión con el primer paquete: su emisor queda como origen."""
+def _mac(raw: bytes) -> Optional[str]:
+    """MAC legible (aa:bb:cc:dd:ee:ff) de 6 bytes, o None si el paquete es demasiado corto."""
+    return ":".join(f"{b:02x}" for b in raw) if len(raw) == 6 else None
+
+
+def _new_session(ends, key, ts: float, frame: bytes = b"") -> Session:
+    """Crea la sesión con el primer paquete: su emisor queda como origen (y su MAC, la de origen)."""
     src, sport, dst, dport, proto = ends
     return Session(
         protocol=_PROTO_NAMES.get(proto, f"IP-{proto}"),
         src_ip=src, src_port=sport, dst_ip=dst, dst_port=dport,
-        first_ts=ts, key=key,
+        first_ts=ts, key=key, dst_mac=_mac(frame[0:6]), src_mac=_mac(frame[6:12]),
     )
 
 
@@ -257,7 +267,7 @@ def group_packets(
             result.untracked_packets += 1
             continue
         if sess is None:
-            sess = sessions[key] = _new_session(ends, key, pkt.ts)
+            sess = sessions[key] = _new_session(ends, key, pkt.ts, pkt.data)
         _record_packet(sess, pkt, flags)
     result.sessions = list(sessions.values())  # orden de aparición
     return result

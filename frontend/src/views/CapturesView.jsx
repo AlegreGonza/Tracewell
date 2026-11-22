@@ -13,6 +13,7 @@ import AttackMap from "../components/captures/AttackMap.jsx";
 import RiskCard from "../components/captures/RiskCard.jsx";
 import TopTalkers from "../components/captures/TopTalkers.jsx";
 import HostsView from "../components/captures/HostsView.jsx";
+import MacGroups from "../components/captures/MacGroups.jsx";
 import DnsView from "../components/captures/DnsView.jsx";
 import HttpView from "../components/captures/HttpView.jsx";
 import CaseTimeline from "../components/captures/CaseTimeline.jsx";
@@ -159,6 +160,7 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
                 {show("alertas") && <AlertsTable refreshKey={version} onError={fail} onViewSessions={viewSessions} />}
                 {show("alertas") && <AttackMap refreshKey={version} onError={fail} />}
                 {show("equipos") && <HostsView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
+                {show("equipos") && <MacGroups refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
                 {show("trafico") && <DnsView refreshKey={version} onError={fail} />}
                 {show("trafico") && <HttpView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}
                 {show("remoto") && <RemoteAccessView refreshKey={version} onError={fail} onFilterIp={filterByIp} />}

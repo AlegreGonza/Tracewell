@@ -9,7 +9,7 @@ vi.mock("../api/client.js", () => ({
     liveStatus: vi.fn(), liveStop: vi.fn(), exportUrl: vi.fn(() => "/api/export"), closeCapture: vi.fn(),
     iocs: vi.fn(), loadIocs: vi.fn(), clearIocs: vi.fn(), saveNote: vi.fn(), reportUrl: vi.fn(() => "/api/report"),
     sessionPcapUrl: vi.fn((id) => `/api/sessions/${id}/pcap`), filteredPcapUrl: vi.fn((f = {}) => `/api/pcap?${new URLSearchParams(f)}`),
-    hosts: vi.fn(), graph: vi.fn(), dns: vi.fn(), explain: vi.fn(), sessionHttp: vi.fn(), sessionTls: vi.fn(), caseTimeline: vi.fn(() => Promise.resolve({ host: null, total: 0, truncated: false, items: [] })), remoteAccess: vi.fn(() => Promise.resolve({ total: 0, services: [] })), httpOverview: vi.fn(),
+    hosts: vi.fn(), graph: vi.fn(), dns: vi.fn(), explain: vi.fn(), sessionHttp: vi.fn(), sessionTls: vi.fn(), hostsByMac: vi.fn(() => Promise.resolve({ total: 0, items: [] })), caseTimeline: vi.fn(() => Promise.resolve({ host: null, total: 0, truncated: false, items: [] })), remoteAccess: vi.fn(() => Promise.resolve({ total: 0, services: [] })), httpOverview: vi.fn(),
     httpBodyUrl: vi.fn((id, i) => `/api/sessions/${id}/http/${i}/body`),
   },
 }));

@@ -218,7 +218,7 @@ def test_host_es_dataclass_serializable():
     from dataclasses import asdict
     d = asdict(build_hosts([S("10.0.0.1", 1, "8.8.8.8", 443)])[0])
     assert set(d) == {"ip", "kind", "sessions", "packets", "bytes", "initiated", "received", "peers", "protocols", "services",
-                      "name", "alerts", "alert_rules", "ioc", "role", "role_label", "owner", "note", "roles"}
+                      "name", "alerts", "alert_rules", "ioc", "role", "role_label", "owner", "note", "roles", "mac"}
     assert isinstance(Host("x", "publica"), Host)
 
 

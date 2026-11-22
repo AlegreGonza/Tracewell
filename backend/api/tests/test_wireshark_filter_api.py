@@ -87,3 +87,24 @@ def test_cada_sesion_trae_su_direccion(demo):
 def test_la_direccion_no_va_al_json_exportado(demo):
     j = demo.get("/api/export").json()
     assert all("direction" not in s for s in j["sessions"])
+
+
+# ------------------------------------------------------------ agrupar por MAC
+def test_hosts_by_mac_en_el_demo(demo):
+    j = demo.get("/api/hosts/by-mac").json()
+    assert j["total"] == len(j["items"]) and j["total"] > 0
+    assert all(g["mac"] and g["ips"] for g in j["items"])
+    assert all(not ip.startswith("93.") for g in j["items"] for ip in g["ips"])  # remotos sin MAC propia
+
+
+def test_hosts_traen_su_mac(demo):
+    items = demo.get("/api/hosts").json()["items"]
+    assert any(h["mac"] for h in items) and all("mac" in h for h in items)
+
+
+def test_hosts_by_mac_sin_analisis_409():
+    assert TestClient(create_app(sampler_factory=None)).get("/api/hosts/by-mac").status_code == 409
+
+
+def test_el_json_exportado_no_lleva_mac(demo):
+    assert all("mac" not in s for s in demo.get("/api/export").json()["sessions"])

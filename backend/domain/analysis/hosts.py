@@ -63,6 +63,8 @@ class Host:
     # Perfil: roles INFERIDOS de lo observado en esta captura (cliente DNS, servidor web, emisor de
     # escaneos, top talker). Son pistas, no una auditoría: un equipo que no aparece no «no es» eso.
     roles: List[str] = field(default_factory=list)
+    # MAC más vista de este equipo (solo equipos de la red local: la MAC de un extremo remoto es la del router).
+    mac: Optional[str] = None
 
 
 class _Acc:
@@ -74,11 +76,12 @@ class _Acc:
         self.peer_overflow = 0
         self.protocols: Set[str] = set()
         self.ports: Counter = Counter()
+        self.macs: Counter = Counter()  # MAC -> veces vista (solo equipos de la red local)
         self.client_services: Counter = Counter()  # (protocolo, puerto) de los servicios a los que este equipo SE CONECTÓ
         self.names: Counter = Counter()
 
     def add(self, s, other_ip: str, as_origin: bool, service_port: Optional[int], name: Optional[str],
-            client_service: Optional[Tuple[str, int]] = None) -> None:
+            client_service: Optional[Tuple[str, int]] = None, mac: Optional[str] = None) -> None:
         """`service_port` y `name` solo llegan si este equipo es el SERVIDOR de la sesión; `client_service`, si es el CLIENTE."""
         self.sessions += 1
         self.packets += s.packets
@@ -92,6 +95,8 @@ class _Acc:
             self.ports[(s.protocol, service_port)] += 1
         if name:
             self.names[name] += 1
+        if mac:
+            self.macs[mac] += 1
         if client_service is not None and client_service[1] is not None:
             self.client_services[client_service] += 1
         if other_ip in self.peers:
@@ -115,6 +120,14 @@ def _server_is_src(s) -> bool:
     return src_kind != "interna" and dst_kind == "interna"
 
 
+def _host_mac(ip: str, mac: Optional[str]) -> Optional[str]:
+    """La MAC solo identifica al equipo si es de la red local y de UN equipo: se descartan las de grupo
+    (multicast y broadcast, bit 0 del primer byte) y las de equipos remotos (serían la del router)."""
+    if not mac or classify(ip) != "interna":
+        return None
+    return None if int(mac[:2], 16) & 1 else mac
+
+
 def _accumulate(sessions: Iterable, names) -> Dict[str, _Acc]:
     accs: Dict[str, _Acc] = {}
     for s in sessions:
@@ -123,10 +136,10 @@ def _accumulate(sessions: Iterable, names) -> Dict[str, _Acc]:
         service = s.src_port if src_is_server else s.dst_port
         accs.setdefault(s.src_ip, _Acc()).add(
             s, s.dst_ip, True, s.src_port if src_is_server else None, name if src_is_server else None,
-            None if src_is_server else (s.protocol, service))
+            None if src_is_server else (s.protocol, service), _host_mac(s.src_ip, getattr(s, "src_mac", None)))
         accs.setdefault(s.dst_ip, _Acc()).add(
             s, s.src_ip, False, None if src_is_server else s.dst_port, None if src_is_server else name,
-            (s.protocol, service) if src_is_server else None)
+            (s.protocol, service) if src_is_server else None, _host_mac(s.dst_ip, getattr(s, "dst_mac", None)))
     return accs
 
 
@@ -178,7 +191,7 @@ def _to_host(ip: str, acc: _Acc, names, rules: Set[str], alert_count: int, ioc, 
         services=[{"protocol": p, "port": port, "sessions": n} for (p, port), n in acc.ports.most_common(TOP_PORTS)],
         name=name, alerts=alert_count, alert_rules=sorted(rules),
         ioc=[m] if ioc is not None and (m := ioc.match_ip(ip)) else [],
-        roles=_roles(acc, scanner),
+        roles=_roles(acc, scanner), mac=acc.macs.most_common(1)[0][0] if acc.macs else None,
     )
 
 
@@ -226,3 +239,37 @@ def build_graph(sessions, hosts: List[Host], limit: int = 24) -> Dict[str, Any]:
         "edges": ordered,
         "truncated": len(hosts) > limit or len(edges) > MAX_EDGES,
     }
+
+
+def _mac_hint(mac: str, shared: bool) -> str:
+    """Pista de lectura de un grupo de MAC (orientativa, no una prueba)."""
+    parts = []
+    if int(mac[:2], 16) & 2:
+        parts.append("MAC administrada localmente (privada o aleatoria): suele ser un teléfono o equipo que la rota, o una máquina virtual.")
+    if shared:
+        parts.append(
+            "Varias IP con la misma MAC: puede ser el mismo equipo con IPv4 e IPv6 o con varias direcciones, "
+            "pero también un router, NAT o puente que reenvía tráfico de otras redes."
+        )
+    return " ".join(parts)
+
+
+def build_mac_groups(hosts: Iterable[Host]) -> List[Dict[str, Any]]:
+    """Agrupa los equipos por MAC: una fila por MAC con sus IP. Los grupos con varias IP van primero.
+
+    Solo entran equipos de la red local con una MAC conocida; los demás no tienen MAC propia en la captura.
+    """
+    groups: Dict[str, List[Host]] = {}
+    for h in hosts:
+        if h.mac:
+            groups.setdefault(h.mac, []).append(h)
+    rows = [
+        {
+            "mac": mac, "ips": sorted(h.ip for h in members), "names": sorted({h.name for h in members if h.name}),
+            "sessions": sum(h.sessions for h in members), "bytes": sum(h.bytes for h in members),
+            "shared": len(members) > 1, "hint": _mac_hint(mac, len(members) > 1),
+        }
+        for mac, members in groups.items()
+    ]
+    rows.sort(key=lambda r: (-len(r["ips"]), -r["bytes"], r["mac"]))
+    return rows

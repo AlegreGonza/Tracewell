@@ -74,6 +74,7 @@ export const api = {
   timeline: (signal) => request("/api/timeline", { signal }),
   // Entender la captura: equipos y grafo, DNS, HTTP, y la explicación en palabras simples de una sesión.
   hosts: (signal) => request("/api/hosts", { signal }),
+  hostsByMac: (signal) => request("/api/hosts/by-mac", { signal }),
   graph: (signal) => request("/api/graph", { signal }),
   dns: (q, signal) => request(`/api/dns${buildQuery({ q })}`, { signal }),
   explain: (id, signal) => request(`/api/sessions/${encodeURIComponent(id)}/explain`, { signal }),

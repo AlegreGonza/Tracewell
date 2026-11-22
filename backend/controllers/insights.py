@@ -5,7 +5,7 @@ from __future__ import annotations
 from backend.controllers.state import Ctx, CtxDep, current
 from backend.controllers.triage import _ioc_by_session
 from backend.domain.analysis.case_timeline import build_case_timeline
-from backend.domain.analysis.hosts import build_graph, build_hosts
+from backend.domain.analysis.hosts import build_graph, build_hosts, build_mac_groups
 from backend.domain.analysis.remote_access import UnknownService, remote_access
 from backend.domain.analysis.wireshark_filter import session_filter
 from fastapi import APIRouter, HTTPException, Query
@@ -51,3 +51,9 @@ def _case_timeline(ctx: Ctx, host, limit: int):
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
+
+
+def _mac_groups(ctx: Ctx):
+    """Equipos del análisis actual agrupados por MAC."""
+    _a, found = _hosts(ctx)
+    return build_mac_groups(found)

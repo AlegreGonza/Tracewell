@@ -58,7 +58,7 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - **IOC import from CSV and STIX 2.1:** besides one indicator per line, a CSV/TSV with a value column (`value`, `valor`, `indicator`, `ioc`, `ip`, `domain`...) or a STIX 2.1 JSON bundle (`ipv4-addr`, `ipv6-addr`, `domain-name`, `network-traffic` indicators). The format is detected from the extension or the content, and the same validations apply (a `/0` network is rejected, misspelled IPs fail with the line or object).
 - **Explain-why fields in rules:** optional `false_positives`, `investigation_steps` and `wireshark_filter` in a rule YAML, shown in the alert detail (`port_scan.yaml` is the example). They are never part of the JSON export.
 - **Flow direction:** every session is labeled *Internal→External*, *External→Internal*, *Internal→Internal (lateral)* or *External→External* (and *Multicast*), client → server, correcting a reversed origin when a capture starts mid-conversation.
-- **Host profile:** inferred roles per host (DNS client, web server, scan sender, top talker), using only what the capture shows.
+- **Host profile:** inferred roles per host (DNS client, web server, scan sender, top talker), using only what the capture shows, and **grouping by MAC address** (several IPs on one MAC are shown together, with a hint: dual-stack, or a router/NAT).
 - **Remote access:** a section grouping SSH, Telnet, SMB, RDP, WinRM and VNC sessions by service, with RST packets and repeated SYNs (retries) highlighted. `GET /api/remote-access?service=`.
 - **Case timeline:** alerts, suspicious DNS queries, marked sessions and IOC matches in one chronological thread, optionally limited to one host. It is a new view; the packets-per-interval chart is unchanged.
 - Exports the analysis to JSON.
@@ -410,6 +410,7 @@ All routes are under `/api`. Errors use `{"detail": "..."}`.
 | `GET /api/http` | Plaintext HTTP requests of the whole capture (sessions to the usual HTTP ports). |
 | `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps and a `wireshark_filter`. |
 | `GET /api/wireshark-filter` | Query `ip`. Display filter for an IP (`ip.addr==X` / `ipv6.addr==X`); `422` if it is not an IP. Needs no loaded capture. |
+| `GET /api/hosts/by-mac` | Local-network hosts grouped by MAC address (several IPs on one MAC first, with a hint). |
 | `GET /api/remote-access` | SSH, Telnet, SMB, RDP, WinRM and VNC sessions grouped by service, with RST and SYN retries. Optional `service` (`422` if unknown). |
 | `GET /api/case-timeline` | Alerts, suspicious DNS, marked sessions and IOC matches in chronological order. Optional `host` (IP) and `limit` (1–2000, default 500). |
 | `GET /api/sessions/{id}/http` | HTTP exchanges of a TCP session; `/http/{n}/body` downloads the file as `.bin` (it may be malware). |
@@ -516,7 +517,7 @@ These are deliberate MVP trade-offs.
 - **Extracted files can be malware.** Only the SHA-256 and the real type are shown by default; downloading saves a `.bin` after a confirmation. Never open it.
 - **The explanations are orientative.** They describe what the capture shows; they do not prove intent.
 - **"Internal" means a private address.** Flow direction and host classification use Python's private-address check, so documentation ranges such as `203.0.113.0/24` count as internal. The real topology is not known.
-- **Host roles are hints.** A host that does not show a role may still have it outside the capture. Grouping hosts by MAC address is **not done**: sessions do not keep the MAC, so it would need a change in the session grouper.
+- **Host roles and MAC groups are hints.** A host that does not show a role may still have it outside the capture. The MAC is read from the first packet of each session and only kept for local-network hosts (a remote host's MAC is your router's). One MAC with several IPs may be one machine (IPv4 + IPv6) or a router/NAT/bridge; a device that rotates its MAC (privacy MAC) appears as several. MACs never go into the JSON export.
 - **Remote-access signals are hints.** An RST can be a closed port or a normal cut, and repeated SYNs can be packet loss rather than brute force. Retries are counted per session (same 5-tuple); a brute force that opens a new source port each time shows as many sessions instead.
 - **No packaged executable.** Deployment is from source with the installer scripts. Installing Python (3.11+) is therefore required.
 

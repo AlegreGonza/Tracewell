@@ -47,16 +47,16 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - **Network support → System (read-only):** a separate screen, reachable from the top menu, that shows the machine Tracewell runs on: resource summary, running processes (RAM, CPU, path, parent, connections, SHA-256 and code signature on demand), open ports with who can reach them, active connections with the program that owns each one, services and startup programs. It never changes anything: there is no kill/disable button and every route is a `GET`. Windows and Linux; the Linux paths are not tested on a real Linux machine.
 - **Network support → Network (read-only):** network configuration, a layer-by-layer *Is the Internet down?* check, latency, devices on the local network (with vendor by MAC when `data/oui.csv` is provided), Wi-Fi status and disconnection history, a background **outage monitor** with a timeline, and small tools (ping, continuous ping, traceroute, port check, RDP reachability, clock offset, duplicate IP). Nothing changes the machine: when a problem is found the fix is shown as text only. Tests that reach out (Internet check, latency, clock) run only when you press their button.
 - **Take it with you:** download just one session (or an IP's traffic) as a new `.pcap` for Wireshark or a ticket.
-- **Novedades de triaje SOC** (texto en español; el resto de este archivo sigue en inglés, ver nota en `docs/decisiones.md`):
-  - **Filtro de Wireshark** por sesión, IP o alerta: botón «Copiar filtro Wireshark» en el detalle de sesión y en cada alerta (`ip.addr`/`ipv6.addr` más `tcp.port`/`udp.port`; en las alertas se deriva de la evidencia). `GET /api/wireshark-filter?ip=` da el filtro de una IP.
-  - **Bloque «Para el ticket»** en el informe HTML: texto plano copiable con resumen ejecutivo, línea de tiempo, IOC confirmados, evidencia clave y recomendación de contención. Todo escapado.
-  - **Importar IOC desde CSV y STIX 2.1** además de una línea por indicador. El formato se detecta por extensión o contenido y valen las mismas validaciones (red /0 rechazada, IP mal escrita, topes).
-  - **Campos explicativos en las reglas YAML:** `false_positives`, `investigation_steps` y `wireshark_filter` (opcionales). Se ven en la alerta y no van al JSON exportado; `rules/port_scan.yaml` es el ejemplo.
-  - **Dirección del flujo:** Interno→Externo, Externo→Interno, Interno→Interno (lateral) y Externo→Externo (y Multicast), de cliente a servidor.
-  - **Perfil de host:** roles inferidos (cliente DNS, servidor web, emisor de escaneos, top talker) solo con lo observado. Agrupar por MAC queda pendiente: las sesiones no guardan la MAC.
-  - **Acceso remoto:** SSH, Telnet, SMB, RDP, WinRM y VNC agrupados por servicio, con RST y reintentos de SYN señalados. `GET /api/remote-access?service=`.
-  - **Cronología del caso:** alertas, DNS sospechoso, sesiones marcadas e IOC en orden de tiempo, con filtro opcional por equipo. `GET /api/case-timeline?host=&limit=`. No reemplaza al gráfico de paquetes por intervalo.
-  - **Para más adelante** (cambian el contrato del JSON o el estado de las vistas): confianza separada de la severidad, silenciar o lista blanca temporal, exportar a TheHive o MISP.
+- **SOC triage additions:**
+  - **Wireshark display filter** per session, IP or alert: a **Copy Wireshark filter** button in the session detail and on every alert (`ip.addr`/`ipv6.addr` plus `tcp.port`/`udp.port`; for alerts it is derived from the evidence). `GET /api/wireshark-filter?ip=` returns the filter for an IP.
+  - **"For the ticket" block** in the HTML report: plain, copyable text with an executive summary, timeline, confirmed IOC matches, key evidence and a containment suggestion. Everything is escaped.
+  - **IOC import from CSV and STIX 2.1** besides one indicator per line. The format is detected from the extension or the content, and the same validations apply (a `/0` network is rejected, misspelled IPs fail, size limits).
+  - **Explain-why fields in YAML rules:** optional `false_positives`, `investigation_steps` and `wireshark_filter`. They show in the alert and are not part of the JSON export; `rules/port_scan.yaml` is the example.
+  - **Flow direction:** Internal→External, External→Internal, Internal→Internal (lateral) and External→External (and Multicast), client to server.
+  - **Host profile:** inferred roles (DNS client, web server, scan sender, top talker) using only what was observed, plus **grouping by MAC address** (`GET /api/hosts/by-mac`).
+  - **Remote access:** SSH, Telnet, SMB, RDP, WinRM and VNC grouped by service, with RST packets and SYN retries flagged. `GET /api/remote-access?service=`.
+  - **Case timeline:** alerts, suspicious DNS, marked sessions and IOC matches in time order, optionally limited to one host. `GET /api/case-timeline?host=&limit=`. It does not replace the packets-per-interval chart.
+  - **Later** (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP.
 - Exports the analysis to JSON.
 - **Demo mode** with a bundled synthetic capture that triggers all three rules.
 
@@ -360,7 +360,15 @@ mitre:
 params:
   min_ports: 15               # 2..65535
   window_seconds: 60
+# Optional explain-why fields (shown in the alert detail, never exported to JSON):
+false_positives:              # list of non-empty texts
+  - An authorized vulnerability scanner.
+investigation_steps:          # list of non-empty texts
+  - Confirm whether the source is an approved scanning host.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0   # non-empty text
 ```
+
+`GET /api/alerts` adds two extra keys to each alert: `wireshark_filter` (derived from the evidence) and, when the rule defines any of the optional fields, `guide`. The JSON export keeps its exact `schema_version: 1` shape.
 
 ### Rule validation is strict
 
@@ -396,7 +404,11 @@ All routes are under `/api`. Errors use `{"detail": "..."}`.
 | `POST /api/support/monitor/start` · `/stop` · `/clear` | Start, stop or clear the in-memory outage monitor (it measures; it changes nothing on the machine). |
 | `GET /api/dns` | DNS table (`?q=` filters by name): queries, responses, result codes, hints. |
 | `GET /api/http` | Plaintext HTTP requests of the whole capture (sessions to the usual HTTP ports). |
-| `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps. |
+| `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps and a `wireshark_filter`. |
+| `GET /api/wireshark-filter` | Query `ip`. Display filter for an IP (`ip.addr==X` / `ipv6.addr==X`); `422` if it is not an IP. Needs no loaded capture. |
+| `GET /api/hosts/by-mac` | Local-network hosts grouped by MAC address (several IPs on one MAC first, with a hint). |
+| `GET /api/remote-access` | SSH, Telnet, SMB, RDP, WinRM and VNC sessions grouped by service, with RST and SYN retries. Optional `service` (`422` if unknown). |
+| `GET /api/case-timeline` | Alerts, suspicious DNS, marked sessions and IOC matches in chronological order. Optional `host` (IP) and `limit` (1–2000, default 500). |
 | `GET /api/sessions/{id}/http` | HTTP exchanges of a TCP session; `/http/{n}/body` downloads the file as `.bin` (it may be malware). |
 | `GET /api/sessions/{id}/tls` | JA4 fingerprint, negotiated version and server certificate (when visible). |
 | `GET /api/sessions/{id}/pcap` / `GET /api/pcap` | A new `.pcap` with one session, or with the sessions matching `protocol`/`ip`/`port`. |
@@ -500,6 +512,9 @@ These are deliberate MVP trade-offs.
 - **JA4:** implemented by hand from the public spec. The cipher-list part was checked against a published value; the extension/signature-algorithm part follows the spec but was **not cross-checked against the reference implementation** (the verification library could not be installed in this environment). Treat it as a strong hint, not as a certified match.
 - **Extracted files can be malware.** Only the SHA-256 and the real type are shown by default; downloading saves a `.bin` after a confirmation. Never open it.
 - **The explanations are orientative.** They describe what the capture shows; they do not prove intent.
+- **"Internal" means a private address.** Flow direction and host classification use Python's private-address check, so documentation ranges such as `203.0.113.0/24` count as internal. The real topology is not known.
+- **Host roles and MAC groups are hints.** A host that does not show a role may still have it outside the capture. The MAC is read from the first packet of each session and only kept for local-network hosts (a remote host's MAC is your router's). One MAC with several IPs may be one machine (IPv4 + IPv6) or a router/NAT/bridge; a device that rotates its MAC (privacy MAC) appears as several. MACs never go into the JSON export.
+- **Remote-access signals are hints.** An RST can be a closed port or a normal cut, and repeated SYNs can be packet loss rather than brute force. Retries are counted per session (same 5-tuple); a brute force that opens a new source port each time shows as many sessions instead.
 - **No packaged executable.** Deployment is from source with the installer scripts. Installing Python (3.11+) is therefore required.
 
 ---
@@ -518,6 +533,7 @@ These are deliberate MVP trade-offs.
 - [x] Live capture validated on real Windows hardware and on Linux (root)
 - [ ] Final run of the full test suite in a clean environment
 - [ ] Desktop window on Linux and macOS
+- [ ] Later (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP
 - Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` in case it is revisited.
 
 ---

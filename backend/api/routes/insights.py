@@ -24,6 +24,7 @@ from backend.controllers.state import CtxDep, current
 from backend.controllers.insights import (  # noqa: F401  (los tests parchean estos nombres desde la ruta)
     _case_timeline,
     _hosts,
+    _mac_groups,
     _remote_access,
     _session,
     _session_filter,
@@ -38,6 +39,13 @@ router = APIRouter(prefix="/api")
 def hosts(ctx: CtxDep, limit: int = Query(50, ge=1, le=500)):
     _a, found = _hosts(ctx)
     return {"total": len(found), "items": [asdict(h) for h in found[:limit]]}
+
+
+@router.get("/hosts/by-mac")
+def hosts_by_mac(ctx: CtxDep):
+    """Equipos de la red local agrupados por MAC (varias IP con la misma MAC van primero)."""
+    groups = _mac_groups(ctx)
+    return {"total": len(groups), "items": groups}
 
 
 @router.get("/graph")
