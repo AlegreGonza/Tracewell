@@ -607,3 +607,18 @@ describe("HostsView", () => {
     expect(signal.aborted).toBe(true);
   });
 });
+
+describe("HostsView: perfil del equipo", () => {
+  it("muestra los roles inferidos del equipo", async () => {
+    api.hosts.mockResolvedValue({ total: 1, items: [host("10.0.0.5", { roles: ["Cliente DNS", "Top talker"] })] });
+    api.graph.mockResolvedValue({ nodes: [node("10.0.0.5")], edges: [], truncated: false });
+    await loaded();
+    const list = screen.getByRole("list", { name: "Perfil del equipo" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Cliente DNS", "Top talker"]);
+  });
+
+  it("sin roles no aparece la lista", async () => {
+    await loaded();
+    expect(screen.queryByRole("list", { name: "Perfil del equipo" })).toBeNull();
+  });
+});

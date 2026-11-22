@@ -19,6 +19,14 @@ from backend.domain.analysis.owners import describe_ip
 MAX_PEERS = 5_000  # destinos distintos que se recuerdan por equipo (después solo se cuenta)
 MAX_EDGES = 300
 TOP_PORTS = 5
+WEB_PORTS = frozenset({80, 443, 8080, 8443})
+TOP_TALKERS = 3  # cuántos equipos, como máximo, se marcan como «top talker»
+TALKER_MIN_SHARE = 0.10  # ...y solo si movieron al menos esta parte de los bytes de la captura
+
+ROLE_DNS_CLIENT = "Cliente DNS"
+ROLE_WEB_SERVER = "Servidor web"
+ROLE_SCANNER = "Emisor de escaneos"
+ROLE_TOP_TALKER = "Top talker"
 
 
 def classify(ip: str) -> str:
@@ -52,6 +60,9 @@ class Host:
     role_label: str = ""
     owner: Optional[str] = None  # dueño conocido del rango (tabla local, solo pista)
     note: Optional[str] = None  # qué es una dirección especial (p. ej. mDNS)
+    # Perfil: roles INFERIDOS de lo observado en esta captura (cliente DNS, servidor web, emisor de
+    # escaneos, top talker). Son pistas, no una auditoría: un equipo que no aparece no «no es» eso.
+    roles: List[str] = field(default_factory=list)
 
 
 class _Acc:
@@ -63,10 +74,12 @@ class _Acc:
         self.peer_overflow = 0
         self.protocols: Set[str] = set()
         self.ports: Counter = Counter()
+        self.client_services: Counter = Counter()  # (protocolo, puerto) de los servicios a los que este equipo SE CONECTÓ
         self.names: Counter = Counter()
 
-    def add(self, s, other_ip: str, as_origin: bool, service_port: Optional[int], name: Optional[str]) -> None:
-        """`service_port` y `name` solo llegan si este equipo es el SERVIDOR de la sesión."""
+    def add(self, s, other_ip: str, as_origin: bool, service_port: Optional[int], name: Optional[str],
+            client_service: Optional[Tuple[str, int]] = None) -> None:
+        """`service_port` y `name` solo llegan si este equipo es el SERVIDOR de la sesión; `client_service`, si es el CLIENTE."""
         self.sessions += 1
         self.packets += s.packets
         self.bytes += s.bytes
@@ -79,6 +92,8 @@ class _Acc:
             self.ports[(s.protocol, service_port)] += 1
         if name:
             self.names[name] += 1
+        if client_service is not None and client_service[1] is not None:
+            self.client_services[client_service] += 1
         if other_ip in self.peers:
             return
         if len(self.peers) < MAX_PEERS:
@@ -105,10 +120,13 @@ def _accumulate(sessions: Iterable, names) -> Dict[str, _Acc]:
     for s in sessions:
         name = names.best_name(s) if names is not None else None
         src_is_server = _server_is_src(s)
+        service = s.src_port if src_is_server else s.dst_port
         accs.setdefault(s.src_ip, _Acc()).add(
-            s, s.dst_ip, True, s.src_port if src_is_server else None, name if src_is_server else None)
+            s, s.dst_ip, True, s.src_port if src_is_server else None, name if src_is_server else None,
+            None if src_is_server else (s.protocol, service))
         accs.setdefault(s.dst_ip, _Acc()).add(
-            s, s.src_ip, False, None if src_is_server else s.dst_port, None if src_is_server else name)
+            s, s.src_ip, False, None if src_is_server else s.dst_port, None if src_is_server else name,
+            (s.protocol, service) if src_is_server else None)
     return accs
 
 
@@ -121,7 +139,33 @@ def _alert_index(alerts: Iterable) -> Dict[str, Set[str]]:
     return index
 
 
-def _to_host(ip: str, acc: _Acc, names, rules: Set[str], alert_count: int, ioc) -> Host:
+def _scan_sources(alerts: Iterable) -> Set[str]:
+    """IP que dispararon la regla de escaneo de puertos (como ORIGEN de la alerta)."""
+    return {a.src_ip for a in alerts if a.rule_id == "port_scan"}
+
+
+def _roles(acc: _Acc, scanner: bool) -> List[str]:
+    """Roles que se desprenden SOLO de lo observado en las sesiones y las alertas de esta captura."""
+    roles = []
+    if any(port == 53 for (_proto, port) in acc.client_services):
+        roles.append(ROLE_DNS_CLIENT)
+    if any(proto == "TCP" and port in WEB_PORTS for (proto, port) in acc.ports):
+        roles.append(ROLE_WEB_SERVER)
+    if scanner:
+        roles.append(ROLE_SCANNER)
+    return roles
+
+
+def _mark_top_talkers(hosts: List[Host], total_bytes: int) -> None:
+    """Marca como «Top talker» a los que más bytes movieron (ya ordenados), si pesan lo suficiente."""
+    if total_bytes <= 0:
+        return
+    for h in hosts[:TOP_TALKERS]:
+        if h.bytes / total_bytes >= TALKER_MIN_SHARE:
+            h.roles.append(ROLE_TOP_TALKER)
+
+
+def _to_host(ip: str, acc: _Acc, names, rules: Set[str], alert_count: int, ioc, scanner: bool = False) -> Host:
     kind = classify(ip)
     # Un equipo de TU red no se llama como el sitio al que se conecta: el nombre es del servidor.
     name = acc.names.most_common(1)[0][0] if acc.names else (names.dns.get(ip) if names is not None else None)
@@ -134,19 +178,25 @@ def _to_host(ip: str, acc: _Acc, names, rules: Set[str], alert_count: int, ioc) 
         services=[{"protocol": p, "port": port, "sessions": n} for (p, port), n in acc.ports.most_common(TOP_PORTS)],
         name=name, alerts=alert_count, alert_rules=sorted(rules),
         ioc=[m] if ioc is not None and (m := ioc.match_ip(ip)) else [],
+        roles=_roles(acc, scanner),
     )
 
 
 def build_hosts(sessions, names=None, alerts: Iterable = (), ioc=None) -> List[Host]:
     """Un Host por IP, ordenado de más a menos tráfico."""
-    alerts = list(alerts)
+    alerts, sessions = list(alerts), list(sessions)
     index = _alert_index(alerts)
+    scanners = _scan_sources(alerts)
     counts: Counter = Counter()
     for a in alerts:
         for ip in {a.src_ip, a.dst_ip}:
             counts[ip] += 1
-    hosts = [_to_host(ip, acc, names, index.get(ip, set()), counts[ip], ioc) for ip, acc in _accumulate(sessions, names).items()]
+    hosts = [
+        _to_host(ip, acc, names, index.get(ip, set()), counts[ip], ioc, ip in scanners)
+        for ip, acc in _accumulate(sessions, names).items()
+    ]
     hosts.sort(key=lambda h: (-h.bytes, -h.sessions, h.ip))
+    _mark_top_talkers(hosts, sum(s.bytes for s in sessions))
     return hosts
 
 

@@ -70,7 +70,7 @@ def test_hosts_demo_forma_y_orden(demo):
     j = demo.get("/api/hosts").json()
     assert j["total"] == len(j["items"]) >= 5
     assert set(j["items"][0]) == {"ip", "kind", "sessions", "packets", "bytes", "initiated", "received", "peers", "protocols", "services",
-                                  "name", "alerts", "alert_rules", "ioc", "role", "role_label", "owner", "note"}
+                                  "name", "alerts", "alert_rules", "ioc", "role", "role_label", "owner", "note", "roles"}
     assert [h["bytes"] for h in j["items"]] == sorted((h["bytes"] for h in j["items"]), reverse=True)
     sessions = demo.get("/api/sessions", params={"limit": 500}).json()["total"]
     assert sum(h["sessions"] for h in j["items"]) == 2 * sessions

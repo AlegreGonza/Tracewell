@@ -239,7 +239,17 @@ export default function HostsView({ refreshKey, onError, onFilterIp }) {
                   <td className="mono">
                     <button type="button" className="link" onClick={() => onFilterIp?.(h.ip)}>{h.ip}</button>
                   </td>
-                  <td>{h.role_label || KIND_LABEL[h.kind] || h.kind}</td>
+                  <td>
+                    {h.role_label || KIND_LABEL[h.kind] || h.kind}
+                    {/* Perfil: roles inferidos de lo observado en la captura (pistas, no una auditoría). */}
+                    {h.roles?.length > 0 && (
+                      <ul className="host-roles" aria-label="Perfil del equipo">
+                        {h.roles.map((r) => (
+                          <li key={r} className="badge">{r}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td className="mono">
                     {h.name ?? (h.owner ? <span className="muted" title={SOURCE_NOTE.rango}>{h.owner}</span> : h.note ? <span className="muted">{h.note}</span> : <span className="muted">—</span>)}
                   </td>
