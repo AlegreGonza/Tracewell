@@ -6,3 +6,8 @@ node_modules/
 dist/
 build/
 release/
+
+# Archivos de configuración de Claude Code: no van al repositorio
+.claude/
+CLAUDE.md
+.mcp.json
