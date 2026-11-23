@@ -22,8 +22,8 @@ def form(**over):
 def test_el_ejemplo_genera_una_regla_valida():
     data = builder.to_dict(form())
     rule = builder.build_rule(data)
-    assert rule.id == "muchas_conexiones_a_ssh_interno" and rule.detector == "threshold"
-    assert rule.params["port"] == 22 and rule.params["dst_ip"] == "10.0.0.0/8"
+    assert rule.id == "muchos_syn_hacia_la_red_interna" and rule.detector == "threshold"
+    assert rule.params["port"] == 0 and rule.params["dst_ip"] == "192.168.0.0/16"
 
 
 def test_el_yaml_generado_se_lee_igual_y_carga_con_el_motor(tmp_path):
@@ -33,7 +33,7 @@ def test_el_yaml_generado_se_lee_igual_y_carga_con_el_motor(tmp_path):
     f = tmp_path / "r.yaml"
     f.write_text(text, encoding="utf-8")
     (rule,) = load_rules(f)
-    assert rule.name == data["name"] and rule.severity == "high"
+    assert rule.name == data["name"] and rule.severity == "medium"
 
 
 def test_mismo_formato_que_las_reglas_del_repo():
@@ -67,7 +67,7 @@ def test_texto_hostil_no_rompe_el_yaml():
 
 def test_vista_previa_cuenta_sesiones_y_alertas(tmp_path):
     pcap = write_pcap(tmp_path / "t.pcap", attempts(10))
-    rule = builder.build_rule(builder.to_dict(form(dst_ip="10.0.0.0/24", min_events=5)))
+    rule = builder.build_rule(builder.to_dict(form(dst_ip="10.0.0.0/24", min_events=5, port=22)))
     result = group_packets(iter_packets(pcap), 1)
     out = builder.preview(rule, iter_packets(pcap), result.sessions)
     assert out["alerts"] == 1 and out["sessions"] == 10

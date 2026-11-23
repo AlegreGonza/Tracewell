@@ -17,6 +17,7 @@ import MacGroups from "../components/captures/MacGroups.jsx";
 import DnsView from "../components/captures/DnsView.jsx";
 import HttpView from "../components/captures/HttpView.jsx";
 import CaseTimeline from "../components/captures/CaseTimeline.jsx";
+import RulesPanel from "../components/captures/RulesPanel.jsx";
 import RemoteAccessView from "../components/captures/RemoteAccessView.jsx";
 import Glossary from "../components/common/Glossary.jsx";
 import GuidedCase from "../components/captures/GuidedCase.jsx";
@@ -138,7 +139,9 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
           </p>
         )}
 
-        {capture === null && !busy ? (
+        {section === "reglas" ? (
+          <RulesPanel refreshKey={version} onError={fail} />
+        ) : capture === null && !busy ? (
           section === "all" || section === "panorama" ? (
             <Welcome onDemo={() => run(api.demo)} onOpenSupport={onOpenSupport} />
           ) : (

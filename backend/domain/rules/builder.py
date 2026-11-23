@@ -168,8 +168,8 @@ def summarize(rules: List[Rule]) -> List[Dict[str, Any]]:
 
 
 EXAMPLE: Dict[str, Any] = {
-    "name": "Muchas conexiones a SSH interno",
-    "severity": "high",
-    "description": "Una IP intentó conectarse muchas veces al SSH de un equipo de la red interna.",
-    "protocol": "tcp", "src_ip": "", "dst_ip": "10.0.0.0/8", "port": 22, "min_events": 8, "window_seconds": 30,
+    "name": "Muchos SYN hacia la red interna",
+    "severity": "medium",
+    "description": "Una IP abrió muchas conexiones nuevas hacia equipos de la red interna en poco tiempo.",
+    "protocol": "tcp", "src_ip": "", "dst_ip": "192.168.0.0/16", "port": 0, "min_events": 15, "window_seconds": 60,
 }

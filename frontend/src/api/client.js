@@ -101,6 +101,9 @@ export const api = {
   filteredPcapUrl: (filters) => `/api/pcap${buildQuery(filters)}`,
   // Triaje: nota/marca "revisada" por sesión y lista de indicadores de compromiso (IOC).
   saveNote: (id, body) => request(`/api/sessions/${encodeURIComponent(id)}/note`, { method: "PUT", body }),
+  rules: (signal) => request("/api/rules", { signal }),
+  previewRule: (body, signal) => request("/api/rules/preview", { method: "POST", body, signal }),
+  saveRule: (body) => request("/api/rules", { method: "POST", body }),
   iocs: (signal) => request("/api/iocs", { signal }),
   loadIocs: (path) => request("/api/iocs", { method: "POST", body: { path } }),
   clearIocs: () => request("/api/iocs", { method: "DELETE" }),

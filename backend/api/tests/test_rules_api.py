@@ -27,7 +27,7 @@ def client(rules_dir):
 def test_lista_reglas_y_trae_el_ejemplo(client):
     j = client.get("/api/rules").json()
     assert {"port_scan", "brute_force_remote"} <= {r["id"] for r in j["items"]}
-    assert j["example"]["port"] == 22 and not any(r["custom"] for r in j["items"])
+    assert j["example"]["protocol"] == "tcp" and not any(r["custom"] for r in j["items"])
 
 
 def test_preview_sin_captura_da_yaml_y_sin_coincidencias(client):

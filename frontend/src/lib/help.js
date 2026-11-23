@@ -73,7 +73,11 @@ export const HELP = {
   },
   attack: {
     title: "Mapa MITRE ATT&CK",
-    text: "MITRE ATT&CK es el «diccionario» de cómo atacan los delincuentes. Las columnas son las tácticas (el objetivo del atacante en cada etapa) y los casilleros, las técnicas concretas. Las que se iluminan son las que dispararon alertas en esta captura.",
+    text: "MITRE ATT&CK es el «diccionario» de cómo atacan los delincuentes. Las columnas son las tácticas (el objetivo del atacante en cada etapa) que se pueden ver en el tráfico de red: reconocimiento, exploración, movimiento lateral, comando y control y exfiltración. Los casilleros son las técnicas concretas. Las que se iluminan son las que dispararon alertas en esta captura.",
+  },
+  rules: {
+    title: "Crear una alerta",
+    text: "Una regla dice qué tráfico mirar (protocolo, IP de origen o destino, puerto) y cuántas veces tiene que repetirse en una ventana de tiempo para que salte una alerta. Antes de guardarla ves cuántas sesiones y alertas daría con la captura abierta. Se guarda como un archivo YAML nuevo en la carpeta rules/ y no cambia las reglas que ya existen.",
   },
   ioc: {
     title: "Indicadores de compromiso (IOC)",
