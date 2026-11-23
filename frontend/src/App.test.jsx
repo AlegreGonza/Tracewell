@@ -58,7 +58,7 @@ describe("Shell: marco y navegación", () => {
   it("marca Tracewell, barra lateral con los dos grupos y todas las secciones", () => {
     render(<Shell />);
     expect(screen.getByText("Tracewell")).toBeInTheDocument();
-    expect(CAPTURE_SECTIONS.map((s) => s.id)).toEqual(["panorama", "alertas", "equipos", "trafico", "remoto", "cronologia", "sesiones", "indicadores"]);
+    expect(CAPTURE_SECTIONS.map((s) => s.id)).toEqual(["panorama", "alertas", "equipos", "trafico", "remoto", "cronologia", "sesiones", "indicadores", "reglas"]);
     ["Panorama", "Alertas y ATT&CK", "Equipos", "DNS y HTTP", "Sesiones", "Indicadores (IOC)"].forEach((l) =>
       expect(item(l)).toHaveAttribute("type", "button")
     );
@@ -255,5 +255,23 @@ describe("Shell: apariencia", () => {
     for (const m of ["Auto", "Claro", "Oscuro"]) expect(await screen.findByText(m)).toBeInTheDocument();
     await userEvent.click(screen.getByText("Oscuro"));
     expect(screen.getByRole("radio", { name: "Oscuro" })).toBeChecked();
+  });
+
+  it("el menú lateral se puede ocultar y mostrar (también en pantallas grandes)", async () => {
+    render(<Shell />);
+    const toggle = screen.getByRole("button", { name: "Mostrar u ocultar el menú lateral" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("el botón del menú para pantallas chicas también informa su estado", async () => {
+    render(<Shell />);
+    const toggle = screen.getByRole("button", { name: "Abrir o cerrar el menú" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 });

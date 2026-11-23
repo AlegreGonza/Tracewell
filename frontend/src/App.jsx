@@ -3,7 +3,7 @@ import { AppShell, Badge, Burger, Group, Menu, NavLink, SegmentedControl, Text, 
 import { useDisclosure } from "@mantine/hooks";
 import {
   IconActivity, IconAlertTriangle, IconCheck, IconCpu, IconFile, IconLayoutDashboard, IconListDetails, IconNetwork,
-  IconHistory, IconPalette, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww,
+  IconHistory, IconPalette, IconRulerMeasure, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww,
 } from "@tabler/icons-react";
 import { PALETTES } from "./theme.js";
 import CapturesView from "./views/CapturesView.jsx";
@@ -19,6 +19,7 @@ export const CAPTURE_SECTIONS = [
   { id: "cronologia", label: "Cronología del caso", icon: IconHistory },
   { id: "sesiones", label: "Sesiones", icon: IconListDetails },
   { id: "indicadores", label: "Indicadores (IOC)", icon: IconShieldSearch },
+  { id: "reglas", label: "Reglas", icon: IconRulerMeasure },
 ];
 const GROUP_ICON = { sistema: IconCpu, red: IconNetwork };
 
@@ -68,7 +69,8 @@ function ThemeMenu({ palette, onPalette }) {
 // Marco de la aplicación: cabecera + barra lateral + contenido. «Capturas» y «Soporte de red» quedan montadas una vez
 // abiertas (solo se ocultan), así cambiar de una a otra no pierde el análisis cargado ni lo que se estaba mirando.
 export default function App({ palette = "esmeralda", onPalette }) {
-  const [opened, { toggle, close }] = useDisclosure(false);
+  const [opened, { toggle, close }] = useDisclosure(false); // menú en pantallas chicas (se abre encima)
+  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true); // en pantallas grandes se puede ocultar para ganar ancho
   const [area, setArea] = useState("capturas");
   const [section, setSection] = useState("panorama");
   const [support, setSupport] = useState({ group: "sistema", section: "resumen" });
@@ -90,13 +92,14 @@ export default function App({ palette = "esmeralda", onPalette }) {
   return (
     <AppShell
       header={{ height: 52 }}
-      navbar={{ width: 236, breakpoint: "sm", collapsed: { mobile: !opened } }}
+      navbar={{ width: 236, breakpoint: "sm", collapsed: { mobile: !opened, desktop: !desktopOpened } }}
       padding={0}
       className="shell"
     >
       <AppShell.Header className="app-header">
         <Group h="100%" px="md" gap="sm" wrap="nowrap">
-          <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Abrir o cerrar el menú" />
+          <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Abrir o cerrar el menú" aria-expanded={opened} />
+          <Burger opened={desktopOpened} onClick={toggleDesktop} visibleFrom="sm" size="sm" aria-label="Mostrar u ocultar el menú lateral" aria-expanded={desktopOpened} />
           <h1 className="brand">
             <IconActivity size={20} stroke={2.2} aria-hidden="true" />
             Tracewell
