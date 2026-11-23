@@ -584,8 +584,9 @@ def test_defaults_de_los_detectores(tmp_path):
 
 def test_reglas_reales_cargan_y_mapean_a_detectores_conocidos():
     rules = load_rules(ROOT / "rules")
-    assert len(rules) == 8
-    assert {r.detector for r in rules} == set(X._engine.DETECTORS)
+    assert len(rules) == 9
+    # "threshold" es la regla que arma el analista desde la interfaz: no tiene una regla propia en rules/.
+    assert {r.detector for r in rules} == set(X._engine.DETECTORS) - {"threshold"}
 
 
 def test_demo_sigue_dando_exactamente_3_alertas():
@@ -609,7 +610,7 @@ def _names(first):
 
 
 EXPECTED = sorted(["port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
-                   "dns_unusual_resolver", "large_upload"])
+                   "dns_unusual_resolver", "large_upload", "brute_force", "threshold"])
 
 
 @pytest.mark.parametrize("first", ["backend.domain.rules.engine", "backend.domain.rules.extra_detectors"])

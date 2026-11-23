@@ -1,0 +1,28 @@
+id: brute_force_remote
+name: Fuerza bruta a SSH o RDP
+description: >
+  Una misma IP abrió muchas conexiones nuevas hacia el SSH (puerto 22) o el
+  Escritorio remoto (puerto 3389) de un mismo equipo en poco tiempo, patrón
+  típico de un programa que prueba contraseñas.
+severity: high
+detector: brute_force
+mitre:
+  technique: T1110
+  name: Brute Force
+  tactic: Credential Access
+params:
+  min_attempts: 10     # intentos de conexión para disparar
+  window_seconds: 60   # ventana de tiempo
+  ports: [22, 3389]    # SSH y RDP
+
+# Campos explicativos OPCIONALES: se muestran en la alerta de la interfaz (no van en el JSON exportado).
+false_positives:
+  - Un script de administración o de respaldo que se conecta por SSH muchas veces seguidas a propósito.
+  - Un cliente con un fallo que reintenta la conexión sin parar.
+  - Un monitoreo que prueba el servicio cada pocos segundos.
+investigation_steps:
+  - Confirmar si el origen es un equipo conocido o un administrador autorizado.
+  - Revisar en los registros del servidor (auth.log o el Visor de eventos) si hubo inicios de sesión fallidos y alguno exitoso al final.
+  - Si el origen es externo, evaluar bloquearlo en el cortafuegos y activar el bloqueo por intentos.
+  - Buscar al mismo origen en otras alertas antes de contener.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0 && tcp.dstport in {22 3389}

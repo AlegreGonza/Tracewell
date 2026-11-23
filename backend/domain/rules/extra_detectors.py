@@ -1,5 +1,5 @@
 """Detectores adicionales: beaconing, inundación SYN, puertos sospechosos, DNS a un
-resolvedor no habitual y subidas grandes de datos.
+resolvedor no habitual subidas grandes de datos, fuerza bruta y la regla personalizada por umbral.
 
 Mismas reglas que el resto: la REGLA es un YAML (umbral, severidad, MITRE) y el
 DETECTOR es código chico. Cada detector guarda estado acotado (`_LRU`): un atacante
@@ -253,12 +253,148 @@ class LargeUploadDetector(Detector):
         })]
 
 
+# --------------------------------------------------------------- fuerza bruta
+
+class BruteForceDetector(Detector):
+    """Muchos intentos de conexión de una misma IP a SSH (22) o RDP (3389) en poco tiempo.
+
+    Cada intento de iniciar sesión abre una conexión nueva: se cuentan los SYN puros de un origen hacia
+    un mismo destino y puerto. Un usuario normal abre pocas; un programa que prueba contraseñas, decenas.
+    Es una pista: no mira si el inicio de sesión falló (el tráfico va cifrado).
+    """
+
+    PARAMS = {
+        "min_attempts": (_int_range(3, 100_000), 10),
+        "window_seconds": (_num_range(0.001), 60.0),
+        "ports": (_port_list, [22, 3389]),
+    }
+
+    def __init__(self, rule):
+        super().__init__(rule)
+        self._seen = _LRU()  # (origen, destino, puerto) -> instantes de los últimos intentos
+        self._alerted = _LRU()
+
+    def feed(self, d):
+        if not _is_pure_syn(d) or d.dport not in self.p["ports"]:
+            return []
+        key = (d.src, d.dst, d.dport)
+        if key in self._alerted:
+            return []
+        recent: Deque[float] = self._seen.get(key) or deque(maxlen=self.p["min_attempts"])
+        recent.append(d.ts)
+        self._seen[key] = recent
+        if len(recent) < self.p["min_attempts"]:
+            return []
+        span = recent[-1] - recent[0]
+        if span > self.p["window_seconds"]:
+            return []  # los intentos más recientes no caben en la ventana
+        self._alerted[key] = True
+        return [self._alert(d, {
+            "service": "SSH" if d.dport == 22 else "RDP" if d.dport == 3389 else f"puerto {d.dport}",
+            "destination_port": d.dport, "attempts": len(recent),
+            "window_seconds": round(span, 3), "threshold": self.p["min_attempts"],
+        }, ts=recent[0])]
+
+
+# ------------------------------------------------------ regla personalizada
+
+_PROTOCOLS = {"any": None, "tcp": 6, "udp": 17}
+
+
+def _protocol(v):
+    if not isinstance(v, str) or v.lower() not in _PROTOCOLS:
+        raise ValueError(f"debe ser uno de {sorted(_PROTOCOLS)}, recibí {v!r}")
+    return v.lower()
+
+
+def _ip_or_network(v):
+    """IP o red CIDR (texto); vacío = cualquiera. Se devuelve normalizado."""
+    if v in (None, ""):
+        return ""
+    try:
+        return str(ipaddress.ip_network(str(v).strip(), strict=False))
+    except ValueError:
+        raise ValueError(f"no es una IP ni una red CIDR: {v!r}") from None
+
+
+def _port_or_zero(v):
+    """Puerto de destino 1..65535; 0 = cualquiera."""
+    if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 65535:
+        raise ValueError(f"debe ser un entero entre 0 y 65535 (0 = cualquiera), recibí {v!r}")
+    return v
+
+
+def _in_network(ip_text: str, network: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip_text) in ipaddress.ip_network(network)
+    except ValueError:  # versión de IP distinta o texto raro
+        return False
+
+
+class ThresholdDetector(Detector):
+    """Regla creada por el analista: N eventos que cumplen un filtro en una ventana de tiempo.
+
+    Filtro: protocolo, red/IP de origen, red/IP de destino y puerto de destino (todo opcional).
+    En TCP se cuentan los intentos de conexión (SYN puros); en UDP y `any`, cada paquete.
+    Se cuenta por par origen -> destino y se alerta una vez por par.
+    """
+
+    PARAMS = {
+        "protocol": (_protocol, "any"),
+        "src_ip": (_ip_or_network, ""),
+        "dst_ip": (_ip_or_network, ""),
+        "port": (_port_or_zero, 0),
+        "min_events": (_int_range(2, 1_000_000), 20),
+        "window_seconds": (_num_range(0.001), 60.0),
+    }
+
+    def __init__(self, rule):
+        super().__init__(rule)
+        self._seen = _LRU()
+        self._alerted = _LRU()
+
+    def _matches(self, d: Decoded) -> bool:
+        p = self.p
+        wanted = _PROTOCOLS[p["protocol"]]
+        if wanted is not None and d.proto != wanted:
+            return False
+        if d.proto == 6 and not _is_pure_syn(d):
+            return False
+        if p["port"] and d.dport != p["port"]:
+            return False
+        if p["src_ip"] and not _in_network(d.src, p["src_ip"]):
+            return False
+        return not (p["dst_ip"] and not _in_network(d.dst, p["dst_ip"]))
+
+    def feed(self, d):
+        if not self._matches(d):
+            return []
+        key = (d.src, d.dst)
+        if key in self._alerted:
+            return []
+        recent: Deque[float] = self._seen.get(key) or deque(maxlen=self.p["min_events"])
+        recent.append(d.ts)
+        self._seen[key] = recent
+        if len(recent) < self.p["min_events"]:
+            return []
+        span = recent[-1] - recent[0]
+        if span > self.p["window_seconds"]:
+            return []
+        self._alerted[key] = True
+        return [self._alert(d, {
+            "events": len(recent), "window_seconds": round(span, 3), "threshold": self.p["min_events"],
+            "protocol": self.p["protocol"], "destination_port": d.dport,
+        }, ts=recent[0])]
+
+
 DETECTORS: Dict[str, Type[Detector]] = {
     "beaconing": BeaconingDetector,
     "syn_flood": SynFloodDetector,
     "suspicious_ports": SuspiciousPortsDetector,
     "dns_unusual_resolver": DnsUnusualResolverDetector,
     "large_upload": LargeUploadDetector,
+    "brute_force": BruteForceDetector,
+    "threshold": ThresholdDetector,
 }
 
 # Si este módulo se importó ANTES que engine, engine ya terminó de cargarse y no vio DETECTORS:

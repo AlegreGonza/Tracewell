@@ -69,5 +69,5 @@ def test_port_scan_de_ejemplo_trae_los_tres_campos():
 
 def test_las_demas_reglas_reales_no_cambian():
     for r in load_rules(REAL_RULES):
-        if r.id != "port_scan":
+        if r.id not in ("port_scan", "brute_force_remote"):
             assert (r.false_positives, r.investigation_steps, r.wireshark_filter) == ((), (), "")

@@ -113,7 +113,7 @@ def test_load_real_rules():
     rules = {r.id: r for r in load_rules(REAL_RULES)}
     assert set(rules) == {
         "port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
-        "dns_unusual_resolver", "large_upload",
+        "dns_unusual_resolver", "large_upload", "brute_force_remote",
     }
     ps, ftp, dns = rules["port_scan"], rules["ftp_cleartext"], rules["dns_suspicious"]
     assert (ps.severity, ps.mitre_technique, ps.mitre_tactic) == ("high", "T1046", "Discovery")

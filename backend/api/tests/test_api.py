@@ -77,7 +77,7 @@ def test_demo_resumen(client):
     assert j["stats"]["sessions"] == 32
     assert j["stats"]["non_ip"] == 1
     assert j["alerts"] == 3
-    assert len(j["rules"]) == 8
+    assert len(j["rules"]) == 9
     assert {"ftp_cleartext", "port_scan", "dns_suspicious"} <= {x["id"] for x in j["rules"]}
     assert client.get("/api/capture").json() == j
 
