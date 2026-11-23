@@ -285,7 +285,7 @@ tracewell/
 │   ├── api/                      # API layer (FastAPI): translates HTTP <-> controllers
 │   │   ├── app.py                # create_app(): assembles the app, nothing else
 │   │   ├── server.py             # runs the API in a thread on a free 127.0.0.1 port
-│   │   ├── security.py           # Host/Origin protection (DNS rebinding, cross-site requests)
+│   │   ├── security.py           # Host/Origin protection and security headers
 │   │   ├── errors.py             # exception -> HTTP status table
 │   │   ├── routes/               # one thin router per area: analysis, live, triage, insights, system, support
 │   │   └── tests/
@@ -464,7 +464,8 @@ A filtered report still carries the partial-analysis flags of the **capture**: a
 ## Security and privacy
 
 - **The API is meant for your own machine.** `POST /api/analyze` reads a path you give it. Run it bound to `127.0.0.1` only.
-- **Protection against web pages.** The API accepts only `Host` headers `127.0.0.1` / `localhost` (blocks DNS rebinding) and rejects any non-local `Origin` header with `403` (blocks cross-site requests from pages you may have open).
+- **Protection against web pages.** The API accepts only `Host` headers `127.0.0.1` / `localhost` / `[::1]` (blocks DNS rebinding) and rejects any non-local `Origin` header with `403` (blocks cross-site requests from pages you may have open). Every response carries a Content-Security-Policy (scripts only from the app itself), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
+- **Paths must be regular files.** `/api/analyze` and `/api/iocs` reject Windows device names (`con`, `aux`, `nul`...) and non-files with a `400` before opening anything. Error messages never echo the content of the file you pointed at.
 - **Hostile traffic is treated as text.** Evidence, names and hex dumps come from captured traffic, which may be malicious. The UI renders them as plain text and never as HTML.
 - **No secrets in alerts or reports.** FTP passwords are never stored; reports contain the file name, not your folders.
 - **Bounded resources.** Capture limits (packets, time, size), a cap on tracked sessions, and bounded detector state prevent a capture or an attack from exhausting memory or disk. Trade-off: with more than 100,000 distinct source/destination pairs a detector forgets the least recent ones.
@@ -493,13 +494,20 @@ cd frontend
 npm test
 ```
 
-There are about 4,020 Python tests and about 1,310 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
+There are about 4,060 Python tests and about 1,310 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
 
 **Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](docs/checklist_hardware.md) (in Spanish).
 
+### Linters and CI
+
+- **Python:** `python -m ruff check backend main.py` (pyflakes rules: unused imports, undefined names). `ruff` is in the `dev` extra of `pyproject.toml`.
+- **Frontend:** `cd frontend && npm run lint` (ESLint, flat config in `frontend/eslint.config.js`).
+- **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs both linters, the full Python and frontend test suites and the frontend build on every push to `main` and on pull requests.
+- Details (including line-ending policy and security headers): [`docs/desarrollo.md`](docs/desarrollo.md) (in Spanish).
+
 ### Static analysis (optional)
 
-`mypy` (with `--check-untyped-defs`) passes with no issues. A quality report with recommended tools (ruff, mypy, pip-audit, ESLint) and performance measurements is in [`docs/informe_calidad.md`](docs/informe_calidad.md) (in Spanish). These tools are **not** added to `pyproject.toml` yet.
+A quality report with recommended tools (ruff, mypy, pip-audit, ESLint) and performance measurements is in [`docs/informe_calidad.md`](docs/informe_calidad.md) (in Spanish). Only ruff (pyflakes rules) and ESLint are configured in the project; `mypy` and `pip-audit` are not, and the report's `mypy` result predates the latest changes.
 
 ### Regenerating the demo capture
 
@@ -563,3 +571,4 @@ All of these are in Spanish:
 - [`docs/decisiones.md`](docs/decisiones.md) — every design decision and why, step by step.
 - [`docs/checklist_hardware.md`](docs/checklist_hardware.md) — manual live-capture validation.
 - [`docs/informe_calidad.md`](docs/informe_calidad.md) — static analysis and performance report.
+- [`docs/desarrollo.md`](docs/desarrollo.md) — linters, CI, line endings and security headers.
