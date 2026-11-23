@@ -103,3 +103,11 @@ def test_no_se_puede_pisar_una_regla_existente(tmp_path):
     with pytest.raises(RuleExists):
         builder.save(rules, data, [r.id for r in load_rules(rules)])
     assert (rules / "port_scan.yaml").read_bytes() == original
+
+
+def test_id_reservado_de_windows_se_rechaza():
+    import pytest
+    from backend.domain.rules.builder import RuleError, RuleForm, to_dict
+    for reservado in ("con", "nul", "com1", "lpt9"):
+        with pytest.raises(RuleError):
+            to_dict(RuleForm(id=reservado, name="Prueba", severity="low"))

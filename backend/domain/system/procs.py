@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import time
@@ -17,6 +18,8 @@ from backend.domain.analysis.owners import owner_of
 from backend.domain.pcap.processes import normalize_ip
 
 from .common import IS_WINDOWS, path_hints, psutil_or_raise, safe
+
+logger = logging.getLogger(__name__)
 
 CPU_SAMPLE_SECONDS = 0.4
 MAX_CMDLINE = 400
@@ -82,6 +85,7 @@ def process_detail(pid: int) -> Dict[str, Any]:
         p = ps.Process(pid)
         p.name()
     except Exception:  # noqa: BLE001 - no existe, o ya terminó
+        logger.debug("el proceso %s no existe o no se puede leer", pid, exc_info=True)
         return {}
     with p.oneshot():
         name = safe(p.name)

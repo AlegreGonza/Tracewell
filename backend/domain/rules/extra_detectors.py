@@ -13,11 +13,11 @@ from __future__ import annotations
 import ipaddress
 import statistics
 from collections import deque
-from typing import Any, Deque, Dict, List, Tuple, Type
+from typing import Deque, Dict, List, Tuple, Type
 
 from backend.domain.rules import engine as _engine
 from backend.domain.rules.engine import (
-    TCP_ACK, TCP_SYN, Alert, Decoded, Detector, DnsSuspiciousDetector, _int_range, _LRU, _num_range, _port_list,
+    Decoded, Detector, DnsSuspiciousDetector, _int_range, _LRU, _num_range, _port_list, is_pure_syn,
 )
 
 # Puertos de servicios que hablan a intervalos regulares de forma normal (DNS, NTP, mDNS, NetBIOS, SSDP, DHCP).
@@ -30,9 +30,12 @@ _PUBLIC_RESOLVERS = [
 _MAX_TRACKED_EVENTS = 200
 
 
-def _is_pure_syn(d: Decoded) -> bool:
-    """SYN sin ACK: intento de abrir una conexión."""
-    return d.proto == 6 and bool(d.flags & TCP_SYN) and not d.flags & TCP_ACK
+def _push_recent(seen: _LRU, key, item, maxlen: int) -> Deque:
+    """Agrega `item` a la ventana deslizante de `key` (últimos `maxlen`) y refresca su recencia."""
+    recent = seen.get(key) or deque(maxlen=maxlen)
+    recent.append(item)
+    seen[key] = recent
+    return recent
 
 
 def _ports_or_empty(v):
@@ -94,7 +97,7 @@ class BeaconingDetector(Detector):
         self._alerted = _LRU()
 
     def _is_event(self, d: Decoded) -> bool:
-        return (_is_pure_syn(d) or d.proto == 17) and d.dport not in self.p["ignore_ports"]
+        return (is_pure_syn(d) or d.proto == 17) and d.dport not in self.p["ignore_ports"]
 
     def _record(self, key, ts: float) -> List[float]:
         times = self._times.get(key) or []
@@ -144,14 +147,12 @@ class SynFloodDetector(Detector):
         self._alerted = _LRU()
 
     def feed(self, d):
-        if not _is_pure_syn(d):
+        if not is_pure_syn(d):
             return []
         key = (d.dst, d.dport)
         if key in self._alerted:
             return []
-        recent: Deque[Tuple[float, str]] = self._seen.get(key) or deque(maxlen=self.p["min_syns"])
-        recent.append((d.ts, d.src))
-        self._seen[key] = recent
+        recent = _push_recent(self._seen, key, (d.ts, d.src), self.p["min_syns"])
         if len(recent) < self.p["min_syns"]:
             return []
         span = recent[-1][0] - recent[0][0]
@@ -178,7 +179,7 @@ class SuspiciousPortsDetector(Detector):
     def feed(self, d):
         # Solo el SYN que inicia la conexión: las respuestas del servidor van al puerto efímero del
         # cliente, que podría coincidir por casualidad con uno de la lista.
-        if not _is_pure_syn(d) or d.dport not in self.p["ports"]:
+        if not is_pure_syn(d) or d.dport not in self.p["ports"]:
             return []
         key = (d.src, d.dst, d.dport)
         if key in self._alerted:
@@ -275,14 +276,12 @@ class BruteForceDetector(Detector):
         self._alerted = _LRU()
 
     def feed(self, d):
-        if not _is_pure_syn(d) or d.dport not in self.p["ports"]:
+        if not is_pure_syn(d) or d.dport not in self.p["ports"]:
             return []
         key = (d.src, d.dst, d.dport)
         if key in self._alerted:
             return []
-        recent: Deque[float] = self._seen.get(key) or deque(maxlen=self.p["min_attempts"])
-        recent.append(d.ts)
-        self._seen[key] = recent
+        recent = _push_recent(self._seen, key, d.ts, self.p["min_attempts"])
         if len(recent) < self.p["min_attempts"]:
             return []
         span = recent[-1] - recent[0]
@@ -358,7 +357,7 @@ class ThresholdDetector(Detector):
         wanted = _PROTOCOLS[p["protocol"]]
         if wanted is not None and d.proto != wanted:
             return False
-        if d.proto == 6 and not _is_pure_syn(d):
+        if d.proto == 6 and not is_pure_syn(d):
             return False
         if p["port"] and d.dport != p["port"]:
             return False
@@ -372,9 +371,7 @@ class ThresholdDetector(Detector):
         key = (d.src, d.dst)
         if key in self._alerted:
             return []
-        recent: Deque[float] = self._seen.get(key) or deque(maxlen=self.p["min_events"])
-        recent.append(d.ts)
-        self._seen[key] = recent
+        recent = _push_recent(self._seen, key, d.ts, self.p["min_events"])
         if len(recent) < self.p["min_events"]:
             return []
         span = recent[-1] - recent[0]

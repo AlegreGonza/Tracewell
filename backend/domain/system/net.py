@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import socket
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,8 @@ from backend.domain.pcap.layers import SERVICES
 from backend.domain.pcap.processes import normalize_ip
 
 from .common import psutil_or_raise, safe
+
+logger = logging.getLogger(__name__)
 
 MAX_ROWS = 1000
 
@@ -46,6 +49,7 @@ def _inet_connections(ps) -> Optional[list]:
     try:
         return list(ps.net_connections(kind="inet"))
     except Exception:  # noqa: BLE001 - AccessDenied u otro fallo de lectura: se informa como "limitado"
+        logger.debug("no se pudieron listar los sockets del sistema", exc_info=True)
         return None
 
 

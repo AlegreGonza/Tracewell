@@ -23,6 +23,9 @@ from backend.domain.rules.extra_detectors import _in_network
 from backend.domain.sessions.grouper import ETHERNET
 
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
+# Nombres de dispositivo de Windows: un archivo con ese nombre (con.yaml, nul.yaml...) es problemático.
+RESERVED_IDS = frozenset({"con", "prn", "aux", "nul"}
+                         | {f"com{i}" for i in range(1, 10)} | {f"lpt{i}" for i in range(1, 10)})
 MAX_NAME, MAX_DESCRIPTION = 80, 500
 DEFAULT_MITRE = {"technique": "T1595", "name": "Active Scanning", "tactic": "Reconnaissance"}
 SAMPLE_ALERTS = 5
@@ -69,6 +72,8 @@ def to_dict(form: RuleForm) -> Dict[str, Any]:
     if len(description) > MAX_DESCRIPTION:
         raise RuleError(f"la descripción admite hasta {MAX_DESCRIPTION} caracteres")
     rule_id = (form.id or "").strip() or slugify(name)
+    if rule_id in RESERVED_IDS:
+        raise RuleError(f"el id {rule_id!r} es un nombre reservado del sistema; elige otro")
     if not ID_RE.match(rule_id):
         raise RuleError("el id debe empezar con una letra minúscula y tener 3 a 40 letras minúsculas, números o _")
     if form.severity not in SEVERITIES:

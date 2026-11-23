@@ -16,13 +16,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.domain.pcap.layers import SERVICES
 
 from .common import IS_WINDOWS, run, valid_host, valid_port
-from .netinfo import default_gateway, is_apipa, network_config
+from .netinfo import default_gateway, network_config
 
 TCP_TIMEOUT = 2.0
 INTERNET_PROBES = (("1.1.1.1", 443), ("8.8.8.8", 443))
 DNS_PROBES = ("www.google.com", "one.one.one.one", "www.microsoft.com")  # alcanza con que UNO resuelva: un solo nombre da falsos positivos
 TIME_SERVERS = ("time.windows.com", "pool.ntp.org", "time.cloudflare.com")
 MAX_PORTS = 20
+PING_COUNT = 3  # pings a la puerta de enlace en «¿hay Internet?»
+DNS_SLOW_MS = 1500  # más que esto, el DNS se marca como lento
 _TIMES = re.compile(r"[=<]\s*(\d+(?:[.,]\d+)?)\s*ms", re.IGNORECASE)
 
 
@@ -65,6 +67,13 @@ def resolve(name: str, timeout: float = 3.0) -> Dict[str, Any]:
     return {"ok": False, "ms": None, "addresses": [], "error": box.get("error", "no se pudo resolver")}
 
 
+def _min_max_avg(times: List[float]) -> Dict[str, Optional[float]]:
+    """Mínimo, máximo y promedio (1 decimal) de unos tiempos en ms; todo None si no hay ninguno."""
+    if not times:
+        return {"min": None, "max": None, "avg": None}
+    return {"min": min(times), "max": max(times), "avg": round(statistics.fmean(times), 1)}
+
+
 def ping(host: str, count: int = 4) -> Dict[str, Any]:
     """Ping con el comando del sistema. Las respuestas se cuentan por la línea que trae `TTL=`, que es igual en
     cualquier idioma (el texto «tiempo»/«time» cambia, el TTL no)."""
@@ -86,61 +95,70 @@ def ping(host: str, count: int = 4) -> Dict[str, Any]:
                 times.append(0.5)  # «tiempo<1ms»
     return {
         "available": True, "host": host, "sent": count, "received": received,
-        "loss_pct": round(100 * (count - received) / count, 1), "times": times,
-        "min": min(times) if times else None, "max": max(times) if times else None,
-        "avg": round(statistics.fmean(times), 1) if times else None,
+        "loss_pct": round(100 * (count - received) / count, 1), "times": times, **_min_max_avg(times),
         "timed_out": res.timed_out,
     }
 
 
 # ------------------------------------------------------------------ ¿hay Internet?
 
-def internet_check() -> Dict[str, Any]:
-    """Revisa capa por capa (adaptador → puerta de enlace → Internet por IP → DNS) y dice dónde se corta.
-
-    Contacta a 1.1.1.1 y 8.8.8.8 (solo abre y cierra una conexión TCP) y le pide a tu DNS la dirección de unos sitios conocidos.
-    """
-    steps: List[Dict[str, Any]] = []
-    config = network_config()
+def _adapter_step(config: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    """Primer paso: ¿hay un adaptador con IP válida? Devuelve el paso y si hay red local (IP que no sea 169.254)."""
     live = [a for a in config["adapters"] if a["up"] and not a["loopback"] and a["ipv4"]]
     apipa = [a for a in live if a["apipa"]]
     good = [a for a in live if not a["apipa"]]
     if good:
         a = good[0]
-        steps.append(_step("adapter", "Adaptador de red", True, f"{a['name']} con IP {a['ipv4'][0]['ip']}"))
-    elif apipa:
-        steps.append(_step("adapter", "Adaptador de red", False,
-                           f"{apipa[0]['name']} tiene una IP 169.254.x.x: no consiguió IP del router (DHCP)."))
-    else:
-        steps.append(_step("adapter", "Adaptador de red", False, "No hay ningún adaptador conectado con IP."))
+        return _step("adapter", "Adaptador de red", True, f"{a['name']} con IP {a['ipv4'][0]['ip']}"), True
+    if apipa:
+        return _step("adapter", "Adaptador de red", False,
+                     f"{apipa[0]['name']} tiene una IP 169.254.x.x: no consiguió IP del router (DHCP)."), False
+    return _step("adapter", "Adaptador de red", False, "No hay ningún adaptador conectado con IP."), False
 
-    gw = default_gateway(config) if good else None
-    if gw:
-        p = ping(gw, 3)
-        ok = p.get("received", 0) > 0
-        steps.append(_step("gateway", "Puerta de enlace (el router)", ok,
-                           f"{gw}: respondió ({p['avg']} ms)" if ok else f"{gw}: no respondió al ping", ms=p.get("avg")))
-    else:
-        steps.append(_step("gateway", "Puerta de enlace (el router)", False if good else None,
-                           "No se encontró una puerta de enlace." if good else "Se omite: no hay red local."))
 
-    probes = [(h, p_, tcp_connect(h, p_)) for h, p_ in INTERNET_PROBES]
-    reachable = [(h, r) for h, _p, r in probes if r["ok"]]
-    steps.append(_step("internet", "Internet (por dirección IP)", bool(reachable),
-                       f"{reachable[0][0]}: conectó en {reachable[0][1]['ms']} ms" if reachable
-                       else "No se pudo conectar a 1.1.1.1 ni a 8.8.8.8.",
-                       ms=reachable[0][1]["ms"] if reachable else None))
+def _gateway_step(config: Dict[str, Any], has_network: bool) -> Dict[str, Any]:
+    title = "Puerta de enlace (el router)"
+    gw = default_gateway(config) if has_network else None
+    if not gw:
+        return _step("gateway", title, False if has_network else None,
+                     "No se encontró una puerta de enlace." if has_network else "Se omite: no hay red local.")
+    p = ping(gw, PING_COUNT)
+    ok = p.get("received", 0) > 0
+    return _step("gateway", title, ok, f"{gw}: respondió ({p['avg']} ms)" if ok else f"{gw}: no respondió al ping", ms=p.get("avg"))
 
+
+def _internet_step() -> Dict[str, Any]:
+    probes = [(h, tcp_connect(h, port)) for h, port in INTERNET_PROBES]
+    reachable = [(h, r) for h, r in probes if r["ok"]]
+    if reachable:
+        host, r = reachable[0]
+        return _step("internet", "Internet (por dirección IP)", True, f"{host}: conectó en {r['ms']} ms", ms=r["ms"])
+    hosts = " ni a ".join(h for h, _port in INTERNET_PROBES)
+    return _step("internet", "Internet (por dirección IP)", False, f"No se pudo conectar a {hosts}.", ms=None)
+
+
+def _dns_step() -> Dict[str, Any]:
+    """Alcanza con que UN nombre resuelva; si ninguno lo hace, se informa el error del último intento."""
     dns: Dict[str, Any] = {"ok": False, "ms": None, "addresses": [], "error": "no se pudo resolver"}
     name = DNS_PROBES[0]
     for name in DNS_PROBES:
         dns = resolve(name)
         if dns["ok"]:
             break
-    slow = dns["ok"] and dns["ms"] is not None and dns["ms"] > 1500
-    steps.append(_step("dns", "DNS (traducir nombres)", dns["ok"],
-                       (f"{name} → {dns['addresses'][0]}" + (" (responde lento)" if slow else "")) if dns["ok"]
-                       else f"No se pudo resolver {', '.join(DNS_PROBES)}: {dns['error']}", ms=dns["ms"]))
+    slow = dns["ok"] and dns["ms"] is not None and dns["ms"] > DNS_SLOW_MS
+    return _step("dns", "DNS (traducir nombres)", dns["ok"],
+                 (f"{name} → {dns['addresses'][0]}" + (" (responde lento)" if slow else "")) if dns["ok"]
+                 else f"No se pudo resolver {', '.join(DNS_PROBES)}: {dns['error']}", ms=dns["ms"])
+
+
+def internet_check() -> Dict[str, Any]:
+    """Revisa capa por capa (adaptador → puerta de enlace → Internet por IP → DNS) y dice dónde se corta.
+
+    Contacta a 1.1.1.1 y 8.8.8.8 (solo abre y cierra una conexión TCP) y le pide a tu DNS la dirección de unos sitios conocidos.
+    """
+    config = network_config()
+    adapter, has_network = _adapter_step(config)
+    steps = [adapter, _gateway_step(config, has_network), _internet_step(), _dns_step()]
     return {"steps": steps, **_verdict(steps)}
 
 
@@ -203,9 +221,7 @@ def latency_test(host: str = "1.1.1.1", port: int = 443, samples: int = 8) -> Di
     gw = default_gateway()
     router = ping(gw, 4) if gw else None
     return {
-        "host": host, "port": port, "samples": samples, "failed": failed, "times": times,
-        "min": min(times) if times else None, "max": max(times) if times else None,
-        "avg": round(statistics.fmean(times), 1) if times else None,
+        "host": host, "port": port, "samples": samples, "failed": failed, "times": times, **_min_max_avg(times),
         "jitter": round(jitter, 1) if jitter is not None else None,
         "router": ({"host": gw, "avg": router["avg"], "loss_pct": router["loss_pct"]} if router and router.get("available") else None),
     }

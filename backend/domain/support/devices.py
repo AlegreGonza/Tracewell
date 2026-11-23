@@ -136,31 +136,49 @@ def _resolve_names(ips: List[str]) -> Dict[str, Optional[str]]:
     return names
 
 
+def _in_nets(ip: str, nets: List[ipaddress.IPv4Network]) -> bool:
+    addr = ipaddress.ip_address(ip)
+    return any(addr in n for n in nets)
+
+
+def _device_dict(ip: str, mac: str, hostname: Optional[str], is_gateway: bool, is_self: bool) -> Dict[str, Any]:
+    rnd = is_random_mac(mac)
+    return {
+        "ip": ip, "mac": fmt_mac(mac), "vendor": None if rnd else vendor_of(mac), "random_mac": rnd,
+        "hostname": hostname, "is_gateway": is_gateway, "is_self": is_self,
+    }
+
+
+def _self_devices(config: Dict[str, Any], nets: List[ipaddress.IPv4Network], known_ips: set) -> List[Dict[str, Any]]:
+    """El propio equipo no aparece en su tabla ARP: se agrega para que la lista esté completa."""
+    out: List[Dict[str, Any]] = []
+    for a in config["adapters"]:
+        if not (a["up"] and not a["loopback"] and a["mac"] and not a["apipa"]):
+            continue
+        for v4 in a["ipv4"]:
+            if v4["ip"] not in known_ips and _in_nets(v4["ip"], nets):
+                known_ips.add(v4["ip"])
+                out.append(_device_dict(v4["ip"], a["mac"], config["hostname"], False, True))
+    return out
+
+
 def list_devices(scan: bool = False) -> Dict[str, Any]:
     """Dispositivos de la red local. Con `scan` hace primero el barrido de pings (tarda unos segundos)."""
     config = network_config()
     nets = local_subnets()
     swept = sweep(local_subnets(only_routed=True)) if scan and nets else 0
     mine = {v["ip"] for a in config["adapters"] for v in a["ipv4"]}
-    own_macs = {norm_mac(a["mac"]): a["name"] for a in config["adapters"] if a["mac"]}
+    own_macs = {norm_mac(a["mac"]) for a in config["adapters"] if a["mac"]}
     gateway = default_gateway(config)
-    entries = [e for e in arp_table() if any(ipaddress.ip_address(e["ip"]) in n for n in nets)] if nets else arp_table()
+    entries = arp_table()
+    if nets:
+        entries = [e for e in entries if _in_nets(e["ip"], nets)]
     names = _resolve_names([e["ip"] for e in entries])
-    devices: List[Dict[str, Any]] = []
-    for e in sorted(entries, key=lambda e: ipaddress.ip_address(e["ip"])):
-        rnd = is_random_mac(e["mac"])
-        devices.append({
-            "ip": e["ip"], "mac": e["mac"], "vendor": None if rnd else vendor_of(e["mac"]), "random_mac": rnd,
-            "hostname": names.get(e["ip"]), "is_gateway": e["ip"] == gateway, "is_self": e["ip"] in mine or norm_mac(e["mac"]) in own_macs,
-        })
-    # El propio equipo no aparece en su tabla ARP: se agrega para que la lista esté completa.
-    for a in config["adapters"]:
-        if a["up"] and not a["loopback"] and a["mac"] and not a["apipa"]:
-            for v4 in a["ipv4"]:
-                if not any(d["ip"] == v4["ip"] for d in devices) and any(ipaddress.ip_address(v4["ip"]) in n for n in nets):
-                    rnd = is_random_mac(a["mac"])
-                    devices.append({"ip": v4["ip"], "mac": fmt_mac(a["mac"]), "vendor": None if rnd else vendor_of(a["mac"]), "random_mac": rnd,
-                                    "hostname": config["hostname"], "is_gateway": False, "is_self": True})
+    devices = [
+        _device_dict(e["ip"], e["mac"], names.get(e["ip"]), e["ip"] == gateway, e["ip"] in mine or norm_mac(e["mac"]) in own_macs)
+        for e in entries
+    ]
+    devices += _self_devices(config, nets, {d["ip"] for d in devices})
     devices.sort(key=lambda d: ipaddress.ip_address(d["ip"]))
     return {
         "devices": devices, "scanned": scan, "swept_hosts": swept, "subnets": [str(n) for n in nets],

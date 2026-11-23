@@ -5,11 +5,14 @@ y permisos, una sonda ARP que pregunta «¿quién tiene mi IP?» y mira si conte
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from .common import IS_WINDOWS, powershell_json
 from .devices import fmt_mac, norm_mac
 from .netinfo import network_config
+
+logger = logging.getLogger(__name__)
 
 _EVENTS_SCRIPT = (
     "try { $e = @(Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Tcpip'; Id=4199} -MaxEvents 20 "
@@ -35,6 +38,7 @@ def _arp_probe(ip: str, own_mac: str) -> Dict[str, Any]:
         answered, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip), timeout=2, retry=1)
         macs = sorted({norm_mac(r.hwsrc) for _s, r in answered})
     except Exception as e:  # noqa: BLE001 - sin Npcap, sin permisos o sin interfaz: la sonda no está disponible
+        logger.debug("sonda ARP no disponible para %s", ip, exc_info=True)
         return {"ip": ip, "probed": False, "reason": f"No se pudo hacer la sonda ARP ({type(e).__name__}): hace falta Npcap y abrir Tracewell como administrador."}
     others = [fmt_mac(m) for m in macs if m != norm_mac(own_mac)]
     return {"ip": ip, "probed": True, "other_macs": others, "duplicate": bool(others)}

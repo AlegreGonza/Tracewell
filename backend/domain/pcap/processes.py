@@ -171,6 +171,7 @@ class PsutilProvider:
         try:
             return self._ps.Process(pid).name()
         except Exception:  # NoSuchProcess / AccessDenied / ZombieProcess: el nombre es opcional
+            logger.debug("no se pudo leer el nombre del proceso %s", pid, exc_info=True)
             return f"PID {pid}"
 
 

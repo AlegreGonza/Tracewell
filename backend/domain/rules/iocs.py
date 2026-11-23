@@ -39,6 +39,15 @@ class IocSet:
     ips: frozenset = field(default_factory=frozenset)
     networks: Tuple = ()
     domains: frozenset = field(default_factory=frozenset)
+    # Índice por (versión, prefijo) -> {dirección de red: (orden, red)}; se arma una vez en __post_init__.
+    _index: dict = field(init=False, repr=False, compare=False, default_factory=dict)
+
+    def __post_init__(self) -> None:
+        index: dict = {}
+        for order, net in enumerate(self.networks):
+            slot = index.setdefault((net.version, net.prefixlen), {})
+            slot.setdefault(int(net.network_address), (order, net))  # ante solapes gana la primera de la lista
+        object.__setattr__(self, "_index", index)
 
     def __len__(self) -> int:
         return len(self.ips) + len(self.networks) + len(self.domains)
@@ -51,10 +60,16 @@ class IocSet:
             return None
         if addr.compressed in self.ips:
             return f"ip:{addr.compressed}"
-        for net in self.networks:
-            if addr.version == net.version and addr in net:
-                return f"red:{net}"
-        return None
+        # Una consulta por prefijo distinto (<=129) en vez de recorrer miles de redes.
+        value, bits, best = int(addr), addr.max_prefixlen, None
+        for (version, prefixlen), nets in self._index.items():
+            if version != addr.version:
+                continue
+            shift = bits - prefixlen
+            hit = nets.get((value >> shift) << shift)
+            if hit and (best is None or hit[0] < best[0]):
+                best = hit
+        return f"red:{best[1]}" if best else None
 
     def match_domain(self, name: str) -> Optional[str]:
         """Coincide si el nombre ES un dominio de la lista o cuelga de uno (con límite de label)."""

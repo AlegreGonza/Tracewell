@@ -223,10 +223,15 @@ def _file_of(ex: Dict[str, Any], req: Optional[_Msg], resp: Optional[_Msg]) -> O
     return None
 
 
+def _starts_with_method(data: bytes) -> bool:
+    """¿Empieza con un método HTTP? Mira solo el inicio: `split` sobre el flujo entero copiaría megas."""
+    return data[:16].split(b" ", 1)[0] in _METHODS
+
+
 def _client_server(origin: bytes, destination: bytes) -> Tuple[bytes, bytes]:
     """(bytes del cliente, bytes del servidor). El «origen» puede estar invertido si la captura empezó a mitad."""
-    dest_is_request = destination.split(b" ", 1)[0] in _METHODS
-    origin_is_request = origin.split(b" ", 1)[0] in _METHODS
+    dest_is_request = _starts_with_method(destination)
+    origin_is_request = _starts_with_method(origin)
     if dest_is_request and not origin_is_request:  # el destino manda las peticiones: el origen quedó invertido
         return destination, origin
     return origin, destination
@@ -234,7 +239,7 @@ def _client_server(origin: bytes, destination: bytes) -> Tuple[bytes, bytes]:
 
 def looks_like_http(origin: bytes, destination: bytes) -> bool:
     client, server = _client_server(origin, destination)
-    return client.split(b" ", 1)[0] in _METHODS or server.startswith(b"HTTP/1.")
+    return _starts_with_method(client) or server.startswith(b"HTTP/1.")
 
 
 def _method_of(request_line: str) -> str:

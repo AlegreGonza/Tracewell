@@ -1,8 +1,11 @@
 """Utilidades compartidas del paquete: acceso perezoso a psutil, lecturas tolerantes y pistas sobre rutas."""
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform.startswith("linux")
@@ -26,6 +29,7 @@ def safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
     except Exception:  # noqa: BLE001 - cualquier fallo de lectura del sistema es "dato no disponible"
+        logger.debug("lectura del sistema no disponible", exc_info=True)
         return default
 
 

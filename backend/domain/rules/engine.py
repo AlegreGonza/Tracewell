@@ -196,6 +196,11 @@ class _LRU(OrderedDict):
             self.popitem(last=False)
 
 
+def is_pure_syn(d: Decoded) -> bool:
+    """SYN sin ACK: intento de abrir una conexión TCP."""
+    return d.proto == 6 and bool(d.flags & TCP_SYN) and not d.flags & TCP_ACK
+
+
 class Detector:
     PARAMS: Dict[str, Tuple[Callable[[Any], Any], Any]] = {}
 
@@ -236,10 +241,7 @@ class PortScanDetector(Detector):
         self._seen = _LRU()
         self._alerted = _LRU()
 
-    @staticmethod
-    def _is_pure_syn(d: Decoded) -> bool:
-        """SYN sin ACK: intento de abrir conexión."""
-        return d.proto == 6 and bool(d.flags & TCP_SYN) and not d.flags & TCP_ACK
+    _is_pure_syn = staticmethod(is_pure_syn)  # alias: los tests lo usan desde la clase
 
     def _record_port(self, key, d: Decoded) -> Dict[int, float]:
         """Anota el puerto visto para el par y refresca su recencia."""

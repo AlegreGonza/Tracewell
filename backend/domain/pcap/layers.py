@@ -42,6 +42,7 @@ ICMP_TYPES = {0: "Respuesta de eco (ping)", 3: "Destino inalcanzable", 5: "Redir
 ICMP6_TYPES = {1: "Destino inalcanzable", 128: "Solicitud de eco (ping)", 129: "Respuesta de eco (ping)", 133: "Solicitud de router",
                134: "Anuncio de router", 135: "Solicitud de vecino (como ARP)", 136: "Anuncio de vecino (como ARP)"}
 CHECKSUM_HINT = "No se verifica: las tarjetas de red suelen calcularlo después de capturar (offload), así que un valor 'malo' es común y normal"
+ARP_OPS = {1: "solicitud", 2: "respuesta"}
 MAX_EXT_HEADERS = 8
 
 
@@ -76,6 +77,11 @@ def _port(label: str, port: int, start: int) -> Field:
     service = SERVICES.get(port)
     return _field(label, f"{port} ({service})" if service else port, start, start + 2,
                   "Puerto bien conocido" if service else None)
+
+
+def _checksum(d: bytes, p: int) -> Field:
+    """Campo «Checksum» de 2 bytes en `p`; se muestra pero no se verifica (ver CHECKSUM_HINT)."""
+    return _field("Checksum", f"0x{_u16(d, p):04x}", p, p + 2, CHECKSUM_HINT)
 
 
 def _ttl_hint(ttl: int) -> str:
@@ -123,7 +129,7 @@ def _ipv4(d: bytes, p: int, layers: List[Layer]) -> Tuple[Optional[int], int]:
         _field("Banderas", flags, p + 6, p + 8, "DF: el paquete no debe partirse en trozos"),
         _field("TTL", ttl, p + 8, p + 9, _ttl_hint(ttl)),
         _field("Protocolo", f"{proto} ({IP_PROTOS.get(proto, 'otro')})", p + 9, p + 10, "Qué protocolo viene dentro"),
-        _field("Checksum", f"0x{_u16(d, p + 10):04x}", p + 10, p + 12, CHECKSUM_HINT),
+        _checksum(d, p + 10),
         _field("IP de origen", socket.inet_ntoa(d[p + 12:p + 16]), p + 12, p + 16),
         _field("IP de destino", socket.inet_ntoa(d[p + 16:p + 20]), p + 16, p + 20),
     ]
@@ -176,7 +182,7 @@ def _arp(d: bytes, p: int, layers: List[Layer]) -> None:
         return
     op = _u16(d, p + 6)
     fields = [
-        _field("Operación", f"{op} ({ {1: 'solicitud', 2: 'respuesta'}.get(op, 'otra') })", p + 6, p + 8,
+        _field("Operación", f"{op} ({ARP_OPS.get(op, 'otra')})", p + 6, p + 8,
                "Solicitud: '¿quién tiene esta IP?'. Respuesta: 'yo, esta es mi MAC'"),
         _field("MAC del emisor", _mac(d[p + 8:p + 14]), p + 8, p + 14),
         _field("IP del emisor", socket.inet_ntoa(d[p + 14:p + 18]), p + 14, p + 18),
@@ -217,7 +223,7 @@ def _tcp(d: bytes, p: int, layers: List[Layer]) -> Optional[int]:
         _field("Largo de cabecera", f"{off} B", p + 12, p + 13),
         _field("Banderas", names, p + 13, p + 14, TCP_FLAG_HINTS.get(names)),
         _field("Ventana", _u16(d, p + 14), p + 14, p + 16, "Cuántos bytes más acepta recibir el que envía este paquete"),
-        _field("Checksum", f"0x{_u16(d, p + 16):04x}", p + 16, p + 18, CHECKSUM_HINT),
+        _checksum(d, p + 16),
     ]
     end = min(p + max(off, 20), len(d))
     if off > 20:
@@ -234,7 +240,7 @@ def _udp(d: bytes, p: int, layers: List[Layer]) -> Optional[int]:
         _port("Puerto de origen", _u16(d, p), p),
         _port("Puerto de destino", _u16(d, p + 2), p + 2),
         _field("Largo", f"{_u16(d, p + 4)} B", p + 4, p + 6, "Cabecera UDP (8 B) + datos"),
-        _field("Checksum", f"0x{_u16(d, p + 6):04x}", p + 6, p + 8, CHECKSUM_HINT),
+        _checksum(d, p + 6),
     ]
     layers.append(_layer("UDP", p, p + 8, fields))
     return p + 8
@@ -248,7 +254,7 @@ def _icmp_like(name: str, types: Dict[int, str]):
         fields = [
             _field("Tipo", f"{d[p]} ({types.get(d[p], 'otro')})", p, p + 1),
             _field("Código", d[p + 1], p + 1, p + 2, "Detalle del tipo"),
-            _field("Checksum", f"0x{_u16(d, p + 2):04x}", p + 2, p + 4, CHECKSUM_HINT),
+            _checksum(d, p + 2),
         ]
         layers.append(_layer(name, p, p + 4, fields))
         return p + 4
@@ -278,6 +284,7 @@ def _payload(d: bytes, pos: int, layers: List[Layer], name: str = "Datos") -> No
 
 # ------------------------------------------------------------------- principal
 
+_L3 = {0x0800: _ipv4, 0x86DD: _ipv6}
 _L4 = {6: _tcp, 17: _udp, 1: _icmp_like("ICMP", ICMP_TYPES), 58: _icmp_like("ICMPv6", ICMP6_TYPES)}
 
 
@@ -299,11 +306,10 @@ def _walk(d: bytes, layers: List[Layer]) -> None:
     if etype == 0x0806:
         _arp(d, pos, layers)
         return
-    parsers = {0x0800: _ipv4, 0x86DD: _ipv6}
-    if etype not in parsers:
+    if etype not in _L3:
         _payload(d, pos, layers)
         return
-    proto, pos = parsers[etype](d, pos, layers)
+    proto, pos = _L3[etype](d, pos, layers)
     if proto is None:
         return
     parse = _L4.get(proto)

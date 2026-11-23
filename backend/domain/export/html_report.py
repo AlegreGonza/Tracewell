@@ -9,7 +9,7 @@ from __future__ import annotations
 import html
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 TOP_SESSIONS = 10  # además de las anotadas, con IOC o de las alertas, se listan las más pesadas
 TICKET_MAX_EVENTS = 40  # líneas de la línea de tiempo del ticket (un ticket no es un volcado)
@@ -115,10 +115,15 @@ def _sessions(report: Dict[str, Any], extras: Dict[int, Dict[str, Any]]) -> str:
     )
 
 
+def _ioc_hits(extras: Dict[int, Dict[str, Any]]) -> int:
+    """Cuántas sesiones coinciden con algún IOC."""
+    return sum(1 for e in extras.values() if e.get("ioc"))
+
+
 def _ioc_section(source: Optional[str], extras: Dict[int, Dict[str, Any]]) -> str:
     if source is None:
         return ""
-    hits = sum(1 for e in extras.values() if e.get("ioc"))
+    hits = _ioc_hits(extras)
     return f"<h2>Indicadores (IOC)</h2><p>Lista: <code>{_e(source)}</code> — sesiones con coincidencias: <strong>{hits}</strong>.</p>"
 
 
@@ -180,7 +185,7 @@ def _ticket_summary(report: Dict[str, Any], extras: Dict[int, Dict[str, Any]]) -
         lines.append(f"Alertas: {len(alerts)} ({', '.join(f'{n} {SEVERITY[sev]}' for sev, n in order if n)}).")
     else:
         lines.append("Sin alertas.")
-    hits = sum(1 for e in extras.values() if e.get("ioc"))
+    hits = _ioc_hits(extras)
     if hits:
         lines.append(f"Sesiones que coinciden con un IOC: {hits}.")
     if st.get("truncated") or st.get("untracked_packets"):
@@ -258,7 +263,7 @@ def _ticket_containment(report: Dict[str, Any], extras: Dict[int, Dict[str, Any]
         text = _CONTAINMENT.get(str(a.get("rule_id"))) or _CONTAINMENT_BY_SEVERITY.get(str(a.get("severity")), "Investigar el equipo involucrado.")
         seen.setdefault(str(a.get("rule_id")), f"- {_plain(a.get('name'))}: {text} Equipo: {_plain(a.get('src_ip'))}.")
     lines += list(seen.values())
-    if any(e.get("ioc") for e in extras.values()):
+    if _ioc_hits(extras):
         lines.append("- Hay sesiones con IOC: aislar los equipos de tu red que hablaron con esos indicadores.")
     return lines if len(lines) > 1 else lines + ["Sin alertas ni IOC: no hay acciones de contención sugeridas."]
 

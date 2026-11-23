@@ -8,7 +8,7 @@ import pytest
 
 from backend.domain.pcap.reader import Packet
 from backend.domain.sessions.grouper import (
-    ETHERNET, GroupingResult, Session, UnsupportedLinktype, _check_group_args, _classify,
+    ETHERNET, GroupingResult, Session, UnsupportedLinktype, _check_group_args,
     _l4_ports, _new_session, _protocol_number, _record_packet, ip_layer,
 )
 from backend.domain.sessions.query import (
@@ -315,30 +315,6 @@ def test_record_packet_origlen_cero_no_cae_en_len():
     s = Session("TCP", "a", 1, "b", 2)
     _record_packet(s, Packet(1.0, b"abc", 0))
     assert s.bytes == 0
-
-
-# ---------- grouper._classify ----------
-
-def test_classify_sesion_devuelve_ends_y_key():
-    """Un paquete TCP devuelve (ends, key) sin tocar contadores."""
-    r = GroupingResult()
-    ends, key = _classify(Packet(0.0, _tcp_frame(), None), r)
-    assert ends == ("10.0.0.1", 1234, "10.0.0.2", 80, 6)
-    assert key == (("10.0.0.1", 1234), ("10.0.0.2", 80), 6) and (r.non_ip, r.malformed) == (0, 0)
-
-
-def test_classify_no_ip_cuenta_non_ip():
-    """ARP devuelve None y suma non_ip."""
-    r = GroupingResult()
-    assert _classify(Packet(0.0, _arp_frame(), None), r) is None
-    assert (r.non_ip, r.malformed) == (1, 0)
-
-
-def test_classify_daniado_cuenta_malformed():
-    """Bytes dañados devuelven None y suman malformed."""
-    r = GroupingResult()
-    assert _classify(Packet(0.0, b"\x00", None), r) is None
-    assert (r.non_ip, r.malformed) == (0, 1)
 
 
 # ---------- query._parse_ip_filter ----------

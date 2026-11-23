@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 from collections import Counter
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -29,6 +30,7 @@ ROLE_SCANNER = "Emisor de escaneos"
 ROLE_TOP_TALKER = "Top talker"
 
 
+@lru_cache(maxsize=65_536)  # acotada; se llama varias veces por sesión con pocas IP distintas
 def classify(ip: str) -> str:
     """'interna' (red local), 'multicast' o 'publica'. Una IP ilegible cuenta como pública."""
     try:

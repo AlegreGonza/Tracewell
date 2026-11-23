@@ -16,7 +16,7 @@ certificados es mínima (sujeto, emisor, validez, nombres alternativos y huella)
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -252,6 +252,11 @@ def _name_attr(data: bytes, name: Tuple[int, int, int], oid: bytes) -> Optional[
     return None
 
 
+def _display_name(data: bytes, name: Tuple[int, int, int]) -> Optional[str]:
+    """Nombre legible de un Name: el CN (2.5.4.3) o, si no hay, la organización O (2.5.4.10)."""
+    return _name_attr(data, name, b"\x55\x04\x03") or _name_attr(data, name, b"\x55\x04\x0a")
+
+
 def _san_names(data: bytes, extensions: Tuple[int, int, int]) -> List[str]:
     """Nombres alternativos (dNSName) de la extensión subjectAltName (OID 2.5.29.17)."""
     for _t, s, e in _children(data, extensions[1], extensions[2]):  # cada Extension: SEQUENCE { OID, [critical], OCTET STRING }
@@ -285,8 +290,8 @@ def parse_certificate(der: bytes) -> Optional[Dict[str, Any]]:
         not_after = _parse_time(der, times[1]) if len(times) == 2 else None
         ext_block = next((_tlv(der, i[1]) for i in items[6:] if i[0] == 0xA3), None)
         return {
-            "subject": _name_attr(der, subject, b"\x55\x04\x03") or _name_attr(der, subject, b"\x55\x04\x0a"),
-            "issuer": _name_attr(der, issuer, b"\x55\x04\x03") or _name_attr(der, issuer, b"\x55\x04\x0a"),
+            "subject": _display_name(der, subject),
+            "issuer": _display_name(der, issuer),
             "not_before": not_before.isoformat() if not_before else None,
             "not_after": not_after.isoformat() if not_after else None,
             "self_signed": der[subject[1]:subject[2]] == der[issuer[1]:issuer[2]],
@@ -335,7 +340,7 @@ def analyze_tls(client_stream: bytes, server_stream: bytes, when: Optional[float
     version = server.version if server else None
     certs = parse_certificates(server_stream)
     cert = parse_certificate(certs[0]) if certs else None
-    out: Dict[str, Any] = {
+    return {
         "tls": True,
         "client": {
             "ja4": ja4(hello) if hello.complete else None, "sni": sni_of(hello), "alpn": alpn_of(hello),
@@ -348,4 +353,3 @@ def analyze_tls(client_stream: bytes, server_stream: bytes, when: Optional[float
         "certificate": _cert_view(cert, when) if cert else None,
         "certificate_hidden": version == 0x0304,  # TLS 1.3: el certificado va cifrado
     }
-    return out

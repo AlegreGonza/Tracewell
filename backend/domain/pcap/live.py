@@ -205,11 +205,16 @@ class CaptureSummary:
     warning: Optional[str] = None
 
 
+def _is_finite_number(v) -> bool:
+    """Número real y finito (ni bool, ni NaN, ni infinito)."""
+    # isfinite: NaN no es <= 0 ni < 0 (toda comparación con NaN da False) y pasaría
+    # una validación de rango, dejando un "límite" que nunca vence.
+    return not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
+
+
 def _check_limit(name: str, v) -> None:
     """Falla si el límite no es un número positivo y finito."""
-    # isfinite: NaN no es <= 0 (toda comparación con NaN da False) y
-    # pasaría la validación, dejando un "límite" que nunca vence.
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
+    if not _is_finite_number(v) or v <= 0:
         raise ValueError(f"{name} debe ser un número positivo y finito, recibí {v!r}")
 
 
@@ -255,11 +260,9 @@ def cleanup_stale_temp_dirs(max_age: float = STALE_AFTER, temp_root=None) -> Lis
     segundos y que contengan únicamente `live.pcap`; nunca lanza por un fallo de
     disco (limpiar es opcional, arrancar no). Devuelve las rutas borradas.
     """
-    # isfinite: con NaN toda comparación da False y TODO contaba como "viejo"
-    # (borraba también las carpetas recientes); en una función que borra, un
-    # valor así tiene que fallar fuerte.
-    if isinstance(max_age, bool) or not isinstance(max_age, (int, float)) \
-            or not math.isfinite(max_age) or max_age < 0:
+    # Con NaN todo contaba como "viejo" (borraba también las carpetas recientes);
+    # en una función que borra, un valor así tiene que fallar fuerte.
+    if not _is_finite_number(max_age) or max_age < 0:
         raise ValueError(f"max_age debe ser un número finito >= 0, recibí {max_age!r}")
     root = Path(temp_root) if temp_root else Path(tempfile.gettempdir())
     cutoff = time.time() - max_age
@@ -363,6 +366,10 @@ class LiveCapture:
             return self._elapsed
         return time.monotonic() - self._started_at if self._started_at is not None else 0.0
 
+    def _warning(self) -> Optional[str]:
+        """Texto del error que no impidió cerrar el archivo, o None."""
+        return str(self.error) if self.error is not None else None
+
     def status(self) -> dict:
         with self._lock:
             return {
@@ -370,7 +377,7 @@ class LiveCapture:
                 "packets": self._packets, "bytes": self._bytes,
                 "seconds": round(self._elapsed_now(), 3),
                 "reason": self._reason if self._done.is_set() else None,
-                "warning": str(self.error) if self.error is not None else None,
+                "warning": self._warning(),
             }
 
     # -- internos
@@ -425,7 +432,7 @@ class LiveCapture:
             self._close_file()
             self._summary = CaptureSummary(
                 self.path, self._packets, self._bytes, round(self._elapsed, 3), self._reason,
-                warning=str(self.error) if self.error is not None else None)
+                warning=self._warning())
 
     def _watch(self) -> None:
         self._wait_for_end()

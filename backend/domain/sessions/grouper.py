@@ -149,15 +149,6 @@ def _endpoints_flags(data: bytes):
     return ends, (ip.data.flags if proto == _TCP else 0)
 
 
-def _endpoints(data: bytes):
-    """Extrae (ip_src, sport, ip_dst, dport, proto) o None si no es IP.
-
-    Lanza dpkt.UnpackError si el paquete está dañado.
-    """
-    found = _endpoints_flags(data)
-    return None if found is None else found[0]
-
-
 def _key(src, sport, dst, dport, proto) -> Tuple:
     """Clave BIDIRECCIONAL: A->B y B->A caen en la misma sesión.
 
@@ -173,9 +164,10 @@ def packet_endpoints(data: bytes):
     """(ip_src, sport, ip_dst, dport, proto) de un paquete, o None si no es IP
     o está dañado. Versión que nunca lanza, para consultas sueltas."""
     try:
-        return _endpoints(data)
+        found = _endpoints_flags(data)
     except dpkt.UnpackError:
         return None
+    return None if found is None else found[0]
 
 
 def packet_session_key(pkt: Packet) -> Optional[Tuple]:
@@ -218,12 +210,6 @@ def _record_packet(sess: Session, pkt: Packet, flags: int = 0) -> None:
     # snaplen. Para "cuánto tráfico fue" importa lo que viajó, no lo guardado.
     sess.bytes += pkt.origlen if pkt.origlen is not None else len(pkt.data)
     sess.last_ts = pkt.ts
-
-
-def _classify(pkt: Packet, result: GroupingResult):
-    """(ends, key) del paquete; si no es una sesión cuenta el descarte y da None."""
-    found = _classify_flags(pkt, result)
-    return None if found is None else found[:2]
 
 
 def _classify_flags(pkt: Packet, result: GroupingResult):

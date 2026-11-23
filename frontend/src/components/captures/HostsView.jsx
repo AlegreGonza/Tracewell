@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatBytes } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
@@ -117,10 +117,24 @@ export default function HostsView({ refreshKey, onError, onFilterIp }) {
     return () => ctl.abort();
   }, [refreshKey, onError]);
 
+  // El hover cambia a cada pasada del ratón: el dibujo y los vecinos no se recalculan salvo que cambie el grafo/el equipo.
+  const layout = useMemo(() => {
+    if (!graph) return null;
+    return { ...layoutGraph(graph.nodes), maxBytes: Math.max(...graph.edges.map((e) => e.bytes), 1) };
+  }, [graph]);
+  const neighbors = useMemo(() => {
+    const set = new Set();
+    if (!hover || !graph) return set;
+    for (const e of graph.edges) {
+      if (e.a === hover) set.add(e.b);
+      else if (e.b === hover) set.add(e.a);
+    }
+    return set;
+  }, [graph, hover]);
+
   if (!hosts || !graph || hosts.items.length === 0) return null;
-  const { pos, rings } = layoutGraph(graph.nodes);
-  const maxBytes = Math.max(...graph.edges.map((e) => e.bytes), 1);
-  const linked = (ip) => hover && graph.edges.some((e) => (e.a === hover && e.b === ip) || (e.b === hover && e.a === ip));
+  const { pos, rings, maxBytes } = layout;
+  const linked = (ip) => neighbors.has(ip);
   const summary = `Grafo de ${graph.nodes.length} equipos y ${graph.edges.length} conversaciones entre ellos.`;
 
   return (
