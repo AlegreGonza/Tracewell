@@ -17,7 +17,7 @@ from backend.domain.rules.engine import Rule
 from backend.domain.sessions.query import compute_stats
 
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 
 class _State:

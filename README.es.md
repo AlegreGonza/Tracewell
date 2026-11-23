@@ -8,6 +8,23 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 
 ---
 
+## Screenshots
+
+The interface is in Spanish. These captures use the built-in demo (samples/demo.pcap).
+
+**Start screen.** Open a file, try the demo or capture live. The side menu groups the capture sections (overview, alerts and ATT&CK, hosts, DNS and HTTP, remote access, case timeline, sessions, IOCs, rules) and the read-only network support tools.
+
+![Start screen](docs/assets/screenshot-inicio.png)
+
+**Summary.** Sessions, packets, volume and alerts at a glance, protocol distribution, traffic over time, risk score and top talkers.
+
+![Summary](docs/assets/screenshot-resumen.png)
+
+**Case timeline.** Alerts, suspicious DNS queries, marked sessions and IOC matches in the order they happened, so the case can be told from start to finish.
+
+![Case timeline](docs/assets/screenshot-cronologia.png)
+
+---
 ## Table of contents
 
 1. [Features](#features)
