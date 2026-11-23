@@ -21,13 +21,17 @@ const show = (props = {}) => render(<AttackMap refreshKey={0} onError={onError} 
 const column = (container, en) => Array.from(container.querySelectorAll("ol.attack-map > li")).find((li) => li.querySelector(".tactic-en").textContent === en);
 
 describe("TACTICS", () => {
-  it("son las 14 tácticas de ATT&CK Enterprise, en orden", () => {
-    expect(TACTICS.map(([n]) => n)).toEqual([
-      "Reconnaissance", "Resource Development", "Initial Access", "Execution", "Persistence", "Privilege Escalation",
-      "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control",
-      "Exfiltration", "Impact",
-    ]);
+  it("son solo las 5 tácticas que se ven en tráfico de red, en orden", () => {
+    expect(TACTICS.map(([n]) => n)).toEqual(["Reconnaissance", "Discovery", "Lateral Movement", "Command and Control", "Exfiltration"]);
+    expect(TACTICS.map(([, es]) => es)).toEqual(["Reconocimiento", "Exploración", "Movimiento lateral", "Comando y control", "Exfiltración"]);
     for (const [en, es, gloss] of TACTICS) expect([en.trim(), es.trim(), gloss.trim()].every(Boolean)).toBe(true);
+  });
+
+  it("no incluye las tácticas que pasan dentro del equipo", () => {
+    const names = TACTICS.map(([n]) => n);
+    for (const gone of ["Resource Development", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Collection", "Impact"]) {
+      expect(names).not.toContain(gone);
+    }
   });
 });
 
@@ -74,12 +78,12 @@ describe("AttackMap", () => {
     expect(api.alerts).toHaveBeenCalledWith(undefined, expect.any(AbortSignal));
   });
 
-  it("sin alertas: 14 columnas apagadas y el mensaje", async () => {
+  it("sin alertas: 5 columnas apagadas y el mensaje", async () => {
     const { container } = show();
     expect(await screen.findByText(/Sin alertas: ninguna táctica se iluminó/)).toBeInTheDocument();
-    expect(container.querySelectorAll("ol.attack-map > li")).toHaveLength(14);
+    expect(container.querySelectorAll("ol.attack-map > li")).toHaveLength(5);
     expect(container.querySelectorAll("li.tactic.hit")).toHaveLength(0);
-    expect(container.querySelectorAll("li.tactic")).toHaveLength(14 + 0);
+    expect(container.querySelectorAll("li.tactic")).toHaveLength(5);
   });
 
   it("un <li> por táctica; solo las que tienen técnicas llevan 'tactic hit'", async () => {
@@ -87,9 +91,9 @@ describe("AttackMap", () => {
     const { container } = show();
     await screen.findByText(/2 táctica\(s\) con actividad/);
     const lis = Array.from(container.querySelectorAll("ol.attack-map > li"));
-    expect(lis).toHaveLength(14);
+    expect(lis).toHaveLength(5);
     expect(lis.filter((l) => l.className === "tactic hit").map((l) => l.querySelector(".tactic-en").textContent)).toEqual(["Discovery", "Command and Control"]);
-    expect(lis.filter((l) => l.className === "tactic")).toHaveLength(12);
+    expect(lis.filter((l) => l.className === "tactic")).toHaveLength(3);
     expect(within(column(container, "Reconnaissance")).getByText("—")).toBeInTheDocument();
   });
 
@@ -121,17 +125,26 @@ describe("AttackMap", () => {
     const { container } = show();
     await screen.findByRole("link", { name: "T9999" });
     const lis = container.querySelectorAll("ol.attack-map > li");
-    expect(lis).toHaveLength(15);
-    expect(lis[14].className).toBe("tactic hit");
-    expect(lis[14]).toHaveTextContent("Nueva Táctica");
-    expect(lis[14]).toHaveTextContent("Rara ×1");
+    expect(lis).toHaveLength(6);
+    expect(lis[5].className).toBe("tactic hit");
+    expect(lis[5]).toHaveTextContent("Nueva Táctica");
+    expect(lis[5]).toHaveTextContent("Rara ×1");
+  });
+
+  it("una alerta de una táctica que el mapa no lista (p. ej. Credential Access) no se pierde", async () => {
+    api.alerts.mockResolvedValue([alert({ mitre_tactic: "Credential Access", mitre_technique: "T1110", mitre_name: "Brute Force" })]);
+    const { container } = show();
+    await screen.findByRole("link", { name: "T1110" });
+    const lis = container.querySelectorAll("ol.attack-map > li");
+    expect(lis).toHaveLength(6);
+    expect(lis[5]).toHaveTextContent("Credential Access");
   });
 
   it("varias tácticas desconocidas, cada una en su columna", async () => {
     api.alerts.mockResolvedValue([alert({ mitre_tactic: "X1", mitre_technique: "T1" }), alert({ mitre_tactic: "X2", mitre_technique: "T2" })]);
     const { container } = show();
     await screen.findByRole("link", { name: "T2" });
-    expect(container.querySelectorAll("ol.attack-map > li")).toHaveLength(16);
+    expect(container.querySelectorAll("ol.attack-map > li")).toHaveLength(7);
   });
 
   it("nombres hostiles de táctica, técnica y nombre se muestran como texto", async () => {

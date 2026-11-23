@@ -2,22 +2,15 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Las 14 tácticas de MITRE ATT&CK (Enterprise), en el orden del ciclo de un ataque, con una frase simple cada una.
+// Solo las tácticas de ATT&CK que se pueden ver en el tráfico de red, en el orden del ciclo de un ataque, con una frase
+// simple cada una. Las demás (Ejecución, Persistencia, Evadir defensas...) pasan dentro del equipo y una captura de red
+// no las ve: mostrarlas vacías haría creer que "no pasó nada". Una alerta de otra táctica igual aparece, en una columna extra.
 export const TACTICS = [
   ["Reconnaissance", "Reconocimiento", "Investigan a la víctima antes de atacar."],
-  ["Resource Development", "Preparación", "Arman la infraestructura y las herramientas."],
-  ["Initial Access", "Acceso inicial", "Consiguen entrar."],
-  ["Execution", "Ejecución", "Corren su código en el equipo."],
-  ["Persistence", "Persistencia", "Se aseguran de seguir adentro."],
-  ["Privilege Escalation", "Más privilegios", "Buscan permisos de administrador."],
-  ["Defense Evasion", "Evadir defensas", "Se esconden de antivirus y monitoreo."],
-  ["Credential Access", "Robo de credenciales", "Roban usuarios y contraseñas."],
   ["Discovery", "Exploración", "Miran qué hay en la red."],
   ["Lateral Movement", "Movimiento lateral", "Saltan a otros equipos."],
-  ["Collection", "Recolección", "Juntan los datos que quieren."],
   ["Command and Control", "Comando y control", "Reciben órdenes desde afuera."],
   ["Exfiltration", "Exfiltración", "Sacan los datos de la red."],
-  ["Impact", "Impacto", "Dañan o interrumpen sistemas."],
 ];
 
 const SEV_RANK = { low: 1, medium: 2, high: 3, critical: 4 };
