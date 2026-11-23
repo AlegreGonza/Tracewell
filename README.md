@@ -549,9 +549,6 @@ These are deliberate MVP trade-offs.
 - [x] Desktop window with pywebview, opened with a single command (native "Browse…" file dialog included; validated on Windows and Linux)
 - [x] One-command installer scripts for Windows and Linux/macOS (deployment from source)
 - [x] Live capture validated on real Windows hardware and on Linux (root)
-- [ ] Final run of the full test suite in a clean environment
-- [ ] Desktop window on macOS
-- [ ] Later (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP
 - Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` (in Spanish) in case it is revisited.
 
 ---

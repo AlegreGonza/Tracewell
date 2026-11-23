@@ -56,7 +56,6 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
   - **Host profile:** inferred roles (DNS client, web server, scan sender, top talker) using only what was observed, plus **grouping by MAC address** (`GET /api/hosts/by-mac`).
   - **Remote access:** SSH, Telnet, SMB, RDP, WinRM and VNC grouped by service, with RST packets and SYN retries flagged. `GET /api/remote-access?service=`.
   - **Case timeline:** alerts, suspicious DNS, marked sessions and IOC matches in time order, optionally limited to one host. `GET /api/case-timeline?host=&limit=`. It does not replace the packets-per-interval chart.
-  - **Later** (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP.
 - Exports the analysis to JSON.
 - **Demo mode** with a bundled synthetic capture (32 sessions, 3 alerts) that triggers the port scan, cleartext FTP and suspicious DNS rules.
 
@@ -545,9 +544,6 @@ These are deliberate MVP trade-offs.
 - [x] Desktop window with pywebview, opened with a single command (native "Browse…" file dialog included; validated on Windows and Linux)
 - [x] One-command installer scripts for Windows and Linux/macOS (deployment from source)
 - [x] Live capture validated on real Windows hardware and on Linux (root)
-- [ ] Final run of the full test suite in a clean environment
-- [ ] Desktop window on macOS
-- [ ] Later (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP
 - Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` in case it is revisited.
 
 ---
