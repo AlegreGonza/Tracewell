@@ -493,11 +493,10 @@ There are about 4,060 Python tests and about 1,310 frontend tests. Besides norma
 
 **Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](docs/checklist_hardware.md).
 
-### Linters and CI
+### Linters
 
 - **Python:** `python -m ruff check backend main.py` (pyflakes rules: unused imports, undefined names). `ruff` is in the `dev` extra of `pyproject.toml`.
 - **Frontend:** `cd frontend && npm run lint` (ESLint, flat config in `frontend/eslint.config.js`).
-- **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs both linters, the full Python and frontend test suites and the frontend build on every push to `main` and on pull requests.
 - Details (including line-ending policy and security headers): [`docs/desarrollo.md`](docs/desarrollo.md).
 
 ### Static analysis (optional)
@@ -564,4 +563,4 @@ These are deliberate MVP trade-offs.
 - [`docs/decisiones.md`](docs/decisiones.md) — every design decision and why, step by step (written in Spanish).
 - [`docs/checklist_hardware.md`](docs/checklist_hardware.md) — manual live-capture validation.
 - [`docs/informe_calidad.md`](docs/informe_calidad.md) — static analysis and performance report.
-- [`docs/desarrollo.md`](docs/desarrollo.md) — linters, CI, line endings and security headers.
+- [`docs/desarrollo.md`](docs/desarrollo.md) — linters, line endings and security headers.
