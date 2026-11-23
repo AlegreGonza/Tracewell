@@ -71,7 +71,7 @@ fi
 
 step "5. Captura en vivo y ventana (opcionales)"
 warn "Captura en vivo: hace falta libpcap y ejecutar con sudo. Analizar archivos no lo necesita."
-warn "Ventana de escritorio: en Linux pywebview necesita GTK/WebKit o Qt (sin probar). Alternativa: ./iniciar.sh --serve-only"
+warn "Ventana de escritorio: en Linux pywebview necesita GTK/WebKit o Qt (la ventana se probó en Linux). Alternativa: ./iniciar.sh --serve-only"
 
 echo
 if [ "${#MISSING[@]}" -gt 0 ]; then

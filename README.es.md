@@ -4,7 +4,7 @@ A desktop-oriented **network traffic analysis tool for SOC triage**, built as an
 
 Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and Tracewell groups the packets into **sessions**, runs **YAML-defined detection rules** against the traffic, and shows everything in a React interface: summary statistics, alerts with severity, MITRE ATT&CK technique and evidence, a filterable session table, and a per-packet hex dump. Results can be exported to JSON.
 
-> **Project status.** The analysis engine, the HTTP API, the web interface, live capture and the **desktop window** (pywebview) are working and tested; `python main.py` opens the app in its own window. Tracewell is deployed **from source** with a one-command installer ([`instalar.ps1`](instalar.ps1) / [`instalar.sh`](instalar.sh)); a packaged executable was deliberately **not** built (see [`docs/despliegue.md`](docs/despliegue.md) and [`docs/empaquetado_futuro.md`](docs/empaquetado_futuro.md)). The desktop window has only been validated on **Windows**.
+> **Project status.** The analysis engine, the HTTP API, the web interface, live capture and the **desktop window** (pywebview) are working and tested; `python main.py` opens the app in its own window. Tracewell is deployed **from source** with a one-command installer ([`instalar.ps1`](instalar.ps1) / [`instalar.sh`](instalar.sh)); a packaged executable was deliberately **not** built (see [`docs/despliegue.md`](docs/despliegue.md) and [`docs/empaquetado_futuro.md`](docs/empaquetado_futuro.md)). The desktop window has been validated on **Windows** and **Linux**; macOS has not been tried.
 
 ---
 
@@ -37,13 +37,13 @@ Open a `.pcap` / `.pcapng` file (or capture live from a network interface), and 
 - Statistics: packets, bytes and distribution by protocol.
 - Per-packet detail with a **hex dump**.
 - Rule engine driven by **YAML** files. Each alert carries a severity, a MITRE ATT&CK technique and the evidence that triggered it.
-- Eight built-in rules: **port scan**, **cleartext FTP credentials**, **suspicious DNS queries**, **beaconing**, **SYN flood**, **suspicious ports**, **DNS to an unusual resolver** and **large uploads**.
+- Nine built-in rules: **port scan**, **cleartext FTP credentials**, **suspicious DNS queries**, **beaconing**, **SYN flood**, **suspicious ports**, **DNS to an unusual resolver**, **large uploads** and **brute force to SSH/RDP**. You can also **create your own alerts from the interface** (a *Rules* section: protocol, source/destination IP, port and a threshold in a time window; live YAML and a preview against the open capture before saving).
 - **Triage tools:** per-session notes and a "reviewed" mark, one-click jump from an alert to its sessions, an **IOC list** (IPs, networks, domains from a local file) that flags matching sessions, and a self-contained **HTML triage report** to paste into a ticket.
 - **Site name per session**, taken from the capture itself (DNS responses and the TLS SNI), with no external lookups.
 - **Packet detail by layers** (Ethernet, IP, TCP/UDP/ICMP, data) with a plain-language hint for every field; hovering a field highlights its bytes in the hex dump.
 - **Follow the conversation** of a TCP session (like Wireshark's *Follow TCP Stream*) and a **traffic-over-time** chart.
 - **Teaching first.** Tracewell exists to lower the barrier that makes Wireshark intimidating: a **?** help button on every section with the *Wireshark equivalent*, a searchable **glossary**, a plain-language **"In simple words"** explanation of every session with a **connection diagram** (SYN → SYN+ACK → ACK → data → FIN), a guided case built on the demo, and a [Wireshark ↔ Tracewell equivalence table](docs/guia_didactica.md).
-- **Understand the capture:** a **MITRE ATT&CK map** of your alerts, a **hosts** view with a "who talks to whom" graph (an icon per host type, and the range owner such as Google or Cloudflare from a small offline table, shown as a hint and never overriding names found in the capture), a **DNS** table (NXDOMAIN, random-looking names), a plaintext **HTTP** analyzer that extracts files and reports their **SHA-256** and real type, and **TLS** details with the **JA4** client fingerprint and the server certificate (TLS ≤ 1.2).
+- **Understand the capture:** a **MITRE ATT&CK map** of your alerts (only the five tactics that show up in network traffic: reconnaissance, discovery, lateral movement, command and control, exfiltration; an alert of any other tactic gets an extra column, it is never hidden), a **hosts** view with a "who talks to whom" graph (an icon per host type, and the range owner such as Google or Cloudflare from a small offline table, shown as a hint and never overriding names found in the capture), a **DNS** table (NXDOMAIN, random-looking names), a plaintext **HTTP** analyzer that extracts files and reports their **SHA-256** and real type, and **TLS** details with the **JA4** client fingerprint and the server certificate (TLS ≤ 1.2).
 - **Network support → System (read-only):** a separate screen, reachable from the top menu, that shows the machine Tracewell runs on: resource summary, running processes (RAM, CPU, path, parent, connections, SHA-256 and code signature on demand), open ports with who can reach them, active connections with the program that owns each one, services and startup programs. It never changes anything: there is no kill/disable button and every route is a `GET`. Windows and Linux; the Linux paths are not tested on a real Linux machine.
 - **Network support → Network (read-only):** network configuration, a layer-by-layer *Is the Internet down?* check, latency, devices on the local network (with vendor by MAC when `data/oui.csv` is provided), Wi-Fi status and disconnection history, a background **outage monitor** with a timeline, and small tools (ping, continuous ping, traceroute, port check, RDP reachability, clock offset, duplicate IP). Nothing changes the machine: when a problem is found the fix is shown as text only. Tests that reach out (Internet check, latency, clock) run only when you press their button.
 - **Take it with you:** download just one session (or an IP's traffic) as a new `.pcap` for Wireshark or a ticket.
@@ -111,7 +111,7 @@ It writes `release\tracewell-<version>.zip` (and its checksum) and does not modi
 | Python **3.11+** | Developed and tested on 3.12. |
 | Node.js | Only needed to **build the web interface**. Tested with Node 24. |
 | Npcap (Windows) or libpcap (Linux) | Only needed for **live capture**. Not needed to analyze files. |
-| WebView2 runtime (Windows) | Used by the **desktop window**. It ships with Windows 11 and up-to-date Windows 10. On Linux, pywebview needs GTK/WebKit or Qt (not tested here). Not needed with `--serve-only`. |
+| WebView2 runtime (Windows) | Used by the **desktop window**. It ships with Windows 11 and up-to-date Windows 10. On Linux, pywebview needs GTK/WebKit or Qt (the window was tested on Linux). Not needed with `--serve-only`. |
 
 ### 1. Create a virtual environment and install the Python dependencies
 
@@ -190,7 +190,7 @@ You can also run the API on its own, without `main.py`:
 
 **Analyze a file.** Type the full path of a `.pcap` or `.pcapng` file in the top bar and press *Analyze*. Opening another file replaces the current analysis.
 
-**Demo mode.** Loads `samples/demo.pcap`: 45 synthetic packets with normal DNS/HTTP/ICMP/ARP traffic plus a port scan, an FTP login and a tunnel-like DNS query. It triggers three of the eight rules (port scan, cleartext FTP and a suspicious DNS query), so you get 3 alerts and 32 sessions to explore.
+**Demo mode.** Loads `samples/demo.pcap`: 45 synthetic packets with normal DNS/HTTP/ICMP/ARP traffic plus a port scan, an FTP login and a tunnel-like DNS query. It triggers three of the nine rules (port scan, cleartext FTP and a suspicious DNS query), so you get 3 alerts and 32 sessions to explore.
 
 **Summary.** Sessions, packets, traffic volume, alerts, and the protocol distribution. Packets that belong to no session (ARP and similar) and damaged packets are **always shown**, even when zero, so the totals never hide traffic.
 
@@ -217,6 +217,8 @@ You can also run the API on its own, without `main.py`:
 **Remote access.** Sessions to SSH (22), Telnet (23), SMB (445), RDP (3389), WinRM (5985/5986) and VNC (5900), one table per service, with who connected to whom, how many connections were reset (**RST**) and how many were **retried** (repeated SYN). Highlighted rows are worth a look, for example a rejected login attempt or brute force. They are hints: an RST can also be a closed port.
 
 **Case timeline.** Alerts, suspicious DNS queries, the sessions you marked or annotated and IOC matches in one chronological list (UTC), to tell the story of a case from start to finish. Limit it to one host with the IP box. This is different from the *Traffic over time* chart, which only counts packets.
+
+**Rules.** Creates a new alert without writing YAML by hand. Pick a name, a severity and a description, optionally filter by protocol, source IP or network (CIDR), destination IP or network and destination port, and set a threshold (how many events in how many seconds). The page shows the **YAML** it will write, updated as you type, and, if a capture is open, **how many sessions and alerts the rule would give on it** before you save (the open capture does not change). *Load an example* fills the form with a sample case. *Save rule* creates a new file in `rules/` with the same format as the built-in ones; **it never modifies or disables an existing rule** (an id or file that already exists is rejected) and it applies from the next capture you open.
 
 **Leaving a capture.** With something loaded, the toolbar shows **Salir del demo** (or **Cerrar captura** for any other analysis). It discards the analysis, on the server too, and returns to the start screen; the IOC list is kept, notes are dropped. In the desktop window, downloads (*Export JSON*, *Informe HTML*) open the system **Save as** dialog (pywebview cancels downloads unless `ALLOW_DOWNLOADS` is enabled, which `main.py` does).
 
@@ -346,6 +348,8 @@ A rule is **data** (a YAML file) and a **detector** is **code**. The YAML sets t
 | `syn_flood` | At least `min_syns` pure SYN packets to one destination and port within `window_seconds`. | high | T1498 – Network Denial of Service |
 | `suspicious_ports` | A connection attempt (SYN) to a port used by common attack tools or backdoors (`ports`, default 4444, 31337, 1337, 12345, 54321, 9001). Replies are ignored so an ephemeral port that happens to match does not alert. | medium | T1571 – Non-Standard Port |
 | `dns_unusual_resolver` | DNS queries sent straight to a public server that is not in `allowed_resolvers` (private destinations are always considered normal). Add your ISP's or company's resolver to the list. | low | T1071.004 – Application Layer Protocol: DNS |
+| `brute_force` (rule `brute_force_remote`) | At least `min_attempts` pure SYN packets from one source to the same destination on SSH (22) or RDP (3389) (`ports`) within `window_seconds`. Each login attempt opens a new connection, so many in a short time look like password guessing. It does not see whether a login failed (the traffic is encrypted). One alert per source, destination and port. | high | T1110 – Brute Force |
+| `threshold` | The rule type that the **Rules** section creates: at least `min_events` events that match a filter (`protocol`, `src_ip`, `dst_ip`, `port`) within `window_seconds`. In TCP it counts connection attempts (SYN); in UDP and `any`, every packet. Counted per source/destination pair. | you choose | T1595 – Active Scanning by default |
 | `large_upload` | At least `min_bytes` sent to one external destination with at least `min_ratio` times more data going out than coming in. It decides as traffic streams in, so a transfer that later balances out can still alert. | medium | T1048 – Exfiltration Over Alternative Protocol |
 
 ARP spoofing is **not** covered: the rule engine only sees TCP/UDP packets, and ARP has no IP layer.
@@ -359,7 +363,7 @@ description: >
   One IP sent connection attempts (SYN) to many ports of one destination
   in a short time, a typical reconnaissance pattern.
 severity: high                # low | medium | high | critical
-detector: port_scan           # port_scan | ftp_cleartext | dns_suspicious
+detector: port_scan           # a detector name, see the table above
 mitre:
   technique: T1046            # format T1234 or T1234.001
   name: Network Service Discovery
@@ -414,6 +418,9 @@ All routes are under `/api`. Errors use `{"detail": "..."}`.
 | `GET /api/sessions/{id}/explain` | The session in plain words plus the connection steps and a `wireshark_filter`. |
 | `GET /api/wireshark-filter` | Query `ip`. Display filter for an IP (`ip.addr==X` / `ipv6.addr==X`); `422` if it is not an IP. Needs no loaded capture. |
 | `GET /api/hosts/by-mac` | Local-network hosts grouped by MAC address (several IPs on one MAC first, with a hint). |
+| `GET /api/rules` | The loaded rules (marking those created from the interface) and a sample case for the form. |
+| `POST /api/rules/preview` | Validates a rule form and returns its YAML plus, if a capture is open, how many sessions and alerts it would match. Saves nothing. |
+| `POST /api/rules` | Saves the rule as `rules/<id>.yaml` (`201`). `422` if the form is invalid, `409` if the id or file already exists (existing rules are never overwritten). |
 | `GET /api/remote-access` | SSH, Telnet, SMB, RDP, WinRM and VNC sessions grouped by service, with RST and SYN retries. Optional `service` (`422` if unknown). |
 | `GET /api/case-timeline` | Alerts, suspicious DNS, marked sessions and IOC matches in chronological order. Optional `host` (IP) and `limit` (1–2000, default 500). |
 | `GET /api/sessions/{id}/http` | HTTP exchanges of a TCP session; `/http/{n}/body` downloads the file as `.bin` (it may be malware). |
@@ -482,7 +489,7 @@ cd frontend
 npm test
 ```
 
-There are about 3,950 Python tests and about 1,290 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
+There are about 4,020 Python tests and about 1,310 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
 
 **Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](docs/checklist_hardware.md).
 
@@ -511,7 +518,7 @@ These are deliberate MVP trade-offs.
 - **DNS detection** only inspects UDP port 53.
 - **Fixed thresholds** can produce false positives (for example CDN hostnames with long labels). For DNS, trusted domains can be skipped with the `ignore_suffixes` parameter in `rules/dns_suspicious.yaml` (exact domain or any subdomain; `elb.amazonaws.com` ships by default). Ignoring a domain also hides real abuse of it, so keep the list short.
 - **A single analysis at a time** (single-user desktop model).
-- **The desktop window has only been validated on Windows** (WebView2). Linux and macOS use other pywebview backends that have not been tried.
+- **The desktop window has been validated on Windows** (WebView2) **and on Linux**. macOS uses another pywebview backend that has not been tried.
 - **MITRE mappings** are judgment calls; review them for your environment.
 - **Live capture** was validated on real Windows hardware (Npcap, administrator) and on Linux as root inside a container; the packet count matched an independent Scapy count in both. Without capture privileges the app reports a clear permission error. macOS has not been tried.
 - **The Process column is best-effort and live-capture only.** The operating system is sampled once per second, so a connection shorter than that can be missed (shown as "—", meaning "could not be identified", not "no process"). Connectionless UDP is matched by local port only, which is less precise, and many Windows services appear as `svchost.exe`. `psutil` is optional: without it the column is simply not offered. The JSON export does **not** include processes unless you ask for them (`/api/export?processes=true`), because reports get shared.
@@ -535,11 +542,11 @@ These are deliberate MVP trade-offs.
 - [x] HTTP API with hex dump and demo mode
 - [x] Live capture (isolated, simulated-interface tests)
 - [x] React interface
-- [x] Desktop window with pywebview, opened with a single command (native "Browse…" file dialog included; validated on Windows)
+- [x] Desktop window with pywebview, opened with a single command (native "Browse…" file dialog included; validated on Windows and Linux)
 - [x] One-command installer scripts for Windows and Linux/macOS (deployment from source)
 - [x] Live capture validated on real Windows hardware and on Linux (root)
 - [ ] Final run of the full test suite in a clean environment
-- [ ] Desktop window on Linux and macOS
+- [ ] Desktop window on macOS
 - [ ] Later (they change the JSON contract or the views' state): confidence separate from severity, temporary mute/whitelist, export to TheHive or MISP
 - Not planned: packaged executables (PyInstaller). The research is kept in `docs/empaquetado_futuro.md` in case it is revisited.
 

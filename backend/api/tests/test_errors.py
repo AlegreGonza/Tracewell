@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api.errors import ERROR_STATUS, register_error_handlers
+from backend.domain.rules.builder import RuleExists
+from backend.domain.rules.engine import RuleError
 from backend.domain.rules.iocs import IocError
 from backend.domain.pcap.live import CaptureError, CaptureStateError, PermissionDenied
 from backend.domain.pcap.reader import PcapError
@@ -13,7 +15,7 @@ from backend.domain.sessions.query import InvalidFilter
 ESPERADO = {
     FileNotFoundError: 404, PcapError: 422, UnsupportedLinktype: 422, InvalidFilter: 422,
     PermissionDenied: 403, CaptureStateError: 409, CaptureError: 503,
-    IsADirectoryError: 400, PermissionError: 403, IocError: 422,
+    IsADirectoryError: 400, PermissionError: 403, IocError: 422, RuleError: 422, RuleExists: 409,
 }
 EXCS = list(ESPERADO)
 
