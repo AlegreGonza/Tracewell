@@ -1,9 +1,4 @@
-"""Monitoreo continuo: detecta cortes intermitentes (el Wi-Fi o Internet que «va y viene») y arma su cronología.
-
-Un hilo de fondo mide cada pocos segundos tres cosas: el router (ping), Internet (conexión TCP a 1.1.1.1:443) y el
-DNS (resolver un nombre conocido). Cuando algo deja de responder abre un «corte» con la capa que falló, y lo cierra
-cuando vuelve todo. Solo corre mientras Tracewell está abierto, y todo queda en memoria (no escribe archivos).
-"""
+"""Monitoreo continuo."""
 from __future__ import annotations
 
 import threading
@@ -17,7 +12,7 @@ from .netinfo import default_gateway
 from .wifi import wifi_status
 
 MIN_INTERVAL, MAX_INTERVAL = 1.0, 30.0
-FAILS_TO_OPEN = 2  # fallos seguidos para abrir un corte: un solo tropiezo no cuenta
+FAILS_TO_OPEN = 2  # fallos seguidos para abrir un corte
 MAX_OUTAGES = 200
 MAX_SAMPLES = 180
 LAYER_ORDER = {"red local": 3, "internet": 2, "dns": 1}  # cuál es la capa más grave si varias fallan
@@ -32,6 +27,15 @@ def _layer(router: Optional[bool], internet: bool, dns: bool) -> Optional[str]:
     if not dns:
         return "dns"
     return None
+
+
+def _read_wifi() -> Optional[Dict[str, Any]]:
+    """Señal y red Wi-Fi; None si no hay o falla (es un dato extra: se sigue sin él)."""
+    try:
+        w = wifi_status()
+    except Exception:  # noqa: BLE001
+        return None
+    return {"signal": w.get("signal"), "ssid": w.get("ssid")} if w.get("available") else None
 
 
 class Monitor:
@@ -94,11 +98,7 @@ class Monitor:
                 if n % 30 == 0:
                     self.gateway = default_gateway()
                 if n % 5 == 0:
-                    try:
-                        w = wifi_status()
-                        self.wifi = {"signal": w.get("signal"), "ssid": w.get("ssid")} if w.get("available") else None
-                    except Exception:  # noqa: BLE001 - el Wi-Fi es un dato extra: si falla, se sigue sin él
-                        self.wifi = None
+                    self.wifi = _read_wifi()
                 self._sample(pool)
                 n += 1
                 self._stop.wait(self.interval)
@@ -123,7 +123,7 @@ class Monitor:
             self._track(layer, now)
 
     def _track(self, layer: Optional[str], now: float) -> None:
-        """Abre un corte tras `FAILS_TO_OPEN` fallos seguidos (contando desde el primero) y lo cierra al volver todo."""
+        """Abre un corte tras `FAILS_TO_OPEN` fallos seguidos (contando desde el primero)."""
         if layer is not None:
             self._fails += 1
             if self._pending is None:

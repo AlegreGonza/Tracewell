@@ -1,9 +1,4 @@
-"""Rutas de «Soporte de red → Red»: pruebas y consultas de red de SOLO LECTURA.
-
-Ninguna cambia la configuración del equipo. Las pruebas que salen a la red las pide la persona a propósito (cada
-pantalla dice a quién se contacta). Lo único con estado es el monitoreo de cortes, que arranca y para un hilo de
-medición en memoria. El cálculo vive en `backend.domain.support`.
-"""
+"""Rutas de «Soporte de red → Red»: pruebas y consultas de red de SOLO LECTURA."""
 from __future__ import annotations
 
 from typing import Any, Callable

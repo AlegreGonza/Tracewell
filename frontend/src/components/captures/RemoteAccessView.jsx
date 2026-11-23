@@ -5,9 +5,7 @@ import { formatBytes, formatTime } from "../../lib/format.js";
 const SERVICES = ["SSH", "Telnet", "SMB", "RDP", "WinRM", "VNC"];
 const n = (v) => v.toLocaleString("es-AR");
 
-// «Acceso remoto»: quién se conecta por SSH, Telnet, SMB, RDP, WinRM o VNC, agrupado por servicio.
-// Las señales (RST, reintentos) son pistas: un RST puede ser un puerto cerrado o un corte normal.
-// Todo es texto que viene de la captura: React lo escapa, nunca se usa HTML.
+// «Acceso remoto»
 function ServiceGroup({ group, onFilterIp }) {
   return (
     <section className="remote-group" aria-labelledby={`remote-${group.service}`}>

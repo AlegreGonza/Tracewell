@@ -29,22 +29,15 @@
 .nav-scroll .mantine-NavLink-root[data-active] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .nav-scroll .mantine-NavLink-label { font-size: 0.85rem; }
 
-.app-main { background: var(--bg); min-height: 100vh; }
+.app-main { background: var(--bg); min-height: 100vh; min-width: 0; overflow-x: clip; }
 .app-main .toolbar .brand { display: none; }
 .app-main .toolbar { top: var(--nav-h); background: var(--surface); }
 .app-main .app { min-height: calc(100vh - var(--nav-h)); }
 
 /* Entrada */
-.start { max-width: 64rem; }
 .start-logo { margin: 0 auto 1rem; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 25%, transparent)); color: var(--accent); }
-.start-steps { gap: 1rem; }
-.start-step {
-  position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.2rem 1.2rem;
-  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.4rem;
-}
 .start-step:hover { border-color: var(--accent); }
 .start-ico { margin-bottom: 0.2rem; }
-.start-num { position: absolute; top: 1rem; right: 1.1rem; opacity: 0.5; }
 .start-sub { background: transparent; border: none; padding: 0; margin: 2rem 0 0.8rem; font-size: 0.78rem; text-align: center; }
 .start-features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; }
 .start-feature { display: flex; gap: 0.8rem; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; }
@@ -74,22 +67,14 @@
 .card-head h2 svg { color: var(--accent); }
 
 /* Telaraña: color por rol */
-.gnode-publica path, .gnode-publica circle { stroke: var(--data-2); }
-.gnode-multicast rect { stroke: var(--data-4); fill: var(--surface-2); }
 .gnode path { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
 .gnode rect { fill: var(--surface-2); stroke-width: 1.5; }
+.gnode-publica path, .gnode-publica circle { stroke: var(--data-2); }
+.gnode-multicast rect { stroke: var(--data-4); }
 .gnode-interna circle { stroke: var(--data-1); }
 .gnode.flagged path, .gnode.flagged rect, .gnode.flagged circle { stroke: var(--sev-critical); stroke-width: 2; filter: drop-shadow(0 0 5px var(--sev-critical)); }
-.gnode-publica path { stroke: var(--data-2); }
-
-/* Ajustes del Resumen */
-.stats > div:first-child { padding-left: 3.4rem; }
-.stats dd { font-size: 1.55rem; white-space: nowrap; }
-.proto-chart .donut { width: 150px; height: 150px; flex: none; }
-.proto-chart .bars { flex: 1 1 22rem; }
 
 /* El contenido ancho (ATT&CK, tablas) se desplaza adentro de su tarjeta y no ensancha la página */
-.app-main { min-width: 0; overflow-x: clip; }
 .app-main > div, .app-main .app, .app-main main, .app-main .layout, .app-main .col, .app-main .support { min-width: 0; max-width: 100%; }
 
 /* Sección sin captura: mensaje propio en vez de repetir la pantalla de inicio */
@@ -128,11 +113,12 @@
   .theme-btn span { display: none; }              /* solo el ícono de la paleta */
   .theme-btn { padding: 0.35rem 0.55rem; }
   .app-header .brand { letter-spacing: 0.08em; font-size: 0.85rem; }
-  .card-head { flex-wrap: wrap; gap: 0.4rem; }
+  .card-head { gap: 0.4rem; }
   .rules-form, .rules-form fieldset { grid-template-columns: minmax(0, 1fr); }
   .talkers-list li { grid-template-columns: minmax(0, 1fr) 4.5rem; }
   .talkers-list li > :first-child { grid-column: 1 / -1; }
-  .stats > div:first-child { padding-left: 1rem; }
+  .stats > div { padding-left: 2.9rem; }  /* deja lugar al ícono */
+  .stats dd { font-size: 1.3rem; }
   .table-wrap { -webkit-overflow-scrolling: touch; max-width: 100%; }
   .table-wrap table { min-width: 36rem; }          /* la tabla no se aplasta: se desliza hacia los costados */
   .graph-wrap { padding: 0.4rem 0.5rem; }

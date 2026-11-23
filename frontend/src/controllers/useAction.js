@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Ejecuta una acción a pedido (un botón), no al abrir la pantalla: guarda el resultado, el error y si está trabajando.
-// Si se vuelve a ejecutar mientras la anterior sigue, descarta la vieja; al desmontar, cancela lo pendiente.
+// Ejecuta una acción a pedido (un botón), no al abrir la pantalla
 export function useAction(fn) {
   const [state, setState] = useState({ loading: false, result: null, error: null });
   const fnRef = useRef(fn);
-  fnRef.current = fn;
+  useEffect(() => {
+    fnRef.current = fn; // React: no se escribe un ref durante el render
+  });
   const ctlRef = useRef(null);
 
   const run = useCallback(async (...args) => {

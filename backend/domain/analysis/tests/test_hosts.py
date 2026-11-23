@@ -122,7 +122,7 @@ def test_servicios_distinguen_protocolo():
 
 
 def test_sesion_invertida_no_etiqueta_al_cliente():
-    """Captura a mitad: el 'origen' es el servidor 443. El nombre y el servicio van a SU lado, no al cliente."""
+    """Captura a mitad: el 'origen' es el servidor 443."""
     s = S("93.184.216.34", 443, "10.0.0.1", 51000)
     names = NameBook(sni={("k",): "example.com"})
     s.key = ("k",)
@@ -147,7 +147,7 @@ def test_nombre_de_respaldo_por_dns_de_la_ip():
     s = S("10.0.0.1", 40000, "10.0.0.2", 50000)  # ningun nombre de sesion
     names = NameBook(dns={"10.0.0.2": "nas.local"})
     by = {h.ip: h for h in build_hosts([s], names)}
-    # best_name(s) usa DNS del destino: ambos puertos altos y ambos internos -> destino es servidor
+    # best_name(s) usa DNS del destino
     assert by["10.0.0.2"].name == "nas.local"
     assert by["10.0.0.1"].name is None
 

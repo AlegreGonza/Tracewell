@@ -3,9 +3,7 @@ import { api } from "../../api/client.js";
 import { formatBytes } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// "Seguir la conversación": lo que se dijo en una sesión TCP, por turnos (como Follow TCP Stream de Wireshark).
-// Los datos vienen del tráfico y pueden ser hostiles: se muestran SIEMPRE como texto, nunca como HTML.
-// Ojo: con protocolos en claro (FTP, HTTP, Telnet) esto muestra el contenido tal cual, contraseñas incluidas.
+// "Seguir la conversación"
 export default function StreamView({ session, onError }) {
   const [state, setState] = useState({ status: "idle", data: null });
 

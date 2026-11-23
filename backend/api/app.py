@@ -1,10 +1,4 @@
-"""API HTTP de Tracewell.
-
-REGLA: este módulo solo ORQUESTA. Arma la app (reglas, contexto, ciclo de
-vida, seguridad, errores, rutas, frontend); las rutas viven en `routes_*`, el
-estado y casos de uso en `controllers`, y el análisis en `domain`. Si alguna vez te tienta poner
-lógica de análisis acá, va en `domain`.
-"""
+"""API HTTP de Tracewell."""
 from __future__ import annotations
 
 import logging
@@ -29,7 +23,7 @@ from .routes import support as routes_support
 from .routes import system as routes_system
 from .routes import triage as routes_triage
 from .errors import register_error_handlers
-from .security import LOCAL_HOSTS, install_local_only
+from .security import LOCAL_HOSTS, install_local_only, install_security_headers
 from backend.controllers.state import VERSION, Ctx, _rmtree, _State
 
 logger = logging.getLogger("tracewell")
@@ -44,7 +38,7 @@ def _shutdown(state: _State) -> None:
     try:
         _stop_live(state.live)
     finally:
-        monitor.stop()  # el monitoreo de cortes es un hilo de fondo: no debe sobrevivir al cierre
+        monitor.stop()  # el monitoreo de cortes es un hilo de fondo
         if state.sampler is not None:
             state.sampler.stop()
         _rmtree(state.owned_dir)  # se borra aunque detener la captura falle
@@ -66,14 +60,15 @@ def _make_lifespan(state: _State):
     """Lifespan de la app: sin trabajo al arrancar, limpieza al cerrar."""
     @asynccontextmanager
     async def lifespan(_app):
-        yield
-        _shutdown(state)
+        try:
+            yield
+        finally:
+            _shutdown(state)
     return lifespan
 
 
 def _mount_frontend(app: FastAPI, frontend_dir) -> None:
-    """Sirve el frontend compilado. Va al final: así "/" no tapa a /api. Si
-    todavía no se compiló el frontend (Paso 8), la API funciona igual."""
+    """Sirve el frontend compilado."""
     if Path(frontend_dir).is_dir():
         app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
@@ -88,10 +83,7 @@ def create_app(
     allowed_hosts: Sequence[str] = LOCAL_HOSTS,
     sampler_factory: Optional[Callable[[], Optional[ProcessSampler]]] = make_default_sampler,
 ) -> FastAPI:
-    """Fábrica de la app. Las dependencias externas (carpetas, fuente de
-    captura, listado de interfaces, muestreo de procesos) se inyectan: así los
-    tests no tocan la red real ni los archivos del usuario. `sampler_factory`
-    en None desactiva la columna Proceso."""
+    """Fábrica de la app."""
     rules = load_rules(rules_dir)  # falla al arrancar si una regla está mal, no a mitad de uso
     state = _State()
     app = FastAPI(title="Tracewell", version=VERSION, lifespan=_make_lifespan(state))
@@ -102,12 +94,13 @@ def create_app(
         live_dir=Path(live_dir) if live_dir else None,
         make_source=source_factory or (lambda iface: ScapySource(iface)),
         interface_lister=interface_lister,
-        # Se resuelve al llamar (no al crear): así `backend.api.app.analyze` sigue siendo parcheable.
+        # Se resuelve al llamar (no al crear)
         analyze=lambda path, rls: analyze(path, rls),
         make_sampler=sampler_factory,
         rules_dir=Path(rules_dir),
     )
     install_local_only(app, allowed_hosts)
+    install_security_headers(app)  # al final: envuelve también los rechazos de Host/Origin
     register_error_handlers(app)
     app.include_router(routes_analysis.router)
     app.include_router(routes_live.router)

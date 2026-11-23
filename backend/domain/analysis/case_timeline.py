@@ -1,13 +1,4 @@
-"""Cronología del caso: alertas, DNS sospechoso, sesiones marcadas e IOC, juntos y en orden de tiempo.
-
-Es una vista NUEVA, distinta del gráfico de paquetes por intervalo (`timeline.py`): acá cada fila es un hecho
-que un analista cuenta en un ticket («a las 10:03 el equipo X consultó este dominio raro; a las 10:04 saltó
-la alerta de beaconing; la sesión 12 coincide con un IOC»). Con `host` se limita a un equipo.
-
-Funciones puras: reciben lo ya calculado (alertas, filas de DNS, sesiones, notas, coincidencias de IOC).
-La hora es la del PRIMER paquete de cada hecho (UTC, epoch); a igual hora conserva este orden de clase:
-alerta, IOC, DNS, sesión marcada.
-"""
+"""Cronología del caso: alertas, DNS sospechoso, sesiones marcadas e IOC, juntos y en orden de tiempo."""
 from __future__ import annotations
 
 import ipaddress
@@ -53,7 +44,7 @@ def _alert_events(alerts: Iterable[Any]) -> List[Dict[str, Any]]:
 
 
 def _dns_events(rows: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-    """Solo las consultas con pistas (nombre aleatorio, NXDOMAIN, TTL bajo...): el resto es ruido en un caso."""
+    """Solo las consultas con pistas (nombre aleatorio, NXDOMAIN, TTL bajo...)."""
     out = []
     for r in rows:
         if not r.get("hints"):
@@ -91,8 +82,7 @@ def build_case_timeline(
     host: Optional[str] = None,
     limit: int = DEFAULT_LIMIT,
 ) -> Dict[str, Any]:
-    """Hechos del caso en orden cronológico. `host` limita a los que involucran esa IP (ValueError si no es una IP);
-    `limit` acota cuántos se devuelven (los más antiguos) y `truncated` avisa si había más."""
+    """Hechos del caso en orden cronológico."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
         raise ValueError(f"limit debe ser un entero entre 1 y {MAX_LIMIT}")
     wanted = normalize_host(host)

@@ -24,7 +24,7 @@ def test_origin_host(origin, esperado):
 
 def test_local_hosts_constante():
     # LOCAL_HOSTS contiene solo nombres locales
-    assert set(LOCAL_HOSTS) == {"127.0.0.1", "localhost"}
+    assert set(LOCAL_HOSTS) == {"127.0.0.1", "localhost", "[::1]"}
 
 
 @pytest.mark.parametrize("origin,ok", [

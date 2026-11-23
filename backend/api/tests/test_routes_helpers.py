@@ -8,8 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.api.errors import register_error_handlers
-from backend.api.routes.analysis import Filters, FiltersDep, Page, PageDep, _analyze_path, _json_attachment, _partial_stats
+from backend.api.routes.analysis import Filters, FiltersDep, PageDep, _analyze_path, _json_attachment, _partial_stats
 from backend.api.routes.live import (
     LiveStartRequest, _make_capture, _release_previous, _start_or_cleanup, _stop_and_analyze,
 )

@@ -1,5 +1,4 @@
-// Cliente de la API. Un único lugar que conoce las URLs y cómo se traducen los
-// errores: los componentes nunca llaman a fetch directamente.
+// Cliente de la API
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -10,8 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-// FastAPI responde `detail` como texto (nuestros errores) o como lista (errores
-// de validación de parámetros). Lo normalizamos a un solo texto legible.
+// FastAPI responde `detail` como texto (nuestros errores) o como lista
 export function normalizeDetail(detail) {
   if (detail == null) return null;
   if (typeof detail === "string") return detail;
@@ -28,7 +26,6 @@ export function normalizeDetail(detail) {
 }
 
 // Arma "?a=1&b=2" omitiendo valores vacíos (null, undefined, ""), así un filtro
-// sin usar no viaja como "ip=" (que el servidor rechazaría por inválido).
 export function buildQuery(params = {}) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -72,7 +69,7 @@ export const api = {
   closeCapture: () => request("/api/capture", { method: "DELETE" }),
   sessions: (params, signal) => request(`/api/sessions${buildQuery(params)}`, { signal }),
   timeline: (signal) => request("/api/timeline", { signal }),
-  // Entender la captura: equipos y grafo, DNS, HTTP, y la explicación en palabras simples de una sesión.
+  // Entender la captura
   hosts: (signal) => request("/api/hosts", { signal }),
   hostsByMac: (signal) => request("/api/hosts/by-mac", { signal }),
   graph: (signal) => request("/api/graph", { signal }),
@@ -96,7 +93,7 @@ export const api = {
   // La exportación y el informe son descargas: devolvemos la URL para un <a download>.
   exportUrl: (filters) => `/api/export${buildQuery(filters)}`,
   reportUrl: () => "/api/report",
-  // Descargas de .pcap: SOLO los paquetes de una sesión, o de las sesiones que cumplen los filtros.
+  // Descargas de .pcap
   sessionPcapUrl: (id) => `/api/sessions/${encodeURIComponent(id)}/pcap`,
   filteredPcapUrl: (filters) => `/api/pcap${buildQuery(filters)}`,
   // Triaje: nota/marca "revisada" por sesión y lista de indicadores de compromiso (IOC).
@@ -116,7 +113,7 @@ export const api = {
   systemConnections: (signal) => request("/api/system/connections", { signal }),
   systemServices: (signal) => request("/api/system/services", { signal }),
   systemStartup: (signal) => request("/api/system/startup", { signal }),
-  // Soporte de red → Red: pruebas de solo lectura. Las que salen a la red las pide la persona a propósito.
+  // Soporte de red → Red: pruebas de solo lectura
   supportConfig: (signal) => request("/api/support/config", { signal }),
   supportConfigRaw: (signal) => request("/api/support/config/raw", { signal }),
   supportInternet: (signal) => request("/api/support/internet", { signal }),

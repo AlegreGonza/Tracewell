@@ -1,13 +1,4 @@
-"""Motor de reglas: carga reglas YAML y las evalúa sobre el tráfico.
-
-Idea central: la REGLA (YAML) es dato (nombre, severidad, técnica MITRE,
-umbrales) y el DETECTOR (Python) es la lógica que sabe buscar un patrón.
-Así un analista ajusta umbrales o cambia la severidad sin tocar código, pero
-no ejecutamos código arbitrario que venga de un archivo.
-
-Una sola pasada: cada paquete se decodifica una vez y se ofrece a todos los
-detectores. Memoria acotada por detector, no por el tamaño del pcap.
-"""
+"""Motor de reglas: carga reglas YAML y las evalúa sobre el tráfico."""
 from __future__ import annotations
 
 import math
@@ -49,8 +40,7 @@ class Rule:
     mitre_tactic: str
     params: Dict[str, Any]
     source: str = ""  # archivo del que salió, para mensajes de error
-    # Campos explicativos OPCIONALES del YAML: ayudan al analista a decidir. Solo se muestran en la
-    # interfaz; NO viajan en el JSON exportado (el contrato schema_version 1 no cambia).
+    # Campos explicativos OPCIONALES del YAML: ayudan al analista a decidir
     false_positives: Tuple[str, ...] = ()
     investigation_steps: Tuple[str, ...] = ()
     wireshark_filter: str = ""
@@ -68,8 +58,7 @@ class Alert:
     src_ip: str
     dst_ip: str
     first_ts: float
-    # Evidencia: por qué saltó la alerta, con datos concretos. Sin esto el
-    # analista tiene que creerle a la herramienta; con esto puede verificar.
+    # Evidencia: por qué saltó la alerta, con datos concretos
     evidence: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -113,7 +102,7 @@ def _port_list(v):
 
 
 def _suffix_list(v):
-    """Lista (puede ser vacía) de sufijos de dominio; se normalizan a minúsculas y sin puntos en los bordes."""
+    """Lista (puede ser vacía) de sufijos de dominio."""
     if not isinstance(v, list):
         raise ValueError(f"debe ser una lista de dominios, recibí {v!r}")
     out = []
@@ -150,11 +139,7 @@ def _l4_info(l4):
 
 
 def _decode(pkt: Packet) -> Optional[Decoded]:
-    """Ethernet -> IP -> TCP/UDP, o None si no aplica o está dañado.
-
-    Un paquete ilegible NO debe tumbar el análisis: en una herramienta de
-    seguridad el tráfico malicioso a veces está malformado a propósito.
-    """
+    """Ethernet -> IP -> TCP/UDP, o None si no aplica o está dañado."""
     try:
         layer = ip_layer(pkt.data)  # fragmento sin capa 4 => UnpackError => None
         if layer is None:
@@ -174,11 +159,7 @@ def _decode(pkt: Packet) -> Optional[Decoded]:
 
 # ---------------------------------------------------------------- detectores
 
-# Tope de entradas por estructura de estado de un detector. Sin tope, un
-# atacante (o un DDoS) que genere millones de pares origen/destino distintos
-# haría crecer la memoria sin límite. Costo asumido: con más pares que el tope
-# se "olvida" a los menos recientes (un escaneo muy lento repartido entre más de
-# MAX_TRACKED pares podría pasar inadvertido). Preferimos eso a quedarnos sin RAM.
+# Tope de entradas por estructura de estado de un detector
 MAX_TRACKED = 100_000
 
 
@@ -223,10 +204,7 @@ class Detector:
 
 
 class PortScanDetector(Detector):
-    """Una IP origen envía SYN a muchos puertos distintos de un mismo destino
-    en poco tiempo. Contamos SYN "puros" (sin ACK): son los intentos de abrir
-    conexión; una conversación normal repite pocos puertos.
-    """
+    """Una IP origen envía SYN a muchos puertos distintos de un mismo destino en poco tiempo."""
 
     PARAMS = {
         "min_ports": (_int_range(2, 65535), 15),
@@ -235,9 +213,7 @@ class PortScanDetector(Detector):
 
     def __init__(self, rule):
         super().__init__(rule)
-        # (origen, destino) -> {puerto: último instante visto}. Un dict por
-        # puerto (y no una lista de SYN) acota la memoria: repetir el mismo
-        # puerto un millón de veces ocupa una sola entrada.
+        # (origen, destino) -> {puerto: último instante visto}
         self._seen = _LRU()
         self._alerted = _LRU()
 
@@ -277,8 +253,7 @@ class PortScanDetector(Detector):
         minimum = self.p["min_ports"]
         if len(ports) < minimum:
             return []  # así el dict nunca pasa de `min_ports` entradas por par
-        # Llegamos al umbral: descartamos los puertos fuera de la ventana y
-        # recién entonces decidimos (con puertos viejos no hay escaneo "rápido").
+        # Llegamos al umbral
         window = self.p["window_seconds"]
         self._prune_old(ports, d.ts, window)
         if len(ports) < minimum:
@@ -289,12 +264,7 @@ class PortScanDetector(Detector):
 
 
 class FtpCleartextDetector(Detector):
-    """Comandos USER/PASS de FTP viajando sin cifrar.
-
-    Por seguridad la alerta NO guarda la contraseña: la evidencia dice que
-    existió y de qué largo era. Los reportes se comparten; una contraseña en
-    texto claro dentro de un JSON sería una filtración nueva.
-    """
+    """Comandos USER/PASS de FTP viajando sin cifrar."""
 
     PARAMS = {"ports": (_port_list, [21])}
 
@@ -343,11 +313,7 @@ def _entropy(s: str) -> float:
 
 
 class DnsSuspiciousDetector(Detector):
-    """Consultas DNS con nombres que parecen datos y no nombres humanos.
-
-    Malware que usa DNS para C2 o para sacar datos (túneles, DGA) mete
-    información codificada en el primer label: es largo y de alta entropía.
-    """
+    """Consultas DNS con nombres que parecen datos y no nombres humanos."""
 
     PARAMS = {
         "max_label_length": (_int_range(1, 63), 40),
@@ -503,7 +469,7 @@ def _build_params(data: dict, detector_cls: Type[Detector], source: str) -> Dict
 
 
 def _text_list(data: dict, key: str, source: str) -> Tuple[str, ...]:
-    """Lista de textos no vacíos de un campo opcional (ausente = vacía); falla si el tipo no es una lista de texto."""
+    """Lista de textos no vacíos de un campo opcional (ausente = vacía)."""
     value = data.get(key)
     if value is None:
         return ()
@@ -553,7 +519,7 @@ def _read_yaml(f: Path) -> Any:
     """Lee un YAML; safe_load nunca ejecuta código."""
     try:
         return yaml.safe_load(f.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, UnicodeDecodeError) as exc:  # un archivo no UTF-8 también es una regla mala
         raise RuleError(f"{f.name}: YAML inválido: {exc}") from exc
 
 
@@ -573,8 +539,7 @@ def load_rules(path) -> List[Rule]:
 # ---------------------------------------------------------------- evaluación
 
 def evaluate(rules: Iterable[Rule], packets: Iterable[Packet], linktype: int = ETHERNET) -> List[Alert]:
-    """Pasa cada paquete por todos los detectores y devuelve las alertas
-    ordenadas por tiempo."""
+    """Pasa cada paquete por todos los detectores y devuelve las alertas ordenadas por tiempo."""
     if linktype != ETHERNET:
         raise UnsupportedLinktype(f"linktype {linktype} no soportado (solo Ethernet = 1)")
     detectors = [DETECTORS[r.detector](r) for r in rules]
@@ -589,11 +554,8 @@ def evaluate(rules: Iterable[Rule], packets: Iterable[Packet], linktype: int = E
     return alerts
 
 
-# Detectores adicionales (beaconing, inundación SYN, puertos sospechosos, DNS no habitual, subidas
-# grandes). Van en otro archivo para que este no crezca sin fin; se importan AL FINAL porque usan las
-# clases de este módulo. Importarlos antes causaría una importación circular.
+# Detectores adicionales
 from backend.domain.rules import extra_detectors as _extra  # noqa: E402
 
-# getattr: si alguien importó extra_detectors ANTES que este módulo, `_extra` está a medio cargar y todavía
-# no tiene DETECTORS; en ese caso se registra él mismo al terminar de cargarse.
+# getattr: si alguien importó extra_detectors ANTES que este módulo
 DETECTORS.update(getattr(_extra, "DETECTORS", {}))

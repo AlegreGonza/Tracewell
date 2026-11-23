@@ -1,11 +1,4 @@
-"""Tráfico a lo largo del tiempo: paquetes y bytes por intervalo, para dibujar un gráfico.
-
-Sirve para ver de un vistazo picos, silencios y ritmos regulares (lo que delata un
-beaconing). Solo usa el instante y el largo de cada paquete: no decodifica nada.
-
-Memoria acotada: se agrupa por intervalos de `g` segundos y, si hay demasiados, `g` se
-duplica y se fusionan; al final se reagrupa a lo sumo en `MAX_BINS` barras.
-"""
+"""Tráfico a lo largo del tiempo: paquetes y bytes por intervalo, para dibujar un gráfico."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,7 +7,7 @@ from typing import Dict, List, Optional
 from backend.domain.pcap.reader import Packet
 
 MAX_BINS = 120  # barras del gráfico
-MAX_KEYS = 20_000  # intervalos finos que se guardan antes de volverlos más gruesos
+MAX_KEYS = 20_000  # intervalos finos que se guardan antes de volverlos más
 
 
 @dataclass(frozen=True)

@@ -1,12 +1,10 @@
 """Tests de backend.domain.pcap.live con fuente simulada (nunca toca la red real)."""
-import importlib
 import json
 import shutil
 import subprocess
 import sys
 import threading
 import time
-import types
 from pathlib import Path
 
 import pytest
@@ -484,8 +482,7 @@ def test_scapy_source_error_generico(monkeypatch):
 
 
 def _timeout(monkeypatch, value):
-    # el default de _wait_started se fijó al definir la función: parchear la
-    # constante del módulo no lo cambia, hay que parchear __defaults__
+    # el default de _wait_started se fijó al definir la función
     monkeypatch.setattr(ScapySource._wait_started, "__defaults__", (value,))
 
 
@@ -599,8 +596,7 @@ def test_scapy_oserror_no_permiso_no_es_permission_denied(monkeypatch):
 
 
 def test_scapy_excepcion_no_exception_se_traduce(monkeypatch):
-    # .exception con un objeto que no es excepción: 'raise' falla con TypeError,
-    # que se traduce igual a CaptureError (no se cuelga ni escapa un TypeError)
+    # .exception con un objeto que no es excepción
     _fake_scapy(monkeypatch, _sniffer_cls(exception="texto raro"))
     with pytest.raises(CaptureError, match="eth0"):
         ScapySource("eth0").start(lambda *a: None)
@@ -651,7 +647,7 @@ def test_scapy_thread_none_no_rompe(monkeypatch):
 
 
 def test_scapy_sniffer_sin_atributo_exception_se_traduce(monkeypatch):
-    # Un AsyncSniffer sin .exception/.thread (versión rara): AttributeError -> CaptureError claro
+    # Un AsyncSniffer sin .exception/.thread (versión rara)
     class Raro:
         def __init__(self, **kw):
             pass
@@ -693,7 +689,7 @@ def test_live_capture_propaga_permission_denied_y_permite_reintento(tmp_path, mo
         with pytest.raises(PermissionDenied):
             cap.start()
         assert cap._fh.closed and cap.status()["state"] == "idle" and not cap.running
-        assert temp.is_dir()  # start() NO borra la carpeta: lo hace cleanup() (la ruta de la API)
+        assert temp.is_dir()  # start() NO borra la carpeta
         cap.cleanup()  # permitido: no está en curso
         assert not temp.exists()
         # reintento sobre el mismo objeto una vez resuelto el problema

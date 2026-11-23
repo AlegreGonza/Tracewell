@@ -1,12 +1,4 @@
-"""Vista por EQUIPO (IP) de una captura: quién es cada uno, con quién habla y cuánto.
-
-Es la mirada que usan NetworkMiner o la pestaña "Conversaciones → IPv4" de Wireshark, pero resumida:
-una fila por IP y un grafo "quién habla con quién". Todo sale de las sesiones ya calculadas, sin
-volver a leer la captura.
-
-Límites: se resume por SESIÓN (no por paquete); los bytes de una sesión cuentan para sus DOS extremos;
-`MAX_PEERS` acota la memoria por equipo (un escaneo a miles de destinos no la hace crecer sin límite).
-"""
+"""Vista por EQUIPO (IP) de una captura: quién es cada uno, con quién habla y cuánto."""
 from __future__ import annotations
 
 import ipaddress
@@ -17,12 +9,12 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from backend.domain.analysis.owners import describe_ip
 
-MAX_PEERS = 5_000  # destinos distintos que se recuerdan por equipo (después solo se cuenta)
+MAX_PEERS = 5_000  # destinos distintos que se recuerdan por equipo
 MAX_EDGES = 300
 TOP_PORTS = 5
 WEB_PORTS = frozenset({80, 443, 8080, 8443})
 TOP_TALKERS = 3  # cuántos equipos, como máximo, se marcan como «top talker»
-TALKER_MIN_SHARE = 0.10  # ...y solo si movieron al menos esta parte de los bytes de la captura
+TALKER_MIN_SHARE = 0.10  # ...y solo si movieron al menos esta parte de los bytes de
 
 ROLE_DNS_CLIENT = "Cliente DNS"
 ROLE_WEB_SERVER = "Servidor web"
@@ -30,7 +22,7 @@ ROLE_SCANNER = "Emisor de escaneos"
 ROLE_TOP_TALKER = "Top talker"
 
 
-@lru_cache(maxsize=65_536)  # acotada; se llama varias veces por sesión con pocas IP distintas
+@lru_cache(maxsize=65_536)  # acotada; se llama varias veces por sesión
 def classify(ip: str) -> str:
     """'interna' (red local), 'multicast' o 'publica'. Una IP ilegible cuenta como pública."""
     try:
@@ -62,10 +54,9 @@ class Host:
     role_label: str = ""
     owner: Optional[str] = None  # dueño conocido del rango (tabla local, solo pista)
     note: Optional[str] = None  # qué es una dirección especial (p. ej. mDNS)
-    # Perfil: roles INFERIDOS de lo observado en esta captura (cliente DNS, servidor web, emisor de
-    # escaneos, top talker). Son pistas, no una auditoría: un equipo que no aparece no «no es» eso.
+    # Perfil: roles INFERIDOS de lo observado en esta captura
     roles: List[str] = field(default_factory=list)
-    # MAC más vista de este equipo (solo equipos de la red local: la MAC de un extremo remoto es la del router).
+    # MAC más vista de este equipo
     mac: Optional[str] = None
 
 
@@ -79,12 +70,12 @@ class _Acc:
         self.protocols: Set[str] = set()
         self.ports: Counter = Counter()
         self.macs: Counter = Counter()  # MAC -> veces vista (solo equipos de la red local)
-        self.client_services: Counter = Counter()  # (protocolo, puerto) de los servicios a los que este equipo SE CONECTÓ
+        self.client_services: Counter = Counter()  # (protocolo, puerto) de los servicios a los
         self.names: Counter = Counter()
 
     def add(self, s, other_ip: str, as_origin: bool, service_port: Optional[int], name: Optional[str],
             client_service: Optional[Tuple[str, int]] = None, mac: Optional[str] = None) -> None:
-        """`service_port` y `name` solo llegan si este equipo es el SERVIDOR de la sesión; `client_service`, si es el CLIENTE."""
+        """`service_port` y `name` solo llegan si este equipo es el SERVIDOR de la sesión."""
         self.sessions += 1
         self.packets += s.packets
         self.bytes += s.bytes
@@ -110,9 +101,7 @@ class _Acc:
 
 
 def _server_is_src(s) -> bool:
-    """¿El servidor es el extremo de ORIGEN? El "origen" es quien mandó el primer paquete VISTO: si la captura
-    empezó a mitad de la conversación está al revés. Se decide por el puerto (uno bajo, como 443, es un servicio),
-    y si no alcanza, por la red: el que está afuera de la red local es el servidor."""
+    """¿El servidor es el extremo de ORIGEN? El "origen" es quien mandó el primer paquete VISTO."""
     if s.src_port is not None and s.dst_port is not None:
         if s.src_port < 1024 <= s.dst_port:
             return True
@@ -123,8 +112,7 @@ def _server_is_src(s) -> bool:
 
 
 def _host_mac(ip: str, mac: Optional[str]) -> Optional[str]:
-    """La MAC solo identifica al equipo si es de la red local y de UN equipo: se descartan las de grupo
-    (multicast y broadcast, bit 0 del primer byte) y las de equipos remotos (serían la del router)."""
+    """La MAC solo identifica al equipo si es de la red local y de UN equipo."""
     if not mac or classify(ip) != "interna":
         return None
     return None if int(mac[:2], 16) & 1 else mac
@@ -182,7 +170,7 @@ def _mark_top_talkers(hosts: List[Host], total_bytes: int) -> None:
 
 def _to_host(ip: str, acc: _Acc, names, rules: Set[str], alert_count: int, ioc, scanner: bool = False) -> Host:
     kind = classify(ip)
-    # Un equipo de TU red no se llama como el sitio al que se conecta: el nombre es del servidor.
+    # Un equipo de TU red no se llama como el sitio al que se conecta
     name = acc.names.most_common(1)[0][0] if acc.names else (names.dns.get(ip) if names is not None else None)
     info = describe_ip(ip, kind)
     return Host(
@@ -257,10 +245,7 @@ def _mac_hint(mac: str, shared: bool) -> str:
 
 
 def build_mac_groups(hosts: Iterable[Host]) -> List[Dict[str, Any]]:
-    """Agrupa los equipos por MAC: una fila por MAC con sus IP. Los grupos con varias IP van primero.
-
-    Solo entran equipos de la red local con una MAC conocida; los demás no tienen MAC propia en la captura.
-    """
+    """Agrupa los equipos por MAC: una fila por MAC con sus IP."""
     groups: Dict[str, List[Host]] = {}
     for h in hosts:
         if h.mac:

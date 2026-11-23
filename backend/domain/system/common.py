@@ -1,4 +1,4 @@
-"""Utilidades compartidas del paquete: acceso perezoso a psutil, lecturas tolerantes y pistas sobre rutas."""
+"""Utilidades compartidas del paquete."""
 from __future__ import annotations
 
 import logging
@@ -24,8 +24,7 @@ def psutil_or_raise():
 
 
 def safe(fn: Callable[[], Any], default: Any = None) -> Any:
-    """Ejecuta una lectura que puede fallar por permisos o porque el proceso ya terminó (AccessDenied,
-    NoSuchProcess, OSError…): devuelve `default` en vez de romper. Un dato que falta es normal, no un error."""
+    """Ejecuta una lectura que puede fallar por permisos o porque el proceso ya terminó."""
     try:
         return fn()
     except Exception:  # noqa: BLE001 - cualquier fallo de lectura del sistema es "dato no disponible"
@@ -38,8 +37,7 @@ _TEMP_MARKERS = (
     "\\appdata\\local\\temp\\", "\\windows\\temp\\", "\\downloads\\", "\\users\\public\\",
     "/tmp/", "/var/tmp/", "/dev/shm/",
 )
-# Procesos propios de Windows y la carpeta donde viven de verdad: el mismo nombre en otro lado es la forma
-# más común de disfrazar un programa ajeno.
+# Procesos propios de Windows y la carpeta donde viven de verdad
 _WINDOWS_PROCESSES = {
     "svchost.exe": "c:\\windows\\system32\\", "lsass.exe": "c:\\windows\\system32\\",
     "csrss.exe": "c:\\windows\\system32\\", "winlogon.exe": "c:\\windows\\system32\\",
@@ -50,7 +48,7 @@ _WINDOWS_PROCESSES = {
 
 
 def path_hints(name: Optional[str], exe: Optional[str]) -> List[Dict[str, str]]:
-    """Pistas (no veredictos) sobre dónde vive un programa. Cada una trae un texto que dice por qué mirarla."""
+    """Pistas (no veredictos) sobre dónde vive un programa."""
     hints: List[Dict[str, str]] = []
     if not exe:
         return hints

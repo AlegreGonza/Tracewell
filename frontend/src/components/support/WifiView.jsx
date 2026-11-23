@@ -10,7 +10,7 @@ const when = (iso) => {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("es-AR");
 };
 
-// «Wi-Fi»: señal, canal y velocidad de la conexión actual, más el historial de conexiones y desconexiones.
+// «Wi-Fi»: señal, canal y velocidad de la conexión actual, más el historial de conexiones
 export default function WifiView({ active }) {
   const { data, error, loading, reload, updatedAt } = useLoad((s) => api.supportWifi(s), { every: 5000, active });
   const history = useAction((s) => api.supportWifiHistory(s));

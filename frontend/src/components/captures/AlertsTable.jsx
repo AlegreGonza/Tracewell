@@ -6,7 +6,7 @@ import CopyFilterButton from "./CopyFilterButton.jsx";
 
 const SEV_LEVEL = { low: 1, medium: 2, high: 3, critical: 4 };
 
-// Guía opcional de la regla (falsos positivos, pasos y filtro). Todo texto: viene de un YAML local, nunca HTML.
+// Guía opcional de la regla (falsos positivos, pasos y filtro)
 function RuleGuide({ guide }) {
   if (!guide) return null;
   return (
@@ -134,7 +134,7 @@ export default function AlertsTable({ refreshKey, onError, onViewSessions }) {
                       <button type="button" onClick={() => onViewSessions(a)}>
                         Ver las sesiones de {a.src_ip}
                       </button>
-                      {/* Los paquetes de esa IP como un .pcap aparte (para Wireshark o un ticket). */}
+                      {/* Los paquetes de esa IP como un .pcap aparte */}
                       <a className="button" href={api.filteredPcapUrl({ ip: a.src_ip })} download>
                         Descargar .pcap de {a.src_ip}
                       </a>

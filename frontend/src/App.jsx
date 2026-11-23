@@ -9,7 +9,7 @@ import { PALETTES } from "./theme.js";
 import CapturesView from "./views/CapturesView.jsx";
 import SupportView, { GROUPS } from "./views/SupportView.jsx";
 
-// Secciones de «Capturas» en la barra lateral: cada una muestra solo sus tarjetas (antes era una página larguísima).
+// Secciones de «Capturas» en la barra lateral
 export const CAPTURE_SECTIONS = [
   { id: "panorama", label: "Panorama", icon: IconLayoutDashboard },
   { id: "alertas", label: "Alertas y ATT&CK", icon: IconAlertTriangle },
@@ -66,8 +66,7 @@ function ThemeMenu({ palette, onPalette }) {
   );
 }
 
-// Marco de la aplicación: cabecera + barra lateral + contenido. «Capturas» y «Soporte de red» quedan montadas una vez
-// abiertas (solo se ocultan), así cambiar de una a otra no pierde el análisis cargado ni lo que se estaba mirando.
+// Marco de la aplicación: cabecera + barra lateral + contenido
 export default function App({ palette = "esmeralda", onPalette }) {
   const [opened, { toggle, close }] = useDisclosure(false); // menú en pantallas chicas (se abre encima)
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true); // en pantallas grandes se puede ocultar para ganar ancho
@@ -75,7 +74,7 @@ export default function App({ palette = "esmeralda", onPalette }) {
   const [section, setSection] = useState("panorama");
   const [support, setSupport] = useState({ group: "sistema", section: "resumen" });
   const [supportOpened, setSupportOpened] = useState(false);
-  const [meta, setMeta] = useState(null); // resumen de la captura cargada, para la cabecera y las insignias
+  const [meta, setMeta] = useState(null); // resumen de la captura cargada, para la cabecera
 
   const goCapture = useCallback((id) => {
     setArea("capturas");

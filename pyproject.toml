@@ -13,9 +13,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "httpx"]  # httpx: lo usa TestClient de FastAPI
+dev = ["pytest", "pytest-cov", "httpx2", "ruff"]  # httpx2: lo usa TestClient (Starlette); ruff: linter
 
 [tool.pytest.ini_options]
 # Los tests viven dentro de cada módulo; pythonpath "." permite `import backend...`.
 testpaths = ["backend"]
 pythonpath = ["."]
+
+[tool.ruff]
+# Solo pyflakes (F): imports sin usar, nombres sin definir, etc. No reformatea nada.
+extend-exclude = ["frontend", "release"]
+
+[tool.ruff.lint]
+select = ["F"]
+
+[tool.ruff.lint.per-file-ignores]
+# El fixture `mk` se importa de test_engine y cada test lo recibe por nombre (idioma de pytest)
+"backend/domain/rules/tests/test_dns_ignore_suffixes.py" = ["F811"]

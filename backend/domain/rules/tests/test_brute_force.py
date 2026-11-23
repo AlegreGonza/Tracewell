@@ -1,4 +1,4 @@
-"""Tests del detector de fuerza bruta (SSH/RDP) y de la regla personalizada por umbral, con pcap sintéticos."""
+"""Tests del detector de fuerza bruta (SSH/RDP) y de la regla personalizada por umbral."""
 from pathlib import Path
 
 import dpkt

@@ -1,16 +1,4 @@
-"""Analizador de HTTP sin cifrar: qué pidió cada cliente y qué le respondieron, y los archivos que viajaron.
-
-Trabaja sobre los bytes ya reconstruidos de cada sentido de una sesión TCP (`raw_directions`). Con HTTPS no
-hay nada que leer: el contenido va cifrado.
-
-Reglas de seguridad (a propósito):
-- NUNCA se guardan valores de contraseñas ni tokens: de un formulario solo se informan los NOMBRES de los
-  campos sensibles, y de una autenticación Basic solo el usuario.
-- Los archivos extraídos se identifican por su huella SHA-256 y su tipo REAL (por los primeros bytes, no por
-  la extensión). Si se descargan, es como `.bin`: son datos de la red y pueden ser malware.
-
-Límites: HTTP/1.x (no HTTP/2); si faltan bytes en la captura, el intercambio se marca incompleto.
-"""
+"""Analizador de HTTP sin cifrar."""
 from __future__ import annotations
 
 import base64
@@ -28,7 +16,7 @@ _STATUS_LINE = re.compile(r"^HTTP/1\.[01] (\d{3})(?: (.*))?$")
 _SENSITIVE = ("pass", "pwd", "secret", "token", "senha", "contrasena", "clave", "apikey", "api_key")
 _UPLOAD_TYPES = ("multipart/", "application/octet-stream")
 
-# Tipo real de un archivo según sus primeros bytes: (prefijo, descripción, ¿es ejecutable o peligroso?).
+# Tipo real de un archivo según sus primeros bytes
 _MAGIC: Tuple[Tuple[bytes, str, bool], ...] = (
     (b"MZ", "Ejecutable o librería de Windows (.exe/.dll)", True),
     (b"\x7fELF", "Ejecutable de Linux (ELF)", True),
@@ -140,7 +128,7 @@ def _messages(data: bytes, responses: bool, request_methods: List[str]) -> List[
         line, headers, body_pos = head
         match = (_STATUS_LINE if responses else _REQUEST_LINE).match(line)
         if match is None:
-            break  # ya no es HTTP (o se perdió el hilo): se corta en vez de inventar
+            break  # ya no es HTTP (o se perdió el hilo)
         no_body = False
         if responses:
             status = int(match.group(1))
@@ -154,7 +142,7 @@ def _messages(data: bytes, responses: bool, request_methods: List[str]) -> List[
 # ----------------------------------------------------------- intercambios
 
 def _sensitive_fields(method: str, target: str, headers: Dict[str, str], body: bytes) -> List[str]:
-    """NOMBRES de campos con pinta de contraseña (en la URL o en un formulario). Los valores nunca se guardan."""
+    """NOMBRES de campos con pinta de contraseña (en la URL o en un formulario)."""
     pairs = urlsplit(target).query
     if method in ("POST", "PUT") and headers.get("content-type", "").lower().startswith("application/x-www-form-urlencoded"):
         pairs += "&" + body[:4096].decode("latin-1")
@@ -229,7 +217,7 @@ def _starts_with_method(data: bytes) -> bool:
 
 
 def _client_server(origin: bytes, destination: bytes) -> Tuple[bytes, bytes]:
-    """(bytes del cliente, bytes del servidor). El «origen» puede estar invertido si la captura empezó a mitad."""
+    """(bytes del cliente, bytes del servidor)."""
     dest_is_request = _starts_with_method(destination)
     origin_is_request = _starts_with_method(origin)
     if dest_is_request and not origin_is_request:  # el destino manda las peticiones: el origen quedó invertido
@@ -264,7 +252,7 @@ def http_exchanges(origin: bytes, destination: bytes) -> List[Dict[str, Any]]:
 
 
 def http_body(origin: bytes, destination: bytes, index: int) -> Optional[Tuple[bytes, str]]:
-    """(cuerpo, nombre seguro) del archivo del intercambio `index`, o None si ese intercambio no tiene archivo."""
+    """(cuerpo, nombre seguro) del archivo del intercambio `index`, o None."""
     pairs = _pairs(origin, destination)
     if not 0 <= index < len(pairs):
         return None

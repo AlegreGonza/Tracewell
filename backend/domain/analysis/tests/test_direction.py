@@ -25,7 +25,7 @@ def test_lateral_entre_equipos_internos():
 
 
 def test_los_rangos_de_documentacion_cuentan_como_privados():
-    # Python trata 203.0.113.0/24 (TEST-NET) como no enrutable: la vista de equipos hace lo mismo
+    # Python trata 203.0.113.0/24 (TEST-NET) como no enrutable
     assert session_direction(sess("203.0.113.9", 40000, "10.0.0.5", 22)) == LATERAL
 
 
@@ -44,7 +44,7 @@ def test_multicast_se_etiqueta_aparte():
 
 
 def test_origen_invertido_por_captura_a_mitad_de_conversacion():
-    # el primer paquete visto es la RESPUESTA del servidor: la dirección sigue siendo cliente -> servidor
+    # el primer paquete visto es la RESPUESTA del servidor
     assert session_direction(sess("93.184.216.34", 443, "192.168.1.10", 50000)) == INTERNAL_TO_EXTERNAL
     assert session_direction(sess("10.0.0.5", 22, "8.8.4.4", 40000)) == EXTERNAL_TO_INTERNAL
 

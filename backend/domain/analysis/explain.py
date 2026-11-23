@@ -1,12 +1,4 @@
-"""«¿Qué pasó en esta sesión?» explicado en palabras simples, más un diagrama paso a paso de la conexión.
-
-Es la parte didáctica: lo que un analista experto "lee" de los paquetes (el saludo de 3 pasos, un RST, un
-keep-alive) escrito como frases, y la conversación dibujada como el «Flow Graph» de Wireshark.
-
-Todo sale de las BANDERAS y los tamaños de los paquetes de la sesión; no se interpreta el contenido
-(salvo reconocer HTTP o TLS por los primeros bytes). Las frases son orientativas: describen lo que se ve
-en la captura, no prueban intenciones.
-"""
+"""«¿Qué pasó en esta sesión?» explicado en palabras simples."""
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
@@ -108,8 +100,7 @@ def _label(ip: str, name: Optional[str]) -> str:
 
 
 def _labels(session, names) -> tuple:
-    """(origen, destino) con el nombre del sitio pegado al SERVIDOR, que no siempre es el destino:
-    si la captura empezó a mitad de la conversación el «origen» puede estar invertido."""
+    """(origen, destino) con el nombre del sitio pegado al SERVIDOR, que no siempre es el destino."""
     name = names.best_name(session) if names else None
     src_is_server = _server_is_src(session)
     return _label(session.src_ip, name if src_is_server else None), _label(session.dst_ip, None if src_is_server else name)
@@ -155,7 +146,7 @@ def _service(session) -> str:
 
 
 def _is_single_probe(t: _Tcp) -> bool:
-    """Una sesión de pocos paquetes cuyo ÚNICO dato es 1 byte 00, sin saludo ni cierre: la forma de una sonda keep-alive."""
+    """Una sesión de pocos paquetes cuyo ÚNICO dato es 1 byte 00, sin saludo ni cierre."""
     return (
         t.keepalive == 1 and t.first_data == b"\x00" and t.bytes["origen"] + t.bytes["destino"] == 1
         and t.packets <= 3 and not (t.syn or t.synack or t.fin or t.rst)
@@ -203,7 +194,7 @@ def _summary_other(session, packets: int, names, process) -> List[str]:
 
 
 def explain_session(session, packets: Iterable[Packet], names=None, process: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Resumen en frases y pasos de la conexión de `session`, a partir de SUS paquetes (en orden de captura)."""
+    """Resumen en frases y pasos de la conexión de `session`, a partir de SUS paquetes."""
     packets = list(packets)
     if session.protocol != "TCP":
         return {"protocol": session.protocol, "outcome": None, "summary": _summary_other(session, len(packets), names, process), "steps": []}

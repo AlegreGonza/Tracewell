@@ -1,9 +1,8 @@
-"""Tests de backend/domain/pcap/layers.py: disección capa por capa (paquetes armados con dpkt/bytes, sin red)."""
+"""Tests de backend/domain/pcap/layers.py."""
 import random
 import socket
 import struct
 
-import dpkt
 import pytest
 
 from backend.domain.pcap import layers as L

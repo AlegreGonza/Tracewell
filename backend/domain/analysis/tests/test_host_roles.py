@@ -1,4 +1,4 @@
-"""Perfil de host: roles inferidos solo de lo observado (cliente DNS, servidor web, emisor de escaneos, top talker)."""
+"""Perfil de host."""
 import pytest
 
 from backend.domain.analysis.hosts import (

@@ -1,8 +1,4 @@
-"""Rutas de «Soporte de red → Sistema»: procesos, puertos, conexiones, servicios y programas de inicio.
-
-TODAS son de LECTURA (GET): ninguna modifica ni termina nada en el equipo. El cálculo vive en `backend.domain.system`.
-No dependen de que haya una captura cargada.
-"""
+"""Rutas de «Soporte de red → Sistema»: procesos, puertos, conexiones, servicios y programas de inicio."""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -15,7 +11,7 @@ from backend.domain.system.common import SystemUnavailable
 
 
 def _no_store(response: Response) -> None:
-    """Lo que se ve del sistema cambia a cada segundo: que el navegador nunca reutilice una respuesta vieja."""
+    """Lo que se ve del sistema cambia a cada segundo."""
     response.headers["Cache-Control"] = "no-store"
 
 

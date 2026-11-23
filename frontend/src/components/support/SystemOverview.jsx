@@ -4,8 +4,7 @@ import HelpTip from "../common/HelpTip.jsx";
 import RefreshButton from "./RefreshButton.jsx";
 import { useLoad } from "../../controllers/useLoad.js";
 
-// Una barra con el porcentaje en texto (el color solo refuerza: el número siempre está).
-// `goodHigh`: cuando un valor ALTO es bueno (la señal del Wi-Fi), los colores se invierten.
+// Una barra con el porcentaje en texto (el color solo refuerza: el número siempre está)
 export function Meter({ label, percent, detail, goodHigh = false }) {
   const p = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
   const level = goodHigh ? (p < 40 ? "high" : p < 70 ? "mid" : "ok") : p >= 90 ? "high" : p >= 75 ? "mid" : "ok";

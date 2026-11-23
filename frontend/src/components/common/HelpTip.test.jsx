@@ -13,8 +13,7 @@ describe("HelpTip", () => {
     }
   });
 
-  // Posible bug de producción: HELP[topic] busca también en Object.prototype ("constructor", "toString"...).
-  // Hoy ningún componente pasa esos nombres; si se corrige (Object.hasOwn), quitar el `.fails`.
+  // Posible bug de producción
   it("temas heredados de Object.prototype tampoco deberían renderizar un botón", () => {
     const { container } = render(<HelpTip topic="constructor" />);
     expect(container).toBeEmptyDOMElement();

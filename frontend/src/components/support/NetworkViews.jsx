@@ -6,7 +6,7 @@ import { useLoad } from "../../controllers/useLoad.js";
 
 const EXPOSURE_CLASS = { local: "expo-local", todas: "expo-all", especifica: "expo-some" };
 
-// «Puertos abiertos»: lo que escucha en este equipo, con su programa y quién puede llamarlo.
+// «Puertos abiertos»
 export function PortsView({ active }) {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [query, setQuery] = useState("");

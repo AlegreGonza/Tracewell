@@ -1,4 +1,4 @@
-"""Tests de backend/domain/analysis/dns_log.py y de NameBook.dns_log (relleno desde paquetes UDP con puerto 53)."""
+"""Tests de backend/domain/analysis/dns_log.py y de NameBook.dns_log."""
 import socket
 from types import SimpleNamespace
 
@@ -8,7 +8,6 @@ import pytest
 import backend.domain.analysis.dns_log as D
 from backend.domain.analysis.dns_log import DnsLog, _entropy
 from backend.domain.analysis.names import NameCollector, collect_names
-from backend.domain.pcap.reader import Packet
 from backend.domain.analysis.tests.test_names import eth4, eth6, pk, tcp, udp
 
 CLIENT, RESOLVER = "10.0.0.5", "8.8.8.8"

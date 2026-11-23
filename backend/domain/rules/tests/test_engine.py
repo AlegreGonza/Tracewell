@@ -575,7 +575,7 @@ def test_evaluate_tolerates_junk_packets(mk):
     trunc_ip = bytes(good.data)[:20]  # Ethernet + 6 bytes de IP
     trunc_tcp = bytes(good.data)[:40]  # IP completo pero TCP cortado
     ip_pkt = _ip(dpkt.tcp.TCP(sport=1, dport=2, flags=SYN), dpkt.ip.IP_PROTO_TCP, "1.1.1.1", "2.2.2.2")
-    ip_pkt.off = 100  # fragmento no inicial
+    ip_pkt.offset = 100  # fragmento no inicial (campo vigente; `off` está deprecado)
     frag = bytes(_eth(ip_pkt))
     icmp = bytes(_eth(_ip(dpkt.icmp.ICMP(), dpkt.ip.IP_PROTO_ICMP, "1.1.1.1", "2.2.2.2")))
     pkts = [Packet(0, x, len(x)) for x in

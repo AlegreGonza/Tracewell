@@ -1,4 +1,4 @@
-"""Tests de backend/domain/analysis/names.py: nombres de sitio desde DNS y SNI (paquetes armados con dpkt/bytes, sin red)."""
+"""Tests de backend/domain/analysis/names.py."""
 import socket
 from types import SimpleNamespace
 

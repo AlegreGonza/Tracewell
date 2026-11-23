@@ -3,8 +3,7 @@ import { api } from "../../api/client.js";
 import { formatTime } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Diagrama de la conexión paso a paso (como el «Flow Graph» de Wireshark): cada fila es un paquete importante y su flecha
-// muestra quién se lo manda a quién. Todo es texto que viene del análisis: nunca se interpreta como HTML.
+// Diagrama de la conexión paso a paso (como el «Flow Graph» de Wireshark)
 export function Ladder({ steps, origin, destination }) {
   return (
     <div className="ladder">

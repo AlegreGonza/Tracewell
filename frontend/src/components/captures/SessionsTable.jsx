@@ -5,16 +5,14 @@ import HelpTip from "../common/HelpTip.jsx";
 
 export const PAGE_SIZE = 25;
 
-// Clase de color por protocolo. El texto siempre se muestra: el color ayuda a distinguir, nunca es lo único.
+// Clase de color por protocolo
 const KNOWN_PROTOCOLS = ["tcp", "udp", "icmp", "icmpv6"];
 export function protoClass(protocol) {
   const slug = String(protocol ?? "").toLowerCase();
   return KNOWN_PROTOCOLS.includes(slug) ? slug : "other";
 }
 
-// Un color por nombre de proceso (paleta de 8): el mismo programa se reconoce de un vistazo. Se asignan por orden
-// de aparición (y no por una cuenta sobre el nombre): así los primeros 8 procesos nunca comparten color, y cada
-// uno lo conserva en todas las páginas mientras la app está abierta. Del noveno en adelante se reutilizan.
+// Un color por nombre de proceso (paleta de 8): el mismo programa se reconoce de un vistazo
 const PALETTE_SIZE = 8;
 const processColors = new Map();
 export function processColor(name) {
@@ -23,7 +21,7 @@ export function processColor(name) {
   return processColors.get(key);
 }
 
-// Marcas del analista y coincidencias de IOC. Todo se muestra como texto (la nota la escribe una persona).
+// Marcas del analista y coincidencias de IOC
 function TriageMarks({ session }) {
   return (
     <>
@@ -53,18 +51,13 @@ function ProcessCell({ process }) {
   );
 }
 
-// `showProcess`: solo hay datos de procesos en una captura en vivo; con un archivo la columna ni se ofrece.
-// `triageVersion`: sube al guardar una nota o cambiar la lista de IOC; recarga la página actual SIN volver a la primera.
+// `showProcess`
 export default function SessionsTable({
   refreshKey, filters, onFilters, selectedId, onSelect, showProcess = false, triageVersion = 0,
 }) {
-  // Borrador del formulario: se aplica al enviar, no en cada tecla. Así no
-  // disparamos una petición (y un error de IP inválida) por cada carácter.
+  // Borrador del formulario: se aplica al enviar, no en cada tecla
   const [draft, setDraft] = useState(filters);
-  // La página va atada a los filtros con los que se eligió. Si los filtros (o
-  // el análisis) cambian, la página guardada deja de valer y se lee como 0 en
-  // el MISMO render: sin un efecto aparte que haga un render intermedio con
-  // filtros nuevos y página vieja (que dispararía una petición de más).
+  // La página va atada a los filtros con los que se eligió
   const resetKey = JSON.stringify([filters, refreshKey]);
   const [pageState, setPageState] = useState({ key: resetKey, page: 0 });
   const page = pageState.key === resetKey ? pageState.page : 0;
@@ -84,9 +77,7 @@ export default function SessionsTable({
       })
       .catch((e) => {
         if (e.name === "AbortError") return;
-        // Un filtro inválido NO se muestra como "no hay sesiones": una tabla
-        // vacía se lee como "no hay tráfico", y es un falso negativo.
-        // Se muestra solo aquí, junto al filtro; el banner global duplicaría el mismo error.
+        // Un filtro inválido NO se muestra como "no hay sesiones"
         setFailure(e.message);
         setData(null);
       });

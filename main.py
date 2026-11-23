@@ -1,14 +1,4 @@
-"""Punto de entrada de escritorio: un solo comando abre Tracewell en su ventana.
-
-    python main.py                # ventana de escritorio
-    python main.py --serve-only   # solo la API y la interfaz, para abrir en un navegador
-    python main.py --self-test    # abre la ventana OCULTA, comprueba la interfaz y sale
-
-Este archivo es solo pegamento: levanta la API (backend/api/server.py) en segundo plano,
-abre la ventana de pywebview apuntando a ella y, al cerrar la ventana, apaga la
-API (lo que detiene una captura en curso y borra lo temporal). La lógica de
-análisis vive en `core` y la de la API en `api`.
-"""
+"""Punto de entrada de escritorio: un solo comando abre Tracewell en su ventana."""
 from __future__ import annotations
 
 import argparse
@@ -32,16 +22,13 @@ LOAD_TIMEOUT = 20  # segundos que esperamos a que la ventana cargue la interfaz
 
 
 class DesktopApi:
-    """Métodos que la interfaz puede llamar desde JavaScript (`window.pywebview.api`).
-
-    Solo expone lo que la ventana sabe hacer y la web no: elegir un archivo con
-    el diálogo nativo del sistema.
-    """
+    """Métodos que la interfaz puede llamar desde JavaScript (`window.pywebview.api`)."""
 
     def __init__(self) -> None:
         self._window: Any = None  # con "_": pywebview no expone atributos privados a la web
 
-    def bind(self, window: Any) -> None:
+    def _bind(self, window: Any) -> None:
+        """Guarda la ventana (con "_" no se expone a JavaScript)."""
         self._window = window
 
     def pick_file(self) -> Optional[str]:
@@ -71,11 +58,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def _allow_downloads(webview: Any) -> None:
-    """pywebview CANCELA las descargas por defecto: sin esto "Exportar JSON" e "Informe HTML" no hacían
-    nada dentro de la ventana. Activadas, muestra el diálogo nativo "Guardar como" con el nombre sugerido."""
+    """pywebview CANCELA las descargas por defecto."""
     try:
         webview.settings["ALLOW_DOWNLOADS"] = True
-    except (AttributeError, KeyError, TypeError):  # una versión sin esa opción: las descargas quedan como estaban
+    except (AttributeError, KeyError, TypeError):  # una versión sin esa opción
         logger.debug("esta versión de pywebview no permite activar las descargas", exc_info=True)
 
 
@@ -88,7 +74,7 @@ def _create_window(url: str, api: DesktopApi, hidden: bool) -> Any:
         TITLE, url, js_api=api, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1],
         min_size=MIN_SIZE, text_select=True, hidden=hidden,
     )
-    api.bind(window)
+    api._bind(window)
     return window
 
 
@@ -132,7 +118,7 @@ def _self_test(window: Any, result: Dict[str, Any]) -> None:
     except Exception as exc:  # borde de hilo: informamos el fallo en vez de perderlo
         result["error"] = str(exc)
     finally:
-        window.destroy()  # siempre: si la sonda falla, la ventana oculta no puede quedar abierta
+        window.destroy()  # siempre: si la sonda falla, la ventana oculta no puede
 
 
 # ------------------------------------------------------------------ ejecución
@@ -182,12 +168,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ImportError as exc:
         print(f"Falta una dependencia de la ventana ({exc}). Instalá pywebview o usá --serve-only.", file=sys.stderr)
         return 1
-    except Exception as exc:  # borde del programa: cualquier fallo de la ventana (p. ej. falta WebView2)
+    except Exception as exc:  # borde del programa: cualquier fallo de la ventana
         logger.debug("fallo al abrir la ventana", exc_info=True)
         print(f"No se pudo abrir la ventana ({exc}). Probá con --serve-only y abrí la dirección en un navegador.", file=sys.stderr)
         return 1
     finally:
-        handle.stop()  # apaga la API: detiene una captura en curso y borra lo temporal
+        handle.stop()  # apaga la API
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Tests de backend/domain/analysis/http.py: HTTP/1.x en claro, archivos y secretos (bytes armados a mano)."""
+"""Tests de backend/domain/analysis/http.py."""
 import base64
 import hashlib
 import json

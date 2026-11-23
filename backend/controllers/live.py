@@ -1,10 +1,9 @@
-"""Controlador de «live»: la lógica que las rutas HTTP de `api/routes/live.py` delegan (sin FastAPI de por medio
-cuando se puede). Las rutas solo traducen HTTP <-> estas funciones."""
+"""Controlador de «live»"""
 from __future__ import annotations
 
-from backend.controllers.state import Ctx, CtxDep, _State, set_analysis
-from backend.domain.pcap.live import DEFAULT_MAX_PACKETS, DEFAULT_MAX_SECONDS, CaptureStateError, LiveCapture, list_interfaces
-from backend.domain.pcap.processes import ProcessSampler, ProcessTable
+from backend.controllers.state import Ctx, _State, set_analysis
+from backend.domain.pcap.live import CaptureStateError, LiveCapture
+from backend.domain.pcap.processes import ProcessTable
 from typing import Optional
 
 
@@ -15,8 +14,7 @@ def _release_previous(state: _State) -> None:
         return
     if previous.running:
         raise CaptureStateError("ya hay una captura en vivo en curso")
-    # La captura anterior ya terminó: si dejó una carpeta temporal y el
-    # análisis actual no depende de ella, se borra (si no, se acumulan).
+    # La captura anterior ya terminó
     if previous.temp_dir != state.owned_dir:
         previous.cleanup()
 
@@ -31,8 +29,7 @@ def _start_or_cleanup(cap: LiveCapture) -> None:
 
 
 def _finish_sampler(state: _State) -> Optional[ProcessTable]:
-    """Detiene el muestreador y devuelve lo observado, o None si no hay datos
-    (sin muestreador, o ninguna muestra salió bien: mejor no ofrecer una columna vacía)."""
+    """Detiene el muestreador y devuelve lo observado, o None si no hay datos."""
     sampler, state.sampler = state.sampler, None
     if sampler is None:
         return None

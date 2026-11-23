@@ -179,7 +179,7 @@ def test_max_age_invalido(bad, tmp_path):
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), -float("inf")])
 def test_max_age_no_finito_lanza_valueerror_y_no_borra(bad, tmp_path):
-    # nan/inf/-inf -> ValueError que menciona max_age, y no se borra ninguna carpeta (vieja ni reciente)
+    # nan/inf/-inf -> ValueError que menciona max_age, y no se borra ninguna carpeta
     vieja = mk(tmp_path, "tracewell_v")
     reciente = mk(tmp_path, "tracewell_r", old=False)
     with pytest.raises(ValueError, match="max_age"):
@@ -203,7 +203,7 @@ def test_resolve_out_path_explicito_sin_temp():
 
 
 def test_capturas_de_livecapture_son_limpiables(tmp_path, monkeypatch):
-    # LiveCapture sin out_path crea tracewell_* en la raíz temporal; envejecida y con live.pcap se borra
+    # LiveCapture sin out_path crea tracewell_* en la raíz temporal
     monkeypatch.setattr(live.tempfile, "tempdir", str(tmp_path))
     cap = LiveCapture(Fake())
     try:

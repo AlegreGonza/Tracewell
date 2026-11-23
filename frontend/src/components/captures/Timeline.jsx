@@ -4,11 +4,7 @@ import { formatDuration, formatTime } from "../../lib/format.js";
 import { BarChart } from "@mantine/charts";
 import HelpTip from "../common/HelpTip.jsx";
 
-const W = 600;
-const H = 70;
-
-// Gráfico de barras del tráfico en el tiempo (SVG, sin librerías). Picos, silencios y ritmos
-// regulares se ven de un vistazo. Solo dibuja números: no interpreta ningún dato como HTML.
+// Gráfico de barras del tráfico en el tiempo (SVG, sin librerías)
 export default function Timeline({ refreshKey, onError }) {
   const [data, setData] = useState(null);
   const [metric, setMetric] = useState("packets");
@@ -24,12 +20,10 @@ export default function Timeline({ refreshKey, onError }) {
 
   if (!data || !data.packets || data.packets.length === 0) return null;
 
-  // Si la respuesta viniera mal formada (otra longitud), se cae a paquetes en vez de romper el gráfico.
+  // Si la respuesta viniera mal formada (otra longitud)
   const chosen = data[metric];
   const values = Array.isArray(chosen) && chosen.length === data.packets.length ? chosen : data.packets;
-  const max = Math.max(...values, 1);
   const peak = values.indexOf(Math.max(...values));
-  const barW = W / values.length;
   const unit = metric === "bytes" ? "bytes" : "paquetes";
   const at = (i) => formatTime(data.start + i * data.bucket_seconds);
   const summary = `Tráfico en el tiempo: ${values.length} intervalos de ${formatDuration(data.bucket_seconds)}. Pico de ${values[peak].toLocaleString("es-AR")} ${unit} a las ${at(peak)}.`;

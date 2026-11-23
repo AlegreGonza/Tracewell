@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Solo las tácticas de ATT&CK que se pueden ver en el tráfico de red, en el orden del ciclo de un ataque, con una frase
-// simple cada una. Las demás (Ejecución, Persistencia, Evadir defensas...) pasan dentro del equipo y una captura de red
-// no las ve: mostrarlas vacías haría creer que "no pasó nada". Una alerta de otra táctica igual aparece, en una columna extra.
+// Solo las tácticas de ATT&CK que se pueden ver en el tráfico de red
 export const TACTICS = [
   ["Reconnaissance", "Reconocimiento", "Investigan a la víctima antes de atacar."],
   ["Discovery", "Exploración", "Miran qué hay en la red."],
@@ -15,7 +13,7 @@ export const TACTICS = [
 
 const SEV_RANK = { low: 1, medium: 2, high: 3, critical: 4 };
 
-// Agrupa las alertas por táctica y técnica: { táctica: { técnica: {id, name, count, severity} } }.
+// Agrupa las alertas por táctica y técnica
 export function groupByTactic(alerts) {
   const out = {};
   for (const a of alerts) {
@@ -27,7 +25,7 @@ export function groupByTactic(alerts) {
   return out;
 }
 
-// Mapa MITRE ATT&CK de la captura: las tácticas que dispararon alertas se iluminan. Es un MARCO para ordenar lo hallado.
+// Mapa MITRE ATT&CK de la captura: las tácticas que dispararon alertas se iluminan
 export default function AttackMap({ refreshKey, onError }) {
   const [alerts, setAlerts] = useState(null);
 

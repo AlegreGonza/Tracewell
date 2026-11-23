@@ -1,16 +1,4 @@
-"""Arranca la API en un hilo, en un puerto libre de esta misma máquina.
-
-Por qué existe: la ventana de escritorio necesita la API corriendo en segundo
-plano y poder pararla al cerrarse, sin bloquear la ventana. Esto es lo único
-que sabe "levantar" la API; `main.py` solo lo usa y abre la ventana.
-
-Dos decisiones de seguridad y robustez:
-- Escucha SOLO en 127.0.0.1. La API puede leer archivos locales (`/api/analyze`):
-  exponerla a la red sería regalar la lectura de archivos de la máquina.
-- El puerto lo elige el sistema operativo (puerto 0) y el socket se entrega ya
-  abierto a uvicorn: así no hay una "carrera" entre buscar un puerto libre y
-  que otro proceso lo tome antes de que lo usemos.
-"""
+"""Arranca la API en un hilo, en un puerto libre de esta misma máquina."""
 from __future__ import annotations
 
 import socket
@@ -74,13 +62,8 @@ def _make_server(app: FastAPI) -> uvicorn.Server:
 
 
 def start_in_thread(app: FastAPI | None = None, port: int = 0, **app_kwargs) -> ServerHandle:
-    """Levanta la API en un hilo y devuelve cuando ya responde.
-
-    `app_kwargs` se pasan a `create_app` (carpetas, fuente de captura...). Los
-    hilos de uvicorn no instalan manejadores de señales: la señal la maneja el
-    programa principal.
-    """
-    # La app se arma ANTES de abrir el socket: si las reglas están mal, no queda un socket abierto.
+    """Levanta la API en un hilo y devuelve cuando ya responde."""
+    # La app se arma ANTES de abrir el socket
     server = _make_server(app or create_app(**app_kwargs))
     sock = bind_local_socket(port)
     try:

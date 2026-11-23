@@ -36,9 +36,22 @@ def test_host_local_ok(host):
     assert r.status_code == 200
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1.evil.com", "evil.com.localhost.evil.com", "0.0.0.0", "[::1]"])
+@pytest.mark.parametrize("host", ["127.0.0.1.evil.com", "evil.com.localhost.evil.com", "0.0.0.0", "[::2]"])
 def test_host_parecido_o_no_listado_400(host):
     assert client_for(host).get("/api/health").status_code == 400
+
+
+@pytest.mark.parametrize("host", ["[::1]", "[::1]:8000", "[::1]:5173"])
+def test_host_ipv6_loopback_ok(host):
+    assert client_for(host).get("/api/health").status_code == 200
+
+
+def test_host_ipv6_con_origin_ipv6_ok_y_ajeno_sigue_rechazado():
+    c = client_for("[::1]:8000")
+    assert c.get("/api/health", headers={"Origin": "http://[::1]:8000"}).status_code == 200
+    assert c.get("/api/health", headers={"Origin": "http://evil.com"}).status_code == 403
+    assert client_for("evil.com").get("/api/health").status_code == 400
+    assert client_for("evil.com:8000").get("/api/health").status_code == 400
 
 
 def test_allowed_hosts_custom():
@@ -131,8 +144,7 @@ def test_origin_con_userinfo_local_se_permite():
 
 
 def test_origin_con_backslash_y_host_local_se_permite():
-    # urlparse toma "evil.com\" como userinfo. Un navegador nunca serializa así un
-    # Origin (siempre es canónico), por eso no es explotable: se documenta.
+    # urlparse toma "evil.com\" como userinfo
     r = client_for().get("/api/health", headers={"Origin": "http://evil.com\\@127.0.0.1"})
     assert r.status_code == 200
 
@@ -143,8 +155,14 @@ def test_origin_puerto_invalido_no_da_500():
     assert r.status_code in (200, 403)
 
 
+def test_origin_ipv6_con_puerto_invalido_no_da_500():
+    # [::1] es local (igual que 127.0.0.1): urlparse no valida el puerto y no debe lanzar un 500
+    r = client_for().get("/api/health", headers={"Origin": "http://[::1]:abc"})
+    assert r.status_code in (200, 403)
+
+
 @pytest.mark.parametrize("origin", [
-    "http://[::1", "http://[evil", "http://[", "http://[::1]:abc", "http://]", "http://%",
+    "http://[::1", "http://[evil", "http://[", "http://]", "http://%",
     "http://\x00", "http://" + "a" * 10_000,
 ])
 def test_origin_ilegible_es_403_nunca_500(origin):
@@ -165,3 +183,58 @@ def test_origin_raro_no_da_500(origin):
     except Exception as e:  # httpx puede rechazar el header antes de enviar
         pytest.skip(f"cliente rechaza el header: {e}")
     assert r.status_code in (200, 403)
+
+
+# ------------------------------------------------------- cabeceras de seguridad
+CABECERAS = {"x-frame-options": "DENY", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer"}
+
+
+def _csp_ok(r):
+    csp = r.headers["content-security-policy"]
+    assert "default-src 'self'" in csp and "frame-ancestors 'none'" in csp and "script-src 'self'" in csp
+    assert "style-src 'self' 'unsafe-inline'" in csp  # Mantine usa estilos en línea
+    assert "unsafe-eval" not in csp and "script-src 'self' 'unsafe-inline'" not in csp
+
+
+def _cabeceras_ok(r):
+    for k, v in CABECERAS.items():
+        assert r.headers[k] == v, k
+    _csp_ok(r)
+
+
+def test_cabeceras_en_api_y_estaticos(tmp_path):
+    (tmp_path / "index.html").write_text("hola")
+    c = client_for(frontend_dir=tmp_path)
+    _cabeceras_ok(c.get("/api/health"))
+    _cabeceras_ok(c.get("/"))
+    _cabeceras_ok(c.get("/api/no-existe"))  # 404 de la API
+
+
+def test_cabeceras_tambien_en_los_rechazos_de_host_y_origin():
+    _cabeceras_ok(client_for("evil.com").get("/api/health"))
+    _cabeceras_ok(client_for().get("/api/health", headers={"Origin": "http://evil.com"}))
+
+
+def test_cabecera_fijada_por_la_ruta_no_se_duplica(tmp_path):
+    # una ruta que ya manda nosniff (descarga de cuerpos HTTP) deja un solo valor
+    from fastapi import Response
+    app = create_app(sampler_factory=None, frontend_dir=tmp_path / "sin_front")
+
+    @app.get("/uno")
+    def uno():
+        return Response("x", headers={"X-Content-Type-Options": "nosniff"})
+
+    r = TestClient(app, base_url="http://127.0.0.1").get("/uno")
+    assert r.headers.get_list("x-content-type-options") == ["nosniff"]
+
+
+def test_cabeceras_en_el_error_500(tmp_path):
+    app = create_app(sampler_factory=None, frontend_dir=tmp_path / "sin_front")
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("x")
+
+    r = TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False).get("/boom")
+    assert r.status_code == 500
+    _cabeceras_ok(r)

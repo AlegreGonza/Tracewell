@@ -5,7 +5,7 @@ import HelpTip from "../common/HelpTip.jsx";
 const VERSIONS = { 13: "TLS 1.3", 12: "TLS 1.2", 11: "TLS 1.1", 10: "TLS 1.0", s3: "SSL 3.0", s2: "SSL 2.0" };
 const ALPNS = { h2: "HTTP/2", h1: "HTTP/1.1", "00": "sin protocolo de aplicación (ALPN)" };
 
-// Traduce la primera parte de una huella JA4 («t13d1516h2») a frases: así se aprende a leerla.
+// Traduce la primera parte de una huella JA4 («t13d1516h2») a frases
 export function describeJa4(ja4) {
   const a = String(ja4 ?? "").split("_")[0];
   if (a.length !== 10) return [];
@@ -38,7 +38,7 @@ function Certificate({ cert }) {
   );
 }
 
-// Lo que se ve de una sesión TLS sin descifrarla: sitio, versión, huella JA4 y certificado (solo si va en claro, TLS ≤ 1.2).
+// Lo que se ve de una sesión TLS sin descifrarla
 export default function TlsView({ session, onError }) {
   const [data, setData] = useState(null);
 

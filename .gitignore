@@ -7,7 +7,12 @@ dist/
 build/
 release/
 
-# Archivos de configuración de Claude Code: no van al repositorio
+# Todo lo de Claude Code (agentes, skills, CLAUDE.md, ajustes, memoria): no va al repositorio
 .claude/
 CLAUDE.md
+CLAUDE.local.md
 .mcp.json
+
+# Cachés de herramientas de revisión
+.mypy_cache/
+.ruff_cache/

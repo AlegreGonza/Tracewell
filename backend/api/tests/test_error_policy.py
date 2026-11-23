@@ -180,7 +180,7 @@ def test_reglas_rotas_no_abren_socket(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("donde", ["_launch", "_wait_ready"])
 def test_fallo_de_arranque_cierra_socket_y_propaga(monkeypatch, tmp_path, donde):
-    # si _launch / _wait_ready fallan, el socket real queda cerrado (fileno -1) y la excepción se propaga
+    # si _launch / _wait_ready fallan, el socket real queda cerrado (fileno -1)
     socks = []
     orig = srv.bind_local_socket
 

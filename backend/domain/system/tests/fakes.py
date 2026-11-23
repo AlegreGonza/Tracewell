@@ -1,8 +1,4 @@
-"""psutil FALSO para probar backend/domain/system sin tocar el sistema real.
-
-Cualquier función que MODIFIQUE el sistema (kill, terminate, suspend, resume, nice, ionice, cpu_affinity, send_signal...)
-o cualquier otra que el código no debería llamar hace fallar el test con AssertionError.
-"""
+"""psutil FALSO para probar backend/domain/system sin tocar el sistema real."""
 import contextlib
 import socket
 from types import SimpleNamespace
@@ -27,7 +23,7 @@ def conn(laddr=None, raddr=None, status="ESTABLISHED", pid=None, type=socket.SOC
 
 
 class FakeProcess:
-    """Un proceso. `deny` = nombres de lectura que fallan con AccessDenied; `gone` = los que fallan con NoSuchProcess."""
+    """Un proceso. `deny` = nombres de lectura que fallan con AccessDenied."""
 
     def __init__(self, pid, name="prog.exe", exe="/usr/bin/prog", cmdline=("prog", "-x"), ppid=1, username="ana", status="running",
                  create_time=1_700_000_000.0, rss=1_000_000, vms=2_000_000, threads=4, cpu=0.0, cwd="/home/ana",

@@ -1,11 +1,4 @@
-"""Filtros de visualización de Wireshark para una sesión, una IP o una alerta.
-
-Es la «llave» para pasar de Tracewell a Wireshark: el analista copia el filtro, abre el `.pcap` y ve los
-mismos paquetes. Funciones puras (sin I/O): reciben datos simples y devuelven texto.
-
-Todo lo que viene del tráfico (nombres DNS, por ejemplo) se escapa antes de ir entre comillas: un nombre
-hostil no puede cerrar la cadena y agregar condiciones al filtro.
-"""
+"""Filtros de visualización de Wireshark para una sesión, una IP o una alerta."""
 from __future__ import annotations
 
 import ipaddress
@@ -33,7 +26,7 @@ def _field(addr, suffix: str) -> str:
 
 
 def _quote(text: str) -> str:
-    """Cadena entre comillas para Wireshark: se escapan la barra y la comilla, y se descartan los controles."""
+    """Cadena entre comillas para Wireshark."""
     clean = "".join(c for c in text if c.isprintable())
     return '"' + clean.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -126,12 +119,7 @@ def _scan_filter(src_ip: str, dst_ip: str, ports: list) -> str:
 
 
 def alert_filter(src_ip: str, dst_ip: str, evidence: Optional[Mapping[str, Any]] = None) -> str:
-    """Filtro de una alerta, derivado de su evidencia.
-
-    Sin evidencia útil devuelve los dos extremos; con ella lo afina: nombre DNS (`dns.qry.name`), puertos
-    de un escaneo, puerto de destino o la víctima de una inundación. Es una pista para llegar a los paquetes:
-    el analista puede ampliarlo o recortarlo en Wireshark.
-    """
+    """Filtro de una alerta, derivado de su evidencia."""
     ev = evidence if isinstance(evidence, Mapping) else {}
     if _is_flood(ev):
         return _flood_filter(dst_ip, _evidence_port(ev))

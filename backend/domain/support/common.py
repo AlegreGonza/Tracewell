@@ -1,4 +1,4 @@
-"""Base de las herramientas de soporte: ejecutar comandos del sistema sin shell y validar lo que escribe el usuario."""
+"""Base de las herramientas de soporte."""
 from __future__ import annotations
 
 import ipaddress
@@ -28,10 +28,7 @@ class RunResult:
 
 
 def run(cmd: List[str], timeout: float = 15.0, env_extra: Optional[dict] = None) -> RunResult:
-    """Ejecuta un comando SIN shell (los argumentos van como lista: nada se interpreta ni se concatena).
-
-    La salida se decodifica con `_decode` (UTF-8 o la página de códigos del sistema), para que los acentos salgan bien.
-    """
+    """Ejecuta un comando SIN shell (los argumentos van como lista: nada se interpreta ni se concatena)."""
     env = {**os.environ, **env_extra} if env_extra else None
     kwargs: dict = {"creationflags": _NO_WINDOW} if IS_WINDOWS else {}
     try:
@@ -46,8 +43,7 @@ def run(cmd: List[str], timeout: float = 15.0, env_extra: Optional[dict] = None)
 
 
 def _decode(raw: bytes) -> str:
-    """Texto de un comando. Algunos (netsh, PowerShell) escriben en UTF-8 y otros (ping, ipconfig) en la página de
-    códigos del sistema: se prueba UTF-8 estricto y, si no cierra, la del sistema, así no se rompen los acentos."""
+    """Texto de un comando."""
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -55,10 +51,7 @@ def _decode(raw: bytes) -> str:
 
 
 def powershell_json(script: str, timeout: float = 20.0) -> Any:
-    """Ejecuta un guion de PowerShell que imprime JSON y lo devuelve ya convertido, o None si falló.
-
-    Solo para guiones FIJOS de este paquete (consultas de lectura); nunca se arma uno con texto del usuario.
-    """
+    """Ejecuta un guion de PowerShell que imprime JSON y lo devuelve ya convertido, o None si falló."""
     res = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], timeout=timeout)
     if not res.out.strip():
         return None
@@ -72,14 +65,12 @@ _LABEL = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$")
 
 
 def valid_host(text: str) -> str:
-    """Nombre de equipo o IP escritos por el usuario, ya validados. Lanza ValueError si no sirven.
-
-    Se exige que empiece con letra o número (así nunca se interpreta como una opción de `ping -n`), que no tenga
-    espacios ni caracteres de shell, y se limita el largo. Igualmente los comandos van sin shell.
-    """
+    """Nombre de equipo o IP escritos por el usuario, ya validados."""
     host = (text or "").strip()
-    if not host or len(host) > 253:
+    if not host:
         raise ValueError("escribí un nombre de equipo o una IP")
+    if len(host) > 253:
+        raise ValueError("el nombre es demasiado largo (máximo 253 caracteres)")
     try:
         return ipaddress.ip_address(host).compressed
     except ValueError:

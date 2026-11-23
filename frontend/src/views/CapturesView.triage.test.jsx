@@ -36,7 +36,7 @@ const alertOf = (name, src) => ({
   rule_id: name, name, severity: "high", mitre_technique: "T1046", mitre_name: "n", mitre_tactic: "t",
   description: "d", src_ip: src, dst_ip: "10.0.0.9", first_ts: 1700000000, evidence: {},
 });
-// El caso guiado del demo repite ese texto en su propio botón: se busca el de la tabla de alertas.
+// El caso guiado del demo repite ese texto en su propio botón
 const viewSessionsBtn = () => within(screen.getByRole("heading", { name: "Alertas" }).closest("section")).getByRole("button", { name: "Ver las sesiones de 192.168.1.66" });
 const ALL = [sess(1, "10.0.0.1"), sess(2, "192.168.1.66"), sess(3, "192.168.1.66")];
 

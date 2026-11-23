@@ -82,8 +82,7 @@ describe("iconOf", () => {
     expect(iconOf({ role: "otro" })).toBe("publica");
     expect(iconOf({})).toBe("publica");
   });
-  // Posible bug: iconOf busca en ICONS sin comprobar propiedad propia, así que "__proto__"/"constructor" no caen a pública.
-  // El servidor solo manda 4 roles fijos; si se corrige (Object.hasOwn) quitar el `.fails`.
+  // Posible bug: iconOf busca en ICONS sin comprobar propiedad propia, así
   it("roles heredados de Object.prototype caen a pública", () => {
     expect(iconOf({ role: "__proto__" })).toBe("publica");
     expect(iconOf({ role: "constructor" })).toBe("publica");

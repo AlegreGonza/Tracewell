@@ -1,5 +1,4 @@
-// Botón «Actualizar» con comprobante: muestra la hora de la última lectura (así se nota aunque los datos no hayan
-// cambiado) y «Actualizando…» mientras trabaja.
+// Botón «Actualizar» con comprobante
 export default function RefreshButton({ onClick, loading, updatedAt, link = false }) {
   return (
     <span className="refresh">

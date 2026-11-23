@@ -1,5 +1,4 @@
 """Tests de backend/domain/sessions/grouper.py (paquetes armados con dpkt, sin red)."""
-import os
 import random
 import socket
 
@@ -239,8 +238,7 @@ def test_linktype_invalido_es_valueerror():
 
 
 def test_bytes_aleatorios_no_escapa_excepcion():
-    # Caracterizacion: bytes basura de largo >= 14 se clasifican como non_ip o
-    # malformed (nunca excepcion). Semilla fija para que sea reproducible.
+    # Caracterizacion
     rng = random.Random(1234)
     total = 0
     for _ in range(2000):
@@ -252,8 +250,7 @@ def test_bytes_aleatorios_no_escapa_excepcion():
 
 
 def test_bytes_aleatorios_forzando_ip_no_escapa_excepcion():
-    # Cabecera Ethernet valida (IPv4/IPv6) + cuerpo aleatorio: fuerza a dpkt a
-    # intentar parsear IP/TCP/UDP sobre basura. Solo se tolera UnpackError.
+    # Cabecera Ethernet valida (IPv4/IPv6) + cuerpo aleatorio
     rng = random.Random(99)
     for ethertype in (b"\x08\x00", b"\x86\xdd"):
         for _ in range(3000):
@@ -265,9 +262,7 @@ def test_bytes_aleatorios_forzando_ip_no_escapa_excepcion():
 
 
 def test_ipv6_esp_no_revienta_y_da_ip_50():
-    # Regresion: IPv6 con nxt=50 (ESP) hacia que dpkt no seteara ip.p y
-    # _endpoints lanzara AttributeError. Ahora se usa ip.nxt: sesion "IP-50"
-    # (protocolo sin puertos conocidos) y puertos None.
+    # Regresion: IPv6 con nxt=50 (ESP) hacia que dpkt no seteara ip.p
     hdr = bytes.fromhex("60000000") + (8).to_bytes(2, "big") + bytes([50, 64]) + bytes(32)
     data = MAC_B + MAC_A + bytes.fromhex("86dd") + hdr + bytes(8)
     r = group_packets([Packet(1.0, data, len(data))])
@@ -278,8 +273,7 @@ def test_ipv6_esp_no_revienta_y_da_ip_50():
 
 
 def test_ipv6_cabecera_extension_hop_by_hop_tcp():
-    # IPv6 nxt=0 (hop-by-hop) -> TCP: el protocolo debe ser el del payload (TCP),
-    # no el de la cabecera de extension, y los puertos deben leerse bien.
+    # IPv6 nxt=0 (hop-by-hop) -> TCP
     tcp = bytes(dpkt.tcp.TCP(sport=4321, dport=80))
     hbh = bytes([6, 0, 1, 4, 0, 0, 0, 0])  # nxt=TCP, len=0 (8 bytes), PadN
     hdr = (bytes.fromhex("60000000") + (len(hbh) + len(tcp)).to_bytes(2, "big")

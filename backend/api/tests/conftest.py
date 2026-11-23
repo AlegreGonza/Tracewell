@@ -1,9 +1,4 @@
-"""Fixtures compartidas de los tests de la API.
-
-La app solo acepta Host local (TrustedHostMiddleware), pero TestClient usa por
-defecto el Host "testserver". Este fixture autouse cambia el base_url por
-defecto a http://127.0.0.1; los tests de seguridad lo pisan explícitamente.
-"""
+"""Fixtures compartidas de los tests de la API."""
 import pytest
 from fastapi.testclient import TestClient
 

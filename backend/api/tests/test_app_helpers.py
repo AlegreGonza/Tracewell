@@ -1,6 +1,5 @@
 """Tests directos de los helpers de backend/api/app.py."""
 import asyncio
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -93,7 +92,7 @@ def test_lifespan_no_hace_nada_al_arrancar_y_limpia_al_cerrar(tmp_path):
 
 
 def test_lifespan_via_testclient_limpia_al_cerrar(tmp_path):
-    # con TestClient como context manager, al salir se borra el pcap temporal de la captura en vivo
+    # con TestClient como context manager
     app = create_app(source_factory=lambda i: FakeSource(), frontend_dir=tmp_path / "nada", sampler_factory=None)
     with TestClient(app) as c:
         assert c.post("/api/live/start", json={"interface": "e"}).status_code == 200

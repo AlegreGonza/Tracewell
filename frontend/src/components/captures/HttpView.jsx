@@ -4,7 +4,7 @@ import { formatBytes } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
 import { httpNotes } from "./SessionHttp.jsx";
 
-// «HTTP» de toda la captura: una fila por petición (sesiones TCP a los puertos habituales de HTTP). Solo aparece si hay HTTP.
+// «HTTP» de toda la captura
 export default function HttpView({ refreshKey, onError, onFilterIp }) {
   const [data, setData] = useState(null);
 

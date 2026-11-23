@@ -1,18 +1,4 @@
-"""TLS sin descifrar: la huella JA4 del cliente, la versión negociada y el certificado del servidor.
-
-Con TLS el contenido va cifrado, pero el SALUDO inicial viaja en claro y dice mucho:
-- el ClientHello trae la lista de cifrados y extensiones del cliente: de ahí sale la huella **JA4**, una
-  «firma» de cómo se presenta el programa (dos programas distintos casi nunca dan la misma);
-- el ServerHello dice qué versión y cifrado se acordaron;
-- en TLS 1.2 (y anteriores) el servidor manda su certificado en claro. En **TLS 1.3 el certificado va
-  cifrado** y no se puede ver: la interfaz lo explica.
-
-JA4 sigue la especificación pública de FoxIO (BSD-3). Se implementa a mano, sin dependencias: ver las pruebas
-contra la implementación de referencia en docs/decisiones.md.
-
-Límites: solo TCP (no QUIC); un saludo partido en segmentos se reconstruye con la sesión; la lectura de
-certificados es mínima (sujeto, emisor, validez, nombres alternativos y huella) y nunca lanza.
-"""
+"""TLS sin descifrar: la huella JA4 del cliente, la versión negociada y el certificado del servidor."""
 from __future__ import annotations
 
 import hashlib
@@ -39,7 +25,7 @@ CIPHER_NAMES = {
 
 
 def _is_grease(value: int) -> bool:
-    """Valores «GREASE» (0x0a0a, 0x1a1a... 0xfafa): relleno que los clientes meten a propósito; JA4 los ignora."""
+    """Valores «GREASE»"""
     return (value & 0x0F0F) == 0x0A0A and (value >> 8) == (value & 0xFF)
 
 
@@ -50,7 +36,7 @@ class ClientHello:
     legacy_version: int
     ciphers: List[int]
     extensions: List[Tuple[int, bytes]]
-    complete: bool  # el saludo llegó entero: sin esto la huella JA4 sería incorrecta
+    complete: bool  # el saludo llegó entero
 
 
 def _records(data: bytes) -> List[Tuple[int, bytes]]:
@@ -66,7 +52,7 @@ def _records(data: bytes) -> List[Tuple[int, bytes]]:
 
 
 def _handshakes(data: bytes) -> List[Tuple[int, bytes]]:
-    """Mensajes de handshake (tipo, cuerpo) de los registros 0x16 del flujo, ya unidos (un mensaje puede ocupar varios)."""
+    """Mensajes de handshake (tipo, cuerpo) de los registros 0x16 del flujo, ya unidos."""
     stream = b"".join(body for kind, body in _records(data) if kind == HANDSHAKE)
     out, pos = [], 0
     while pos + 4 <= len(stream):
@@ -142,7 +128,7 @@ def _highest_version(hello: ClientHello) -> int:
 
 
 def ja4(hello: ClientHello) -> str:
-    """Huella JA4 del cliente: `t13d1516h2_<12>_<12>` (protocolo, versión, ¿nombre?, nº cifrados, nº extensiones, ALPN)."""
+    """Huella JA4 del cliente."""
     ciphers = [c for c in hello.ciphers if not _is_grease(c)]
     exts = [(k, d) for k, d in hello.extensions if not _is_grease(k)]
     kinds = [k for k, _ in exts]
@@ -178,7 +164,7 @@ def alpn_of(hello: ClientHello) -> Optional[str]:
 
 @dataclass
 class ServerHello:
-    version: int  # el NEGOCIADO (en TLS 1.3 sale de la extensión supported_versions)
+    version: int  # el NEGOCIADO
     cipher: int
 
 
@@ -243,7 +229,7 @@ def _parse_time(data: bytes, item: Tuple[int, int, int]) -> Optional[datetime]:
 
 
 def _name_attr(data: bytes, name: Tuple[int, int, int], oid: bytes) -> Optional[str]:
-    """Valor del atributo `oid` (por ejemplo CN) dentro de un Name (SEQUENCE de SET de SEQUENCE{OID, valor})."""
+    """Valor del atributo `oid` (por ejemplo CN) dentro de un Name."""
     for _t, s, e in _children(data, name[1], name[2]):
         for _t2, s2, e2 in _children(data, s, e):
             parts = _children(data, s2, e2)

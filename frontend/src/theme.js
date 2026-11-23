@@ -1,6 +1,6 @@
 import { createTheme } from "@mantine/core";
 
-// Escalas de acento de cada paleta (10 tonos). El tono 6 (claro) y el 4 (oscuro) son los mismos del acento de tokens.css.
+// Escalas de acento de cada paleta (10 tonos)
 const SCALES = {
   esmeralda: ["#ecfdf5", "#d1fae5", "#a7f3d0", "#6ee7b7", "#34d399", "#10b981", "#059669", "#047857", "#065f46", "#064e3b"],
   violeta: ["#f3f0ff", "#e5dbff", "#d0bfff", "#b197fc", "#8b7cf6", "#7950f2", "#6d4fe0", "#5f3dc4", "#4c2da5", "#3b2380"],
@@ -13,7 +13,7 @@ export const PALETTES = [
   { id: "terracota", label: "Terracota", swatch: "#d97757" },
 ];
 
-// Tema de Mantine con la paleta elegida. Las superficies siguen las variables de tokens.css (ver styles.css).
+// Tema de Mantine con la paleta elegida
 export function buildTheme(palette = "esmeralda") {
   return createTheme({
     primaryColor: "tw",

@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatBytes } from "../../lib/format.js";
 
-// «Equipos por MAC»: agrupa las IP de la red local que comparten la misma dirección física.
-// Varias IP con una MAC suelen ser IPv4 + IPv6 del mismo equipo, o un router/NAT que reenvía otras redes.
-// Es una pista, no una prueba. Todo es texto de la captura: nunca HTML.
+// «Equipos por MAC»: agrupa las IP de la red local que comparten la misma dirección física
 export default function MacGroups({ refreshKey, onError, onFilterIp }) {
   const [data, setData] = useState(null);
 

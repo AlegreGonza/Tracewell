@@ -5,10 +5,10 @@ import { HELP, GLOSSARY } from "./help.js";
 
 const src = path.join(process.cwd(), "src");
 const readJsx = (d) => fs.readdirSync(d).filter((f) => f.endsWith(".jsx") && !f.includes(".test.")).map((f) => [f, fs.readFileSync(path.join(d, f), "utf8")]);
-// Todas las pantallas y componentes: src/views y src/components/{captures,common,support}.
+// Todas las pantallas y componentes
 const all = ["views", "components/captures", "components/common", "components/support"].flatMap((d) => readJsx(path.join(src, d)));
 const roots = ["App.jsx", "main.jsx"].map((f) => fs.readFileSync(path.join(src, f), "utf8"));
-// Solo cuentan los componentes que de verdad se usan (importados por App, main u otro componente): uno a medio hacer no rompe.
+// Solo cuentan los componentes que de verdad se usan
 const sources = all.filter(([f]) => [...roots, ...all.filter(([g]) => g !== f).map(([, t]) => t)].some((t) => t.includes(`/${f}"`)));
 
 describe("HELP", () => {

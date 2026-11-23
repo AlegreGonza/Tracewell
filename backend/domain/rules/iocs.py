@@ -1,16 +1,4 @@
-"""Lista de indicadores de compromiso (IOC) cargada desde un archivo local.
-
-Un IOC es una IP, una red (CIDR) o un dominio que ya se sabe malicioso. El
-analista carga su lista y Tracewell marca las sesiones que coinciden. Todo es
-local: no se consulta ningún servicio externo (mandar IP de tu red a un tercero
-filtraría datos).
-
-Formatos (se detectan por la extensión y, si no alcanza, por el contenido):
-- texto: un indicador por línea, `#` para comentarios (el formato original);
-- CSV/TSV: con una columna de valor (`value`, `valor`, `indicator`, `ioc`, `ip`, `domain`...);
-- STIX 2.1 (JSON): indicadores con patrón `ipv4-addr`, `ipv6-addr`, `domain-name` o `network-traffic`.
-Las mismas validaciones valen para los tres (red /0 rechazada, IP mal escrita, límites de tamaño).
-"""
+"""Lista de indicadores de compromiso (IOC) cargada desde un archivo local."""
 from __future__ import annotations
 
 import csv
@@ -22,9 +10,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
+from backend.domain.files import require_regular_file
+
 MAX_FILE_BYTES = 5_000_000
 MAX_ENTRIES = 100_000
-MAX_NETWORKS = 5_000  # cada sesión se compara contra todas las redes: se acota el costo
+MAX_NETWORKS = 5_000  # cada sesión se compara contra todas las redes
 
 _LABEL = r"(?!-)[a-z0-9-]{1,63}(?<!-)"
 _DOMAIN = re.compile(rf"^{_LABEL}(\.{_LABEL})+$")
@@ -39,7 +29,7 @@ class IocSet:
     ips: frozenset = field(default_factory=frozenset)
     networks: Tuple = ()
     domains: frozenset = field(default_factory=frozenset)
-    # Índice por (versión, prefijo) -> {dirección de red: (orden, red)}; se arma una vez en __post_init__.
+    # Índice por (versión, prefijo) -> {dirección de red
     _index: dict = field(init=False, repr=False, compare=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -89,7 +79,7 @@ class IocSet:
 
 
 def _parse_entry(text: str, number: int, where: Optional[str] = None):
-    """('ip'|'red'|'dominio', valor) de un valor ya limpio; IocError indicando DÓNDE falló (por defecto, «línea N»)."""
+    """('ip'|'red'|'dominio', valor) de un valor ya limpio."""
     where = where or f"línea {number}"
     try:
         return "ip", ipaddress.ip_address(text).compressed
@@ -99,16 +89,16 @@ def _parse_entry(text: str, number: int, where: Optional[str] = None):
         try:
             net = ipaddress.ip_network(text, strict=False)
         except ValueError:
-            raise IocError(f"{where}: red inválida: {text[:60]!r}") from None
+            raise IocError(f"{where}: red inválida") from None
         if net.prefixlen == 0:
             raise IocError(f"{where}: una red /0 coincidiría con todo el tráfico")
         return "red", net
     domain = text.lower().lstrip("*.").rstrip(".")
-    if domain.rsplit(".", 1)[-1].isdigit():  # ningún dominio real termina en un número: es una IP mal escrita
-        raise IocError(f"{where}: parece una IP mal escrita: {text[:60]!r}")
+    if domain.rsplit(".", 1)[-1].isdigit():  # ningún dominio real termina en un número
+        raise IocError(f"{where}: parece una IP mal escrita")
     if len(domain) <= 253 and _DOMAIN.match(domain):
         return "dominio", domain
-    raise IocError(f"{where}: no es una IP, una red ni un dominio: {text[:60]!r}")
+    raise IocError(f"{where}: no es una IP, una red ni un dominio")
 
 
 class _Collector:
@@ -182,10 +172,7 @@ def _csv_rows(text: str) -> list:
 
 
 def parse_csv_iocs(text: str) -> IocSet:
-    """CSV/TSV con una columna de valor. Con una sola columna se admite sin encabezado.
-
-    Los errores indican la fila (`línea N`, contando también el encabezado y los comentarios).
-    """
+    """CSV/TSV con una columna de valor."""
     rows = _csv_rows(text)
     if not rows:
         return IocSet()
@@ -224,7 +211,7 @@ def _unescape(literal: str) -> str:
 
 
 def _pattern_values(pattern: str) -> List[str]:
-    """Valores de IP/dominio comparados con `=` (o con `IN`) en un patrón STIX. Un `NOT` lo descarta: sería lo contrario."""
+    """Valores de IP/dominio comparados con `=` (o con `IN`) en un patrón STIX."""
     if re.search(r"\bNOT\b", pattern):
         return []
     found = [m.group(4) for m in _STIX_COMPARE.finditer(pattern) if m.group(3) == "=" and _stix_path_ok(m.group(1), m.group(2))]
@@ -259,7 +246,7 @@ def _object_values(obj: dict) -> List[str]:
 
 
 def parse_stix_iocs(text: str) -> IocSet:
-    """STIX 2.1 en JSON. Solo se leen indicadores de IP/dominio/tráfico de red; hashes, URL y demás se ignoran."""
+    """STIX 2.1 en JSON."""
     try:
         data = json.loads(text)
     except ValueError:
@@ -276,7 +263,7 @@ def parse_stix_iocs(text: str) -> IocSet:
 # --------------------------------------------------------------- detección y carga
 
 def detect_format(text: str, name: str = "") -> str:
-    """'stix', 'csv' o 'texto': por la extensión (.json/.stix, .csv/.tsv, .txt) y, si no dice nada, por el contenido."""
+    """'stix', 'csv' o 'texto'."""
     ext = Path(name).suffix.lower()
     if ext in (".json", ".stix"):
         return "stix"
@@ -297,8 +284,8 @@ def parse_ioc_text(text: str, name: str = "") -> IocSet:
 
 
 def load_iocs(path) -> IocSet:
-    """Lee y valida un archivo de IOC (texto, CSV o STIX). FileNotFoundError si no existe (la API lo traduce a 404)."""
-    p = Path(path).expanduser()
+    """Lee y valida un archivo de IOC (texto, CSV o STIX)."""
+    p = require_regular_file(path, "archivo de texto")
     if p.stat().st_size > MAX_FILE_BYTES:
         raise IocError(f"el archivo es demasiado grande (máximo {MAX_FILE_BYTES // 1_000_000} MB)")
     try:

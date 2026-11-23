@@ -5,8 +5,7 @@ import { formatTime, severityLabel } from "../../lib/format.js";
 // Etiqueta en texto (nunca solo color) de cada tipo de hecho.
 const KIND_LABEL = { alerta: "Alerta", dns: "DNS", ioc: "IOC", sesion: "Sesión" };
 
-// «Cronología del caso»: alertas, DNS sospechoso, sesiones marcadas e IOC juntos, en orden de tiempo.
-// Es distinta del gráfico de tráfico por intervalo. Todo es texto que viene de la captura: nunca HTML.
+// «Cronología del caso»
 export default function CaseTimeline({ refreshKey, triageVersion = 0, onError, onFilterIp }) {
   const [host, setHost] = useState("");
   const [applied, setApplied] = useState("");

@@ -6,7 +6,7 @@ import { useLoad } from "../../controllers/useLoad.js";
 
 const when = (epoch) => (Number.isFinite(epoch) ? new Date(epoch * 1000).toLocaleString("es-AR") : "—");
 
-// Detalle de UN proceso. Todo texto plano: nombres y rutas vienen del sistema y pueden ser cualquier cosa.
+// Detalle de UN proceso
 export default function ProcessDetail({ pid, onClose, onSelect }) {
   const { data, error, loading } = useLoad((s) => api.systemProcess(pid, s), { deps: [pid] });
   const [file, setFile] = useState(null);

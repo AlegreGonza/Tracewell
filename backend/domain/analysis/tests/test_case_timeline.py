@@ -1,4 +1,4 @@
-"""Cronología del caso: unión de alertas, DNS sospechoso, sesiones marcadas e IOC, en orden cronológico."""
+"""Cronología del caso."""
 import pytest
 
 from backend.domain.analysis.case_timeline import MAX_LIMIT, build_case_timeline, normalize_host

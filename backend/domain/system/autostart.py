@@ -82,18 +82,7 @@ def _windows_startup() -> List[Dict[str, Any]]:
     roots = {"HKCU": winreg.HKEY_CURRENT_USER, "HKLM": winreg.HKEY_LOCAL_MACHINE}
     items: List[Dict[str, Any]] = []
     for root, sub, where in _RUN_KEYS:
-        try:
-            with winreg.OpenKey(roots[root], sub) as key:
-                i = 0
-                while True:
-                    try:
-                        name, value, _kind = winreg.EnumValue(key, i)
-                    except OSError:
-                        break
-                    i += 1
-                    items.append(_item(where, name, str(value)))
-        except OSError:
-            continue  # la clave no existe o no se puede leer
+        items += [_item(where, n, v) for n, v in _registry_values(winreg, roots[root], sub)]
     for where, folder in (
         ("Carpeta Inicio de tu usuario", Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs/Startup"),
         ("Carpeta Inicio de todos los usuarios", Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs/StartUp"),
@@ -102,6 +91,22 @@ def _windows_startup() -> List[Dict[str, Any]]:
             if f.name.lower() != "desktop.ini":
                 items.append(_item(where, f.stem, str(f)))
     return items
+
+
+def _registry_values(winreg, root, sub: str) -> List[tuple]:
+    """(nombre, valor) de una clave del registro; lista vacía si no existe o no se puede leer."""
+    values: List[tuple] = []
+    try:
+        with winreg.OpenKey(root, sub) as key:
+            while True:
+                try:
+                    name, value, _kind = winreg.EnumValue(key, len(values))
+                except OSError:
+                    break
+                values.append((name, str(value)))
+    except OSError:
+        pass
+    return values
 
 
 def _linux_startup() -> List[Dict[str, Any]]:

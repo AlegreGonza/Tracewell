@@ -7,7 +7,7 @@ import pytest
 
 import backend.domain.system.procs as P
 from backend.domain.system.procs import file_info, file_signature, list_processes, process_detail, sha256_of
-from backend.domain.system.tests.fakes import AccessDenied, FakeProcess, FakePsutil, addr, conn, patch_psutil
+from backend.domain.system.tests.fakes import FakeProcess, FakePsutil, addr, conn, patch_psutil
 
 
 @pytest.fixture(autouse=True)

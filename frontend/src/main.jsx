@@ -11,7 +11,7 @@ import "./tokens.css";
 import "./styles.css";
 import "./shell.css";
 
-// Raíz: elige la paleta de color (se recuerda) y arma el tema de Mantine; el modo claro/oscuro lo maneja Mantine ("auto" = el del sistema).
+// Raíz: elige la paleta de color (se recuerda) y arma el tema de Mantine
 function Root() {
   const [palette, setPalette] = usePalette();
   const theme = useMemo(() => buildTheme(palette), [palette]);

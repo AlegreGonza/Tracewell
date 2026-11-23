@@ -5,7 +5,7 @@ import { useAction } from "../../controllers/useAction.js";
 const MARK = { true: "✔", false: "✘", null: "–" };
 const LABEL = { true: "bien", false: "falla", null: "omitido" };
 
-// «¿Hay Internet?»: revisa capa por capa y dice dónde se corta. Los comandos que sugiere son solo texto.
+// «¿Hay Internet?»: revisa capa por capa y dice dónde se corta
 export default function InternetCheckView() {
   const check = useAction((s) => api.supportInternet(s));
   const r = check.result;

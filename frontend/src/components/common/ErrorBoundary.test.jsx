@@ -59,7 +59,7 @@ describe("ErrorBoundary", () => {
 
   it("no atrapa errores de eventos (comportamiento documentado de React)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    // React reporta el error del handler al window; lo absorbemos para que no falle la corrida.
+    // React reporta el error del handler al window
     const onWinErr = vi.fn((e) => e.preventDefault());
     window.addEventListener("error", onWinErr);
     try {

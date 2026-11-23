@@ -1,15 +1,13 @@
-"""Controlador de «triage»: la lógica que las rutas HTTP de `api/routes/triage.py` delegan (sin FastAPI de por medio
-cuando se puede). Las rutas solo traducen HTTP <-> estas funciones."""
+"""Controlador de «triage»"""
 from __future__ import annotations
 
-from backend.controllers.state import Ctx, CtxDep, _session_id, current
-from backend.domain.rules.iocs import IocSet, load_iocs
+from backend.controllers.state import Ctx, _session_id
+from backend.domain.rules.iocs import IocSet
 from typing import Dict, List
 
 
 def _matched_ips(ioc: IocSet, sessions) -> set:
-    """IP de las sesiones que coinciden con la lista. Cada IP distinta se compara UNA vez:
-    con miles de sesiones repiten las mismas pocas IP."""
+    """IP de las sesiones que coinciden con la lista."""
     ips = {ip for s in sessions for ip in (s.src_ip, s.dst_ip)}
     return {ip for ip in ips if ioc.match_ip(ip)}
 

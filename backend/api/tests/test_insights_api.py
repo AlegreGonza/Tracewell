@@ -292,7 +292,7 @@ def test_ningun_secreto_se_filtra_en_ninguna_salida(web):
 
 
 def test_el_secreto_de_la_url_solo_aparece_como_parte_del_target(web):
-    """El valor del token viaja dentro de la URL pedida (es el pedido literal); los campos sensibles solo traen NOMBRES."""
+    """El valor del token viaja dentro de la URL pedida (es el pedido literal)."""
     j = web.get("/api/http").json()
     login = next(i for i in j["items"] if i["target"].startswith("/login"))
     assert login["sensitive_fields"] == ["apikey", "password"]
@@ -380,7 +380,7 @@ def test_tls13_oculta_certificado(client, tmp_path):
 
 
 def test_tls_con_el_origen_invertido(client, tmp_path):
-    """Captura iniciada a mitad: el primer paquete visto es del servidor, asi que el 'origen' es el servidor."""
+    """Captura iniciada a mitad."""
     full = tls_capture()
     ch_frames = [f for f in full]
     # ponemos la respuesta del servidor ANTES que el hello del cliente, sin saludo de 3 pasos

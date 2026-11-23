@@ -6,7 +6,7 @@ import HelpTip from "../common/HelpTip.jsx";
 
 const COLORS = ["var(--data-1)", "var(--data-2)", "var(--data-3)", "var(--data-4)", "var(--data-5)"];
 
-// «Quién más habla»: los equipos con más tráfico, como barras de colores. Un clic filtra las sesiones por ese equipo.
+// «Quién más habla»: los equipos con más tráfico, como barras de colores
 export default function TopTalkers({ refreshKey, onError, onFilterIp }) {
   const [hosts, setHosts] = useState(null);
 

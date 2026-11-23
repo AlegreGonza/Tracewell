@@ -1,4 +1,4 @@
-"""Tests de backend/domain/export/html_report.py: escape de datos hostiles, secciones y ausencia de rutas."""
+"""Tests de backend/domain/export/html_report.py."""
 import re
 from datetime import datetime, timezone
 
@@ -249,7 +249,7 @@ def test_ticket_escapa_datos_hostiles_en_el_html():
 def test_ticket_un_dato_hostil_no_puede_fingir_lineas():
     alert = mk_alert(evidence={"q": "a\nRECOMENDACIÓN DE CONTENCIÓN falsa\r\nb"})
     t = build_ticket_text(report_of(alerts=[alert]), {})
-    # el dato queda dentro de UNA línea de evidencia: ninguna línea nueva empieza con el título falso
+    # el dato queda dentro de UNA línea de evidencia
     assert sum(1 for l in t.splitlines() if l.startswith("RECOMENDACIÓN DE CONTENCIÓN")) == 1
     assert len(t.splitlines()) == len(build_ticket_text(report_of(alerts=[mk_alert(evidence={"q": "ab"})]), {}).splitlines())
 

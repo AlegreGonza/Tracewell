@@ -3,7 +3,7 @@ import {
   IconActivity, IconAlertTriangle, IconFileSearch, IconNetwork, IconPlayerPlay, IconRadar2, IconTopologyStar3, IconWorldWww,
 } from "@tabler/icons-react";
 
-// Lo que se puede hacer con Tracewell, para que la entrada se vea como un tablero de inicio y no como un manual.
+// Lo que se puede hacer con Tracewell, para
 const FEATURES = [
   { icon: IconAlertTriangle, color: "orange", title: "Alertas con MITRE ATT&CK", text: "Escaneos, contraseñas en claro y DNS raro, con la evidencia y la técnica." },
   { icon: IconTopologyStar3, color: "teal", title: "Equipos y conversaciones", text: "Quién habló con quién, con el dueño de cada IP y el programa que lo hizo." },
@@ -11,8 +11,7 @@ const FEATURES = [
   { icon: IconNetwork, color: "cyan", title: "Soporte de red", text: "Procesos, puertos, Wi-Fi, latencia y un monitor de cortes. Todo de solo lectura." },
 ];
 
-// Pantalla de inicio (todavía no hay una captura cargada): explica las tres formas de empezar, deja la más rápida
-// —el ejemplo— a un clic y muestra qué hay adentro de la herramienta.
+// Pantalla de inicio (todavía no hay una captura cargada)
 export default function Welcome({ onDemo, onOpenSupport }) {
   return (
     <section className="start" aria-labelledby="start-title">

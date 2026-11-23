@@ -1,16 +1,4 @@
-"""Qué proceso tiene abierto cada socket (SOLO para la captura en vivo).
-
-Por qué solo en vivo: un .pcap no dice qué programa generó cada paquete; esa
-información la tiene únicamente el sistema operativo, y solo mientras la
-conexión está abierta. Por eso, durante una captura en vivo, un hilo le pregunta
-al sistema cada segundo "¿qué conexiones hay abiertas y de qué proceso son?" y
-anota lo que ve. Al terminar, cada sesión se busca en esa tabla.
-
-Límites (conscientes):
-- Es una foto cada `SAMPLE_INTERVAL`: una conexión más corta que eso puede no verse.
-- UDP sin "conexión" se identifica por el puerto local, que es menos preciso.
-- psutil es OPCIONAL: sin él (o si falla) la función no existe y nada más se rompe.
-"""
+"""Qué proceso tiene abierto cada socket (SOLO para la captura en vivo)."""
 from __future__ import annotations
 
 import ipaddress
@@ -23,7 +11,7 @@ from typing import Any, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, T
 logger = logging.getLogger("tracewell")
 
 SAMPLE_INTERVAL = 1.0  # segundos entre muestras
-MAX_ENTRIES = 50_000  # tope por tabla: acota la memoria en capturas con muchísimas conexiones
+MAX_ENTRIES = 50_000  # tope por tabla
 STOP_JOIN_TIMEOUT = 2.0
 
 
@@ -45,12 +33,7 @@ class Conn(NamedTuple):
 
 
 def normalize_ip(text: Any) -> Optional[str]:
-    """IP en forma canónica, o None si no es una IP.
-
-    Quita el sufijo de zona (`fe80::1%12`) y convierte IPv4-mapeada
-    (`::ffff:1.2.3.4`, típica de sockets de doble pila) a IPv4, para que
-    coincida con lo que el lector de capturas entrega.
-    """
+    """IP en forma canónica, o None si no es una IP."""
     if not isinstance(text, str):
         return None
     try:
@@ -83,8 +66,7 @@ class ProcessTable:
             self._local_ips = frozenset(normalized)
 
     def add(self, conn: Conn) -> None:
-        """Anota una conexión. Gana la PRIMERA vista: un puerto reutilizado después
-        por otro programa no debe reetiquetar sesiones anteriores."""
+        """Anota una conexión."""
         with self._lock:
             if conn.remote_ip is not None and conn.remote_port is not None:
                 key = (conn.proto, conn.local_ip, conn.local_port, conn.remote_ip, conn.remote_port)
@@ -146,15 +128,14 @@ class PsutilProvider:
         return found
 
     def connections(self) -> List[Conn]:
-        names: Dict[int, str] = {}  # solo dentro de esta muestra: los PID se reutilizan entre muestras
+        names: Dict[int, str] = {}  # solo dentro de esta muestra
         conns = (self._to_conn(c, names) for c in self._ps.net_connections(kind="inet"))
         return [c for c in conns if c is not None]
 
     def _to_conn(self, c, names: Dict[int, str]) -> Optional[Conn]:
         proto = {socket.SOCK_STREAM: "TCP", socket.SOCK_DGRAM: "UDP"}.get(c.type)
         local_ip = normalize_ip(c.laddr.ip) if c.laddr else None
-        # PID 0 (o None): conexiones sin dueño real, p. ej. TIME_WAIT. Windows las atribuye a
-        # "System Idle Process", que NO es quien las abrió: etiquetarlas así sería mentir.
+        # PID 0 (o None): conexiones sin dueño real, p
         if proto is None or not c.pid or local_ip is None:
             return None
         remote_ip = normalize_ip(c.raddr.ip) if c.raddr else None
@@ -170,7 +151,7 @@ class PsutilProvider:
         """Nombre del proceso; sin permiso o si ya terminó, un texto neutro con el PID."""
         try:
             return self._ps.Process(pid).name()
-        except Exception:  # NoSuchProcess / AccessDenied / ZombieProcess: el nombre es opcional
+        except Exception:  # NoSuchProcess / AccessDenied / ZombieProcess
             logger.debug("no se pudo leer el nombre del proceso %s", pid, exc_info=True)
             return f"PID {pid}"
 
@@ -217,7 +198,7 @@ class ProcessSampler:
             self.table.set_local_ips(self._provider.local_ips())
             for conn in self._provider.connections():
                 self.table.add(conn)
-        except Exception:  # borde de hilo: esta función es OPCIONAL y no puede afectar la captura
+        except Exception:  # borde de hilo
             self.errors += 1
             if self.errors == 1:
                 logger.warning("no se pudieron leer las conexiones del sistema", exc_info=True)

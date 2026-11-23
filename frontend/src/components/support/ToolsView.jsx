@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 import { useAction } from "../../controllers/useAction.js";
@@ -21,9 +21,8 @@ function PingTool() {
   const [history, setHistory] = useState([]);
   const [continuous, setContinuous] = useState(false);
   const once = useAction((h, s) => api.supportPing(h, 4, s));
-  const timer = useRef(null);
 
-  // Ping continuo: un ping por segundo desde el navegador (así no hay nada que quede corriendo en el servidor).
+  // Ping continuo
   useEffect(() => {
     if (!continuous || !host.trim()) return undefined;
     let alive = true;
@@ -36,10 +35,10 @@ function PingTool() {
       }
     }
     tick();
-    timer.current = setInterval(tick, 1000);
+    const timer = setInterval(tick, 1000);
     return () => {
       alive = false;
-      clearInterval(timer.current);
+      clearInterval(timer);
     };
   }, [continuous, host]);
 

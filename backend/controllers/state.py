@@ -1,10 +1,4 @@
-"""Estado compartido de la API y contexto que reciben las rutas.
-
-Una app de escritorio tiene un solo usuario y una captura abierta a la vez,
-así que guardamos UN análisis actual en memoria (`_State`). Las rutas lo
-alcanzan por inyección de dependencias (`Ctx`), no por globales: cada
-`create_app` tiene el suyo y los tests no se pisan entre sí.
-"""
+"""Estado compartido de la API y contexto que reciben las rutas."""
 from __future__ import annotations
 
 import shutil
@@ -35,8 +29,8 @@ class _State:
         self.live_result: Optional[dict] = None  # resultado de /live/stop, para repetirlo sin reanalizar
         self.owned_dir: Optional[Path] = None  # carpeta temporal de la que depende el análisis actual
         self.sampler: Optional[ProcessSampler] = None  # muestreador de procesos de la captura en vivo en curso
-        self.processes: Optional[ProcessTable] = None  # procesos observados del análisis actual (solo captura en vivo)
-        self.notes: Dict[int, dict] = {}  # notas del analista por id de sesión; valen para el análisis actual
+        self.processes: Optional[ProcessTable] = None  # procesos observados del análisis actual
+        self.notes: Dict[int, dict] = {}  # notas del analista por id de sesión
         self.iocs: Optional[IocSet] = None  # lista de IOC cargada; NO se reemplaza al cambiar de análisis
         self.iocs_name: Optional[str] = None  # solo el nombre del archivo de IOC
 
@@ -64,9 +58,7 @@ CtxDep = Annotated[Ctx, Depends(get_ctx)]
 
 
 def _session_id(a: Analysis, s) -> int:
-    """Id de una sesión del análisis. Toda sesión que sale de `group_packets`
-    tiene clave, así que un None acá es un bug de core: mejor un error claro
-    que un id `null` en la respuesta."""
+    """Id de una sesión del análisis."""
     sid = a.session_id(s.key)
     if sid is None:
         raise RuntimeError("sesión sin id en el análisis actual")
@@ -88,8 +80,7 @@ def current(ctx: Ctx) -> Analysis:
 
 
 def summary(a: Analysis, has_processes: bool = False) -> dict:
-    """Resumen de un análisis para las respuestas de analyze/demo/capture.
-    `processes`: si hay datos de procesos (solo captura en vivo): la interfaz muestra la columna."""
+    """Resumen de un análisis para las respuestas de analyze/demo/capture."""
     return {
         "source": a.path.name,
         "format": a.info.format,
@@ -103,9 +94,7 @@ def summary(a: Analysis, has_processes: bool = False) -> dict:
 
 
 def clear_analysis(ctx: Ctx) -> None:
-    """Vuelve al estado inicial (sin captura cargada). Si el análisis era de una captura en vivo,
-    borra su carpeta temporal. Las notas, los procesos y la selección dependían de ese análisis; la
-    lista de IOC no: sobrevive, igual que al cambiar de captura."""
+    """Vuelve al estado inicial (sin captura cargada)."""
     state = ctx.state
     with state.lock:
         previous = state.owned_dir
@@ -116,18 +105,14 @@ def clear_analysis(ctx: Ctx) -> None:
 def set_analysis(
     ctx: Ctx, a: Analysis, owned_dir: Optional[Path] = None, processes: Optional[ProcessTable] = None
 ) -> dict:
-    """Reemplaza el análisis actual. `owned_dir` es una carpeta temporal que
-    creamos nosotros y de la que depende el análisis (el pcap de una captura
-    en vivo); se borra cuando el análisis se reemplaza, no antes: el detalle
-    de paquetes relee ese archivo. `processes` (solo captura en vivo) se
-    reemplaza junto con el análisis: los de un archivo nunca los tienen."""
+    """Reemplaza el análisis actual."""
     state = ctx.state
     with state.lock:
         previous = state.owned_dir
         state.analysis = a
         state.owned_dir = owned_dir
         state.processes = processes
-        state.notes = {}  # los ids de sesión cambian con cada análisis: las notas viejas apuntarían a otra cosa
+        state.notes = {}  # los ids de sesión cambian con cada análisis
     if previous is not None and previous != owned_dir:
         _rmtree(previous)
     return summary(a, has_processes=processes is not None)

@@ -1,8 +1,7 @@
 import { useId, useState } from "react";
 import { HELP } from "../../lib/help.js";
 
-// Botón «?» que despliega una explicación en lenguaje simple.
-// El contenido sale de help.js: texto fijo, nunca datos de la captura.
+// Botón «?» que despliega una explicación en lenguaje simple
 export default function HelpTip({ topic }) {
   const [open, setOpen] = useState(false);
   const id = useId();

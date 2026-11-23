@@ -1,15 +1,4 @@
-"""Dirección de una sesión respecto de TU red: ¿quién habló con quién, adentro o afuera?
-
-Etiquetas: «Interno→Externo» (salida a internet), «Externo→Interno» (algo de afuera le habló a un equipo tuyo),
-«Interno→Interno (lateral)» (entre equipos de la red local, donde se mueve un atacante ya adentro) y
-«Externo→Externo» (ninguno de los dos extremos es de la red local: tráfico que pasó por la captura, un tránsito).
-Si un extremo es multicast se etiqueta aparte («Multicast»): no es ni adentro ni afuera.
-
-La flecha va del CLIENTE al SERVIDOR, no del primer paquete visto: si la captura empezó a mitad de la
-conversación el «origen» de la sesión puede estar invertido, y se corrige con la misma regla que usa la vista
-de equipos (puerto de servicio y, si no alcanza, estar afuera de la red). Es una pista, no una prueba: «interno»
-significa dirección privada (RFC 1918, ULA, link-local, loopback); no se conoce la topología real.
-"""
+"""Dirección de una sesión respecto de TU red."""
 from __future__ import annotations
 
 from typing import Any

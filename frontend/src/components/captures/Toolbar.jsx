@@ -3,11 +3,7 @@ import { api } from "../../api/client.js";
 
 const findPicker = () => window.pywebview?.api?.pick_file ?? null;
 
-// Dentro de la ventana de escritorio pywebview expone un diálogo nativo para
-// elegir archivo; en el navegador no existe y se escribe la ruta. pywebview
-// inyecta `window.pywebview.api` DESPUÉS de cargar la página y lo avisa con el
-// evento "pywebviewready": leerlo una sola vez al renderizar llegaría tarde y
-// el botón "Examinar…" nunca aparecería.
+// Dentro de la ventana de escritorio pywebview expone un diálogo nativo para elegir archivo
 function useNativePicker() {
   const [picker, setPicker] = useState(findPicker);
   useEffect(() => {
@@ -18,7 +14,7 @@ function useNativePicker() {
   return picker;
 }
 
-// `onClose` + `closeLabel`: descartan el análisis y vuelven a la pantalla de inicio (solo se ofrecen con algo cargado).
+// `onClose` + `closeLabel`
 export default function Toolbar({
   busy, loaded, filters, onDemo, onAnalyze, onError, onClose, closeLabel = "Cerrar captura", onGlossary,
 }) {
@@ -33,8 +29,7 @@ export default function Toolbar({
         onAnalyze(picked);
       }
     } catch (e) {
-      // Un diálogo nativo que falla no debe quedar como un rechazo sin manejar:
-      // el usuario tiene que ver un aviso (y puede escribir la ruta a mano).
+      // Un diálogo nativo que falla no debe quedar como un rechazo sin manejar
       onError?.(e?.message || "No se pudo abrir el selector de archivos.");
     }
   }
@@ -100,7 +95,7 @@ export default function Toolbar({
             Exportar JSON
           </span>
         )}
-        {/* Informe de triaje listo para un ticket: alertas, evidencia y notas. */}
+        {/* Informe de triaje listo para un ticket */}
         {loaded ? (
           <a className="button" href={api.reportUrl()} download="tracewell-informe.html">
             Informe HTML

@@ -141,7 +141,7 @@ describe("App: cerrar captura", () => {
     await userEvent.click(screen.getByRole("button", { name: "Salir del demo" }));
     await screen.findByRole("button", { name: "Modo demo" });
     document.body.innerHTML = "";
-    render(<App />); // "recarga": una App nueva consulta al servidor, que ya no tiene captura
+    render(<App />); // "recarga": una App nueva consulta al servidor
     expect(await screen.findByRole("button", { name: "Modo demo" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Resumen" })).toBeNull();
   });

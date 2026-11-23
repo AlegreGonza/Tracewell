@@ -250,7 +250,7 @@ def test_warning_none_con_fuente_normal(env):
 def test_status_idle_no_falla_y_start_trae_la_clave(env):
     st = env.client.get("/api/live/status").json()
     assert st["state"] == "idle"
-    assert st.get("warning") is None  # idle sin captura: clave presente o ausente, pero nunca un error
+    assert st.get("warning") is None  # idle sin captura
 
 
 def test_stop_con_fuente_que_lanza_da_200_y_warning(tmp_path):

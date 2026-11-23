@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-// Cada sección se reemplaza por un componente mínimo que cuenta cuántas veces se montó y qué `active` recibió.
+// Cada sección se reemplaza por un componente mínimo que cuenta cuántas veces se montó
 const mounts = vi.hoisted(() => ({}));
 vi.mock("../components/support/SystemOverview.jsx", () => ({ default: (p) => section("resumen", p) }));
 vi.mock("../components/support/ProcessesView.jsx", () => ({ default: (p) => section("procesos", p) }));

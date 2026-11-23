@@ -83,7 +83,7 @@
 
 ## Paso 6: API (backend/api/app.py) y piezas de core que la sostienen
 - **La API solo traduce.** La lógica de "analizar una captura" vive en `backend/domain/analysis/analyzer.py` (carpeta nueva con su `tests/`, aprobada) para que una CLI o la ventana la reutilicen sin levantar un servidor.
-- **Dependencias #3 y #4: FastAPI + Uvicorn** (validación de parámetros, docs automáticas, estándar) y **httpx** solo como dependencia de desarrollo (lo requiere `TestClient`).
+- **Dependencias #3 y #4: FastAPI + Uvicorn** (validación de parámetros, docs automáticas, estándar) y **httpx2** solo como dependencia de desarrollo (lo requiere `TestClient`; `httpx` quedó deprecado para eso en Starlette).
 - **Un análisis en memoria** (app de escritorio, un usuario). Sin análisis cargado → 409.
 - **Errores de core → HTTP:** archivo inexistente 404, pcap inválido/linktype no soportado/filtro inválido 422, carpeta 400, permisos 403, estado inválido 409, driver/captura 503. Los mensajes no incluyen rutas del usuario.
 - **Paquetes de una sesión sin guardarlos:** `Session.key` permite releer el pcap y filtrar. Costo O(archivo) por consulta; a cambio, memoria constante. Si duele, se construye un índice de offsets más adelante.

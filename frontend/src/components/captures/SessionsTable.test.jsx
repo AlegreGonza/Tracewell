@@ -132,7 +132,7 @@ describe("SessionsTable", () => {
     await vi.waitFor(() => expect(lastParams()).toMatchObject({ port: "80", offset: 0 }));
   });
 
-  // Corregido: la página queda atada a los filtros; ya no se pide offset 25 con filtros nuevos.
+  // Corregido: la página queda atada a los filtros
   it("no pide nunca la página vieja con los filtros nuevos", async () => {
     api.sessions.mockResolvedValue(page(60, [1]));
     render(<Harness />);

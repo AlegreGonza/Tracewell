@@ -1,4 +1,4 @@
-"""main._allow_downloads: pywebview cancela las descargas por defecto; se activan sin romper versiones viejas."""
+"""main._allow_downloads."""
 import sys
 import types
 

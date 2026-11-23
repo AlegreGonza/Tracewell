@@ -12,8 +12,7 @@ import SystemOverview from "../components/support/SystemOverview.jsx";
 import ToolsView from "../components/support/ToolsView.jsx";
 import WifiView from "../components/support/WifiView.jsx";
 
-// Dos grupos: «Sistema» (qué corre en este equipo) y «Red» (pruebas de red). Solo se monta la sección elegida;
-// cada una pide sus datos al abrirse.
+// Dos grupos: «Sistema» (qué corre en este equipo) y «Red» (pruebas de red)
 export const GROUPS = [
   {
     id: "sistema",
@@ -44,9 +43,7 @@ export const GROUPS = [
   },
 ];
 
-// Soporte de red: herramientas de SOLO LECTURA sobre el equipo («Sistema») y la red («Red»).
-// Con `group` y `section` (los elige la barra lateral de la aplicación) la pantalla es «controlada»: sin pestañas propias.
-// Sin ellos (uso suelto) se maneja sola con pestañas.
+// Soporte de red: herramientas de SOLO LECTURA sobre el equipo («Sistema») y la red («Red»)
 export default function SupportApp({ active = true, group: groupProp, section: sectionProp }) {
   const controlled = groupProp !== undefined;
   const [groupId, setGroupId] = useState("sistema");

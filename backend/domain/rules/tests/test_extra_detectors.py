@@ -1,4 +1,4 @@
-"""Tests de backend/domain/rules/extra_detectors.py: los 5 detectores nuevos y sus validadores (frames con dpkt)."""
+"""Tests de backend/domain/rules/extra_detectors.py."""
 import subprocess
 import sys
 from pathlib import Path
@@ -585,7 +585,7 @@ def test_defaults_de_los_detectores(tmp_path):
 def test_reglas_reales_cargan_y_mapean_a_detectores_conocidos():
     rules = load_rules(ROOT / "rules")
     assert len(rules) == 9
-    # "threshold" es la regla que arma el analista desde la interfaz: no tiene una regla propia en rules/.
+    # "threshold" es la regla que arma el analista desde la interfaz
     assert {r.detector for r in rules} == set(X._engine.DETECTORS) - {"threshold"}
 
 

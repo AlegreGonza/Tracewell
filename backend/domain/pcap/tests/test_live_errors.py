@@ -1,4 +1,4 @@
-"""Errores en backend.domain.pcap.live: sniffer que falla, cierre del pcap con OSError, hilo del sniffer, logging."""
+"""Errores en backend.domain.pcap.live."""
 import logging
 import subprocess
 import sys

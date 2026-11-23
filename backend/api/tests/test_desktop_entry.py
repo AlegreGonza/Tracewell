@@ -106,7 +106,7 @@ def test_pick_file_devuelve_primera_ruta(monkeypatch):
     # devuelve la primera ruta del diálogo
     fake_webview(monkeypatch)
     api = main.DesktopApi()
-    api.bind(FakeWindow(dialog=("C:/a.pcap", "C:/b.pcap")))
+    api._bind(FakeWindow(dialog=("C:/a.pcap", "C:/b.pcap")))
     assert api.pick_file() == "C:/a.pcap"
 
 
@@ -115,7 +115,7 @@ def test_pick_file_cancelado(monkeypatch, valor):
     # diálogo cancelado (None o vacío) -> None
     fake_webview(monkeypatch)
     api = main.DesktopApi()
-    api.bind(FakeWindow(dialog=valor))
+    api._bind(FakeWindow(dialog=valor))
     assert api.pick_file() is None
 
 
@@ -124,7 +124,7 @@ def test_pick_file_argumentos(monkeypatch):
     fake_webview(monkeypatch)
     w = FakeWindow(dialog=("x",))
     api = main.DesktopApi()
-    api.bind(w)
+    api._bind(w)
     api.pick_file()
     args, kw = w.calls[0]
     assert args == ("OPEN_SENTINEL",)
@@ -133,7 +133,7 @@ def test_pick_file_argumentos(monkeypatch):
 
 
 def test_pick_file_sin_bind_falla_con_attributeerror(monkeypatch):
-    # sin bind(), _window es None: pick_file lanza AttributeError (comportamiento real, no controlado)
+    # sin _bind(), _window es None
     fake_webview(monkeypatch)
     with pytest.raises(AttributeError):
         main.DesktopApi().pick_file()
@@ -142,7 +142,7 @@ def test_pick_file_sin_bind_falla_con_attributeerror(monkeypatch):
 def test_window_no_es_publico():
     # lo expuesto a JS (sin guion bajo) no incluye la ventana
     publicos = [n for n in dir(main.DesktopApi()) if not n.startswith("_")]
-    assert sorted(publicos) == ["bind", "pick_file"]
+    assert sorted(publicos) == ["pick_file"]
     assert "window" not in publicos
 
 
@@ -268,7 +268,7 @@ def test_self_test_un_campo_falso(monkeypatch, campo):
 
 
 def test_self_test_destruye_aunque_probe_explote(monkeypatch):
-    # try/except/finally: si la sonda explota, la ventana se destruye igual, ok queda False y error trae el mensaje
+    # try/except/finally
     def boom(w):
         raise RuntimeError("sonda rota")
 
@@ -351,7 +351,7 @@ def test_main_importerror_ventana(monkeypatch, capsys):
 
 @pytest.mark.parametrize("exc", [RuntimeError("WebView2 no disponible"), OSError("WebView2 no disponible")])
 def test_main_fallo_generico_de_ventana(monkeypatch, capsys, exc):
-    # cualquier excepción al abrir la ventana: mensaje con --serve-only, 1, sin traceback, stop() igual
+    # cualquier excepción al abrir la ventana
     h = FakeHandle()
     monkeypatch.setattr(main, "start_in_thread", lambda **kw: h)
 

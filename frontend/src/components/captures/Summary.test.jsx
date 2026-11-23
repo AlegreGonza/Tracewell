@@ -38,6 +38,13 @@ describe("Summary", () => {
     expect(screen.getByText(/demo\.pcap · pcap · snaplen 65535/)).toBeInTheDocument();
   });
 
+  it("la leyenda de protocolos no usa la clase de las barras sueltas (gráficos de latencia)", () => {
+    render(<Summary capture={base()} />);
+    const lista = screen.getAllByRole("listitem")[0].parentElement;
+    expect(lista).toHaveClass("proto-legend");
+    expect(lista).not.toHaveClass("bars");
+  });
+
   it("muestra non_ip y dañados SIEMPRE, incluso en 0", () => {
     render(<Summary capture={base({ non_ip: 0, malformed: 0 })} />);
     expect(stat("Sin IP (ARP…)")).toBe("0");

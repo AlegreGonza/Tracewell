@@ -137,8 +137,7 @@ def test_scan_alerta_una_sola_vez_y_libera_estado():
 
 
 def test_scan_par_evictado_de_alerted_puede_volver_a_alertar():
-    # Costo asumido y documentado: si el par alertado sale del LRU de _alerted
-    # (mas de MAX_TRACKED pares alertados) se olvida y puede alertar de nuevo.
+    # Costo asumido y documentado
     det = scan(min_ports=2)
     det._alerted = _LRU(1)
     assert len(det.feed(syn(0, 1)) + det.feed(syn(1, 2))) == 1

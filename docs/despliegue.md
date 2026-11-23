@@ -67,7 +67,7 @@ Se puede ejecutar varias veces: lo que ya está listo se omite (la segunda corri
 |---|---|
 | `-Check` | Solo informa qué falta. No instala ni descarga nada. |
 | `-Yes` | No pregunta: acepta las instalaciones con `winget`. Útil para automatizar. |
-| `-Dev` | Instala también `pytest`, `pytest-cov` y `httpx` (para correr los tests). |
+| `-Dev` | Instala también `pytest`, `pytest-cov`, `httpx2` (para correr los tests) y `ruff` (linter). |
 | `-SkipTest` | Omite la autoprueba final de la ventana. |
 
 ## Abrir Tracewell

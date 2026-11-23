@@ -3,7 +3,7 @@ import { IconShieldHalf } from "@tabler/icons-react";
 import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Peso de cada alerta en el puntaje, por severidad. El puntaje es la SUMA de los pesos (tope 100): se muestra el porqué.
+// Peso de cada alerta en el puntaje, por severidad
 export const RISK_WEIGHT = { critical: 35, high: 25, medium: 12, low: 5 };
 const SHAPE = { critical: "◆", high: "▲", medium: "●", low: "▼" };
 const LABEL = { critical: "crítica", high: "alta", medium: "media", low: "baja" };
@@ -34,7 +34,7 @@ function Gauge({ score, color }) {
   );
 }
 
-// «Puntaje de riesgo»: un número de 0 a 100 que resume las alertas, con la lista de motivos (nada de cajas negras).
+// «Puntaje de riesgo»
 export default function RiskCard({ refreshKey, onError }) {
   const [alerts, setAlerts] = useState(null);
 

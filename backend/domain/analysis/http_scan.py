@@ -1,10 +1,4 @@
-"""Busca HTTP en TODA la captura (no solo en una sesión): una fila por petición, con su respuesta.
-
-Para no leer el archivo una vez por sesión, se hace UNA pasada y se juntan los paquetes de las sesiones
-candidatas. Como no se puede saber si una sesión es HTTP sin mirarla, los candidatos son las de TCP a los
-puertos habituales de HTTP; para otro puerto se abre la sesión y se lee ahí. Hay topes (sesiones, bytes,
-intercambios) y se informa cuando se alcanzan.
-"""
+"""Busca HTTP en TODA la captura (no solo en una sesión): una fila por petición, con su respuesta."""
 from __future__ import annotations
 
 from collections import defaultdict

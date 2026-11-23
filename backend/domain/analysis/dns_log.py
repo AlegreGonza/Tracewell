@@ -1,12 +1,4 @@
-"""Tabla de DNS: qué nombres se consultaron, cuántas veces, qué respondieron y qué salió mal.
-
-Es el equivalente simple del `dns.log` de Zeek (o de filtrar `dns` en Wireshark): una fila por nombre y
-tipo de consulta (A, AAAA, MX...). Sirve para ver de un vistazo a qué se conectó un equipo, qué nombres
-NO existen (NXDOMAIN) y qué nombres parecen generados al azar.
-
-Límites (conscientes): una fila por (nombre, tipo) con topes (`MAX_ENTRIES`, listas cortas) para acotar la
-memoria; solo DNS sobre UDP (el DNS sobre TCP, DoH y DoT no se ven aquí).
-"""
+"""Tabla de DNS: qué nombres se consultaron, cuántas veces, qué respondieron y qué salió mal."""
 from __future__ import annotations
 
 import ipaddress
@@ -19,7 +11,7 @@ import dpkt
 
 MAX_ENTRIES = 20_000
 MAX_LIST = 8  # respuestas y clientes que se recuerdan por fila
-RANDOM_ENTROPY = 3.5  # bits por carácter del primer label a partir de los cuales "parece aleatorio"
+RANDOM_ENTROPY = 3.5  # bits por carácter del primer label a partir de los cuales
 RANDOM_MIN_LABEL = 20
 
 QTYPES = {1: "A", 2: "NS", 5: "CNAME", 6: "SOA", 12: "PTR", 15: "MX", 16: "TXT", 28: "AAAA", 33: "SRV", 65: "HTTPS", 255: "ANY"}
@@ -50,6 +42,21 @@ def _entropy(text: str) -> float:
 def _add_unique(items: List[str], value: str) -> None:
     if value and value not in items and len(items) < MAX_LIST:
         items.append(value)
+
+
+def _rr_answers(rr) -> List[str]:
+    """Direcciones y CNAME de un registro de respuesta."""
+    out: List[str] = []
+    for raw in (getattr(rr, "ip", None), getattr(rr, "ip6", None)):
+        if not isinstance(raw, bytes):
+            continue
+        try:
+            out.append(ipaddress.ip_address(raw).compressed)
+        except ValueError:
+            continue
+    if getattr(rr, "cname", None):
+        out.append(str(rr.cname).lower().rstrip("."))
+    return out
 
 
 class DnsLog:
@@ -97,15 +104,8 @@ class DnsLog:
             ttl = getattr(rr, "ttl", None)
             if isinstance(ttl, int):
                 entry.min_ttl = ttl if entry.min_ttl is None else min(entry.min_ttl, ttl)
-            for attr in ("ip", "ip6"):
-                raw = getattr(rr, attr, None)
-                if isinstance(raw, bytes):
-                    try:
-                        _add_unique(entry.answers, ipaddress.ip_address(raw).compressed)
-                    except ValueError:
-                        continue  # un registro con una dirección de largo inválido (paquete raro o hostil) se ignora
-            if getattr(rr, "cname", None):
-                _add_unique(entry.answers, str(rr.cname).lower().rstrip("."))
+            for text in _rr_answers(rr):
+                _add_unique(entry.answers, text)
 
     # ------------------------------------------------------------ consulta
 

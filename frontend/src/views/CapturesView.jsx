@@ -26,8 +26,7 @@ import Welcome from "../components/captures/Welcome.jsx";
 
 const NO_FILTERS = { protocol: "", ip: "", port: "" };
 
-// `section` elige qué tarjetas se ven («all» = todas, el uso de siempre; la barra lateral pasa una por vez).
-// `onNavigate` cambia de sección (p. ej. desde una alerta a las sesiones), `onCapture` avisa qué captura hay cargada.
+// `section` elige qué tarjetas se ven
 export default function App({ section = "all", onNavigate, onCapture, onOpenSupport } = {}) {
   const show = (name) => section === "all" || section === name;
   const [capture, setCapture] = useState(null); // resumen del análisis actual
@@ -46,7 +45,7 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
   const fail = useCallback((msg) => setError(msg), []);
   const refreshTriage = useCallback(() => setTriageVersion((v) => v + 1), []);
 
-  // Descarta el análisis (también en el servidor, para que recargar la página no lo traiga de vuelta) y vuelve al inicio.
+  // Descarta el análisis
   async function closeAnalysis() {
     setBusy(true);
     try {
@@ -63,13 +62,13 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
     }
   }
 
-  // Filtra la tabla de sesiones por una IP (desde el gráfico de equipos o la tabla de HTTP) y baja hasta ella.
+  // Filtra la tabla de sesiones por una IP (desde el gráfico de equipos o la tabla de HTTP)
   const filterByIp = useCallback((ip) => {
     setFilters({ protocol: "", ip, port: "" });
     setSelected(null);
     onNavigate?.("sesiones");
     setTimeout(() => document.getElementById("sessions-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 0);
-  }, []);
+  }, [onNavigate]);
 
   // Desde una alerta: filtra la tabla por la IP de origen y baja hasta ella.
   const viewSessions = useCallback((alert) => {
@@ -77,10 +76,9 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
     setSelected(null);
     onNavigate?.("sesiones");
     setTimeout(() => document.getElementById("sessions-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 0);
-  }, []);
+  }, [onNavigate]);
 
-  // Un análisis nuevo reemplaza al anterior: se limpian filtros y selección,
-  // que podrían apuntar a sesiones que ya no existen.
+  // Un análisis nuevo reemplaza al anterior
   const adopt = useCallback((summary) => {
     setCapture(summary);
     setFilters(NO_FILTERS);
@@ -100,8 +98,7 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
     }
   }
 
-  // Si el servidor ya tiene un análisis (p. ej. se recargó la página), lo
-  // retomamos. Un 409 significa "todavía no hay nada": es el caso normal.
+  // Si el servidor ya tiene un análisis
   useEffect(() => {
     const ctl = new AbortController();
     api
@@ -196,7 +193,7 @@ export default function App({ section = "all", onNavigate, onCapture, onOpenSupp
           )
         )}
       </main>
-      {/* Barra inferior fija: así la captura en vivo no le quita espacio al análisis. */}
+      {/* Barra inferior fija */}
       <LivePanel
         disabled={busy}
         onError={fail}

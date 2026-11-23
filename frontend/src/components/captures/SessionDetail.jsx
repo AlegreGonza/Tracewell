@@ -10,13 +10,12 @@ import StreamView from "./StreamView.jsx";
 
 const PAGE = 50;
 
-// Resalta offset y panel ASCII solo con spans de texto (nunca HTML). Las líneas
-// que no tienen el formato esperado se muestran tal cual; el texto total no cambia.
+// Resalta offset y panel ASCII solo con spans de texto (nunca HTML)
 const HEX_LINE = /^([0-9a-f]{8})( {2})(.*?)( {2})(\|.*\|)$/;
 
 const inRange = (n, hl) => hl != null && n >= hl.start && n < hl.end;
 
-// Cada byte hexadecimal va en su propio <span> para poder resaltar un campo; el texto total no cambia.
+// Cada byte hexadecimal va en su propio <span> para poder resaltar un campo
 function HexBytes({ text, base, highlight }) {
   let n = -1;
   return text.split(/([0-9a-f]{2})/).map((part, k) => {
@@ -68,8 +67,7 @@ function HexLines({ text, highlight = null }) {
   });
 }
 
-// Árbol de capas (Ethernet, IP, TCP...). Pasar el mouse o dar foco a un campo resalta sus bytes en el
-// hex dump; un clic lo deja fijo (para teclado y pantallas táctiles). Todo es texto: nunca HTML.
+// Árbol de capas (Ethernet, IP, TCP...)
 function PacketLayers({ layers, onHover, onPin, pinnedKey }) {
   return (
     <div className="layers">
@@ -155,7 +153,7 @@ function PacketView({ index, onError }) {
           en él no prueba que no estuviera en la red.
         </p>
       )}
-      {/* Los bytes vienen del tráfico: se muestran como texto, nunca como HTML. */}
+      {/* Los bytes vienen del tráfico */}
       <pre className="hexdump mono" aria-label="Volcado hexadecimal">
         <HexLines text={d.hexdump || "(sin datos)"} highlight={hover ?? pinned.range} />
       </pre>
@@ -171,15 +169,14 @@ function PacketView({ index, onError }) {
   );
 }
 
-// Nota del analista y marca "revisada". El texto lo escribe una persona: se guarda y se muestra como texto.
+// Nota del analista y marca "revisada"
 function NoteForm({ session, onNoteSaved, onError }) {
   const [note, setNote] = useState(session.note ?? "");
   const [reviewed, setReviewed] = useState(Boolean(session.reviewed));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Solo al cambiar de sesión: depender también de note/reviewed borraría el aviso "Guardada"
-  // justo después de guardar, porque guardar actualiza esos mismos valores.
+  // Solo al cambiar de sesión
   useEffect(() => {
     setNote(session.note ?? "");
     setReviewed(Boolean(session.reviewed));
@@ -280,7 +277,7 @@ export default function SessionDetail({ session, onClose, onError, onNoteSaved }
             Sitio: <strong className="mono">{session.host}</strong>
           </p>
         )}
-        {/* La clave `process` solo existe en una captura en vivo: sin ella no se muestra nada. */}
+        {/* La clave `process` solo existe en una captura en vivo */}
         {"process" in session && (
           <p>
             Proceso:{" "}
@@ -306,7 +303,7 @@ export default function SessionDetail({ session, onClose, onError, onNoteSaved }
           Descargar .pcap de esta sesión
         </a>
         <HelpTip topic="pcap" />
-        {/* Mismo tráfico en Wireshark: el filtro lo arma el servidor al pedirlo. */}
+        {/* Mismo tráfico en Wireshark */}
         <CopyFilterButton load={() => api.explain(session.id).then((r) => r.wireshark_filter)} onError={onError} />
       </p>
       <NoteForm session={session} onNoteSaved={onNoteSaved} onError={onError} />

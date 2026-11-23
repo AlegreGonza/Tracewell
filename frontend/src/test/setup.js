@@ -16,7 +16,6 @@ if (!window.ResizeObserver) {
 }
 
 // Todos los tests renderizan dentro del MantineProvider, como en la aplicación real
-// (sin él, cualquier componente de Mantine falla), sin tener que cambiar cada test.
 vi.mock("@testing-library/react", async (importOriginal) => {
   const actual = await importOriginal();
   const wrapper = ({ children }) => React.createElement(MantineProvider, { theme, env: "test", withCssVariables: false, withGlobalClasses: false }, children);

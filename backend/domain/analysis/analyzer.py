@@ -1,9 +1,4 @@
-"""Orquestador: lee un pcap, agrupa sesiones y evalúa reglas.
-
-Por qué vive en `core` y no en `api`: es lógica de negocio ("qué significa
-analizar una captura"). Si la dejáramos en la API, una CLI o la ventana de
-escritorio tendrían que duplicarla o levantar un servidor para usarla.
-"""
+"""Orquestador: lee un pcap, agrupa sesiones y evalúa reglas."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -36,7 +31,7 @@ class Analysis:
     alerts: List[Alert]
     rules: List[Rule]
     names: NameBook = field(default_factory=NameBook)  # nombres de sitio sacados de la captura (DNS y SNI)
-    timeline: Optional[Timeline] = None  # paquetes y bytes por intervalo (None si la captura no tiene paquetes)
+    timeline: Optional[Timeline] = None  # paquetes y bytes por intervalo
     # clave de sesión -> id (posición en result.sessions)
     _ids: Dict[Tuple, int] = field(init=False, repr=False, default_factory=dict)
 
@@ -72,12 +67,7 @@ class PacketDetail:
 
 
 def analyze(path, rules: List[Rule]) -> Analysis:
-    """Tres pasadas en streaming sobre el archivo (sesiones, reglas y nombres de sitio).
-
-    Varias pasadas en vez de una: cada consumidor queda simple e independiente y
-    la memoria no crece con el archivo. Si el costo duele en capturas enormes,
-    se unifica después (decisión anotada en docs/decisiones.md).
-    """
+    """Tres pasadas en streaming sobre el archivo (sesiones, reglas y nombres de sitio)."""
     path = Path(path)
     info = capture_info(path)  # valida el archivo antes de gastar tiempo
     result = group_packets(iter_packets(path), info.linktype)
@@ -113,11 +103,7 @@ def _check_page_args(analysis: Analysis, session_id, offset: int, limit: int) ->
 
 
 def session_packets(analysis: Analysis, session_id: int, offset: int = 0, limit: int = 100):
-    """Paquetes de una sesión, paginados -> (lista de PacketSummary, hay_más).
-
-    No guardamos los paquetes de cada sesión (la memoria crecería con el
-    archivo): releemos el pcap y nos quedamos con los de esa clave.
-    """
+    """Paquetes de una sesión, paginados -> (lista de PacketSummary, hay_más)."""
     _check_page_args(analysis, session_id, offset, limit)
     key = analysis.result.sessions[session_id].key
     out, seen, more = [], 0, False
@@ -134,10 +120,7 @@ def session_packets(analysis: Analysis, session_id: int, offset: int = 0, limit:
 
 
 def session_stream(analysis: Analysis, session_id: int) -> Stream:
-    """Conversación de una sesión TCP, reconstruida releyendo el archivo (como `session_packets`).
-
-    IndexError si la sesión no existe; ValueError si no es TCP (los otros protocolos no tienen "conversación").
-    """
+    """Conversación de una sesión TCP, reconstruida releyendo el archivo (como `session_packets`)."""
     if isinstance(session_id, bool) or not isinstance(session_id, int) or not 0 <= session_id < len(analysis.result.sessions):
         raise IndexError(f"la sesión {session_id!r} no existe")
     session = analysis.result.sessions[session_id]

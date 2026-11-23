@@ -1,6 +1,4 @@
-// Textos de ayuda en lenguaje simple. Cada tema explica QUÉ es lo que se ve, CÓMO leerlo y, cuando existe,
-// y, cuando hace falta, CÓMO se relaciona con otras herramientas: el objetivo de Tracewell es que esto deje de dar miedo.
-// Todo es texto plano (se muestra como texto, nunca como HTML).
+// Textos de ayuda en lenguaje simple
 
 export const HELP = {
   riesgo: {

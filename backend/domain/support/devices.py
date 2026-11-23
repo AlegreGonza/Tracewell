@@ -1,8 +1,4 @@
-"""Dispositivos de la red local: quién está, su MAC, la marca (por la MAC) y su nombre.
-
-Dos fuentes: la tabla ARP del equipo (lo que ya conoce) y, si se pide, un barrido de pings por la subred para que
-conteste todo el que esté encendido. Solo MIRA: un ping por equipo, nada más.
-"""
+"""Dispositivos de la red local: quién está, su MAC, la marca (por la MAC) y su nombre."""
 from __future__ import annotations
 
 import csv
@@ -14,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .common import IS_LINUX, IS_WINDOWS, run
-from .netinfo import default_gateway, network_config
+from .netinfo import active_ipv4, default_gateway, network_config
 
 OUI_FILE = Path(__file__).resolve().parents[3] / "data" / "oui.csv"
 MAX_SWEEP_HOSTS = 1024  # no se barre nada más grande que un /22
@@ -32,26 +28,27 @@ def fmt_mac(mac: str) -> str:
 
 
 def is_random_mac(mac: str) -> bool:
-    """Bit «administrada localmente»: los teléfonos y PC modernos lo usan para una MAC privada que cambia por red."""
+    """Bit «administrada localmente»"""
     h = norm_mac(mac)
     return len(h) == 12 and bool(int(h[1], 16) & 0b10)
 
 
 def _load_oui() -> Dict[str, str]:
-    """Base de fabricantes (IEEE) desde `data/oui.csv`, si existe. Formato del registro de la IEEE:
-    Registry, Assignment (6 hex), Organization Name, Organization Address. Sin el archivo, no hay marcas."""
+    """Base de fabricantes (IEEE) desde `data/oui.csv`, si existe."""
     global _oui_cache
     if _oui_cache is None:
-        table: Dict[str, str] = {}
-        try:
-            with open(OUI_FILE, encoding="utf-8", errors="replace", newline="") as f:
-                for row in csv.reader(f):
-                    if len(row) >= 3 and re.fullmatch(r"[0-9A-Fa-f]{6}", row[1].strip()):
-                        table[row[1].strip().upper()] = row[2].strip()
-        except OSError:
-            pass
-        _oui_cache = table
+        _oui_cache = _read_oui()
     return _oui_cache
+
+
+def _read_oui() -> Dict[str, str]:
+    """Lee `oui.csv`; sin archivo devuelve una tabla vacía."""
+    try:
+        with open(OUI_FILE, encoding="utf-8", errors="replace", newline="") as f:
+            rows = [r for r in csv.reader(f) if len(r) >= 3]
+    except OSError:
+        return {}
+    return {r[1].strip().upper(): r[2].strip() for r in rows if re.fullmatch(r"[0-9A-Fa-f]{6}", r[1].strip())}
 
 
 def vendor_of(mac: str) -> Optional[str]:
@@ -65,41 +62,55 @@ def oui_available() -> bool:
 
 def arp_table() -> List[Dict[str, str]]:
     """Pares IP/MAC que el equipo ya conoce (vecinos de la red local), sin multicast ni difusión."""
-    entries: List[Dict[str, str]] = []
     if IS_WINDOWS:
-        res = run(["arp", "-a"], timeout=10)
-        for m in _ARP_LINE.finditer(res.out):
-            ip, mac, kind = m.groups()
-            mac_n = norm_mac(mac)
-            if mac_n == "f" * 12 or mac_n.startswith("01005e") or mac_n.startswith("3333"):
-                continue
-            entries.append({"ip": ip, "mac": fmt_mac(mac), "kind": "estático" if kind.lower().startswith(("est", "stat")) else "dinámico"})
-    elif IS_LINUX:
-        res = run(["ip", "neigh"], timeout=10)
-        for line in res.out.splitlines():
-            parts = line.split()
-            if "lladdr" in parts and parts[0].count(".") == 3:
-                entries.append({"ip": parts[0], "mac": fmt_mac(parts[parts.index("lladdr") + 1]), "kind": parts[-1].lower()})
-    return entries
+        return _arp_windows(run(["arp", "-a"], timeout=10).out)
+    if IS_LINUX:
+        return _arp_linux(run(["ip", "neigh"], timeout=10).out)
+    return []
+
+
+def _is_multicast_mac(mac_n: str) -> bool:
+    """Difusión o multicast: no son equipos."""
+    return mac_n == "f" * 12 or mac_n.startswith(("01005e", "3333"))
+
+
+def _arp_windows(text: str) -> List[Dict[str, str]]:
+    """Entradas de `arp -a`."""
+    rows = [m.groups() for m in _ARP_LINE.finditer(text)]
+    return [
+        {"ip": ip, "mac": fmt_mac(mac), "kind": "estático" if kind.lower().startswith(("est", "stat")) else "dinámico"}
+        for ip, mac, kind in rows if not _is_multicast_mac(norm_mac(mac))
+    ]
+
+
+def _arp_linux(text: str) -> List[Dict[str, str]]:
+    """Entradas de `ip neigh` que tienen MAC."""
+    rows = [ln.split() for ln in text.splitlines()]
+    return [
+        {"ip": p[0], "mac": fmt_mac(p[p.index("lladdr") + 1]), "kind": p[-1].lower()}
+        for p in rows if "lladdr" in p and p[0].count(".") == 3
+    ]
 
 
 def local_subnets(only_routed: bool = False) -> List[ipaddress.IPv4Network]:
-    """Subredes privadas del equipo. Con `only_routed`, solo las de adaptadores con puerta de enlace: la red real,
-    sin las virtuales de WSL, VirtualBox o Docker (que además harían el barrido eterno)."""
+    """Subredes privadas del equipo."""
     out: List[ipaddress.IPv4Network] = []
-    for a in network_config()["adapters"]:
-        if not a["up"] or a["loopback"] or a["apipa"] or (only_routed and not a["gateway"]):
-            continue
-        for v4 in a["ipv4"]:
-            try:
-                net = ipaddress.IPv4Network(f"{v4['ip']}/{v4['mask']}", strict=False)
-            except (ValueError, TypeError):
-                continue
-            if net.num_addresses > MAX_SWEEP_HOSTS:  # red grande: solo el /24 propio
-                net = ipaddress.IPv4Network(f"{v4['ip']}/24", strict=False)
-            if net not in out and net.is_private:
-                out.append(net)
+    for _a, v4 in active_ipv4(network_config(), need_gateway=only_routed):
+        net = _subnet_of(v4)
+        if net is not None and net not in out and net.is_private:
+            out.append(net)
     return out
+
+
+def _subnet_of(v4: Dict[str, Any]) -> Optional[ipaddress.IPv4Network]:
+    """Subred de una IPv4 con máscara; si es enorme, solo el /24 propio. None si los datos no sirven."""
+    try:
+        net = ipaddress.IPv4Network(f"{v4['ip']}/{v4['mask']}", strict=False)
+    except (ValueError, TypeError):
+        return None
+    if net.num_addresses > MAX_SWEEP_HOSTS:
+        return ipaddress.IPv4Network(f"{v4['ip']}/24", strict=False)
+    return net
 
 
 def _ping_once(ip: str) -> None:
@@ -108,7 +119,7 @@ def _ping_once(ip: str) -> None:
 
 
 def sweep(nets: List[ipaddress.IPv4Network]) -> int:
-    """Un ping a cada dirección de las subredes para que el sistema aprenda la MAC de quien conteste. Devuelve cuántas."""
+    """Un ping a cada dirección de las subredes para que el sistema aprenda la MAC de quien conteste."""
     hosts = [str(h) for n in nets for h in n.hosts()][:MAX_SWEEP_HOSTS]
     with ThreadPoolExecutor(max_workers=128) as pool:
         list(pool.map(_ping_once, hosts))
@@ -123,7 +134,7 @@ def _hostname(ip: str) -> Optional[str]:
 
 
 def _resolve_names(ips: List[str]) -> Dict[str, Optional[str]]:
-    """Nombres por DNS inverso en paralelo y con tope de tiempo: un equipo que no contesta no cuelga la pantalla."""
+    """Nombres por DNS inverso en paralelo y con tope de tiempo."""
     names: Dict[str, Optional[str]] = {ip: None for ip in ips}
     pool = ThreadPoolExecutor(max_workers=16)
     futures = {ip: pool.submit(_hostname, ip) for ip in ips}
@@ -152,13 +163,11 @@ def _device_dict(ip: str, mac: str, hostname: Optional[str], is_gateway: bool, i
 def _self_devices(config: Dict[str, Any], nets: List[ipaddress.IPv4Network], known_ips: set) -> List[Dict[str, Any]]:
     """El propio equipo no aparece en su tabla ARP: se agrega para que la lista esté completa."""
     out: List[Dict[str, Any]] = []
-    for a in config["adapters"]:
-        if not (a["up"] and not a["loopback"] and a["mac"] and not a["apipa"]):
+    for a, v4 in active_ipv4(config, need_mac=True):
+        if v4["ip"] in known_ips or not _in_nets(v4["ip"], nets):
             continue
-        for v4 in a["ipv4"]:
-            if v4["ip"] not in known_ips and _in_nets(v4["ip"], nets):
-                known_ips.add(v4["ip"])
-                out.append(_device_dict(v4["ip"], a["mac"], config["hostname"], False, True))
+        known_ips.add(v4["ip"])
+        out.append(_device_dict(v4["ip"], a["mac"], config["hostname"], False, True))
     return out
 
 

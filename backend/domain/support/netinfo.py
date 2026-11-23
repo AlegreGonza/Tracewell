@@ -1,4 +1,4 @@
-"""Configuración de red del equipo: adaptadores, IP, máscara, puerta de enlace, DNS y si la IP es automática (DHCP)."""
+"""Configuración de red del equipo."""
 from __future__ import annotations
 
 import ipaddress
@@ -48,13 +48,13 @@ def _extras_windows() -> Dict[str, Dict[str, Any]]:
 
 def _linux_gateways() -> Dict[str, str]:
     res = run(["ip", "-j", "route", "show", "default"], timeout=5)
-    out: Dict[str, str] = {}
     try:
-        for r in json.loads(res.out or "[]"):
-            if r.get("dev") and r.get("gateway"):
-                out.setdefault(r["dev"], r["gateway"])
+        routes = json.loads(res.out or "[]")
     except ValueError:
-        pass
+        return {}
+    out: Dict[str, str] = {}
+    for r in (r for r in routes if r.get("dev") and r.get("gateway")):
+        out.setdefault(r["dev"], r["gateway"])
     return out
 
 
@@ -72,8 +72,7 @@ _cache: Dict[str, Any] = {"at": 0.0, "value": None}
 
 
 def network_config(fresh: bool = False) -> Dict[str, Any]:
-    """Configuración de red, con una caché de unos segundos: leerla llama a PowerShell (varios segundos) y una misma
-    pantalla la pide más de una vez. `fresh=True` fuerza una lectura nueva (el botón «Actualizar»)."""
+    """Configuración de red, con una caché de unos segundos."""
     with _cache_lock:
         if not fresh and _cache["value"] is not None and time.monotonic() - _cache["at"] < _CACHE_SECONDS:
             return _cache["value"]
@@ -83,8 +82,7 @@ def network_config(fresh: bool = False) -> Dict[str, Any]:
 
 
 def _read_config() -> Dict[str, Any]:
-    """Adaptadores con su configuración. Los datos de puerta de enlace y DNS salen de PowerShell (Windows) o de
-    `ip` y /etc/resolv.conf (Linux); si no se pueden leer, quedan vacíos y el resto igual se muestra."""
+    """Adaptadores con su configuración."""
     ps = psutil_or_raise()
     stats = safe(ps.net_if_stats, {}) or {}
     extras: Dict[str, Dict[str, Any]] = _extras_windows() if IS_WINDOWS else {}
@@ -117,8 +115,19 @@ def default_gateway(config: Optional[Dict[str, Any]] = None) -> Optional[str]:
     return None
 
 
+def active_ipv4(config: Dict[str, Any], *, need_mac: bool = False, need_gateway: bool = False):
+    """Pares (adaptador, IPv4) de los adaptadores activos."""
+    for a in config["adapters"]:
+        if not a["up"] or a["loopback"] or a["apipa"]:
+            continue
+        if (need_mac and not a["mac"]) or (need_gateway and not a["gateway"]):
+            continue
+        for v4 in a["ipv4"]:
+            yield a, v4
+
+
 def raw_config() -> Dict[str, Any]:
-    """La salida completa de `ipconfig /all` (Windows) o `ip addr` (Linux), tal cual, para quien quiera ver todo."""
+    """La salida completa de `ipconfig /all` (Windows) o `ip addr` (Linux), tal cual."""
     cmd = ["ipconfig", "/all"] if IS_WINDOWS else ["ip", "addr"]
     res = run(cmd, timeout=15)
     if res.missing:

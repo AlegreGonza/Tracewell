@@ -1,4 +1,4 @@
-"""Tests de backend/domain/analysis/tls.py: ClientHello/JA4, ServerHello, certificados X.509 y analyze_tls."""
+"""Tests de backend/domain/analysis/tls.py."""
 import hashlib
 import random
 import re
@@ -162,7 +162,7 @@ def test_client_hello_sin_bloque_de_extensiones():
 
 def test_client_hello_truncado_en_las_extensiones_es_incompleto():
     data = client_hello([0x1301], exts=[e_sni(), e_alpn(b"h2")])
-    # cortamos el registro justo dentro del bloque de extensiones y ajustamos el largo del registro
+    # cortamos el registro justo dentro del bloque de extensiones
     payload = data[5:-6]
     cut = record(payload)
     h = parse_client_hello(cut)
@@ -269,7 +269,6 @@ def test_ja4_chrome_completo_contra_la_referencia():
 
 
 def test_grease_se_ignora_en_cifrados_extensiones_y_versiones():
-    kinds = [0, 0x10, 0x0A, 0x2B]
     exts = [ext(0x0A0A), e_sni(), e_alpn(b"h2"), ext(0x0A, b"\x00\x02\x00\x1d"), e_versions(0x3A3A, 0x0304, 0x0303), ext(0xFAFA, b"x")]
     plain = ja4(parsed(client_hello([0x1301, 0x1302], [e for e in exts if e[:2] not in (b"\x0a\x0a", b"\xfa\xfa")])))
     greasy = ja4(parsed(client_hello([0x0A0A, 0x1301, 0x4A4A, 0x1302], exts)))

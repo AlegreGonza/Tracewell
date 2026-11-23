@@ -1,11 +1,4 @@
-"""Constructor de reglas: arma una regla por umbral a partir de los campos de un formulario.
-
-Lógica pura (sin FastAPI): valida el formulario, genera el YAML con el MISMO formato que las reglas
-de `rules/`, calcula la vista previa sobre una captura y guarda el archivo. La regla usa el detector
-`threshold` (extra_detectors.py): el analista elige filtros y umbral, no escribe código.
-
-Nunca modifica ni desactiva reglas existentes: guardar con un id o un archivo que ya existe falla.
-"""
+"""Constructor de reglas: arma una regla por umbral a partir de los campos de un formulario."""
 from __future__ import annotations
 
 import re
@@ -22,8 +15,8 @@ from backend.domain.rules.engine import SEVERITIES, Rule, RuleError, _parse_rule
 from backend.domain.rules.extra_detectors import _in_network
 from backend.domain.sessions.grouper import ETHERNET
 
-ID_RE = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
-# Nombres de dispositivo de Windows: un archivo con ese nombre (con.yaml, nul.yaml...) es problemático.
+ID_RE = re.compile(r"[a-z][a-z0-9_]{2,39}")  # con fullmatch: un `$` final aceptaría un salto de línea
+# Nombres de dispositivo de Windows
 RESERVED_IDS = frozenset({"con", "prn", "aux", "nul"}
                          | {f"com{i}" for i in range(1, 10)} | {f"lpt{i}" for i in range(1, 10)})
 MAX_NAME, MAX_DESCRIPTION = 80, 500
@@ -63,18 +56,27 @@ def slugify(name: str) -> str:
     return slug[:40].rstrip("_")
 
 
+def _has_control_chars(text: str) -> bool:
+    """Hay NUL, saltos de línea u otros caracteres de la categoría C (control, formato)."""
+    return any(unicodedata.category(c).startswith("C") for c in text)
+
+
 def to_dict(form: RuleForm) -> Dict[str, Any]:
     """Diccionario de la regla (claves en el orden de las reglas del repo). Valida lo que el motor no ve."""
     name = (form.name or "").strip()
-    if not name or len(name) > MAX_NAME:
-        raise RuleError(f"el nombre es obligatorio y de hasta {MAX_NAME} caracteres")
+    if not name:
+        raise RuleError("el nombre es obligatorio")
+    if len(name) > MAX_NAME:
+        raise RuleError(f"el nombre admite hasta {MAX_NAME} caracteres")
+    if _has_control_chars(name):
+        raise RuleError("el nombre no puede tener caracteres de control")
     description = " ".join((form.description or "").split())
     if len(description) > MAX_DESCRIPTION:
         raise RuleError(f"la descripción admite hasta {MAX_DESCRIPTION} caracteres")
-    rule_id = (form.id or "").strip() or slugify(name)
+    rule_id = (form.id or "").strip(" ") or slugify(name)  # un salto de línea en el id se rechaza
     if rule_id in RESERVED_IDS:
         raise RuleError(f"el id {rule_id!r} es un nombre reservado del sistema; elige otro")
-    if not ID_RE.match(rule_id):
+    if not ID_RE.fullmatch(rule_id):
         raise RuleError("el id debe empezar con una letra minúscula y tener 3 a 40 letras minúsculas, números o _")
     if form.severity not in SEVERITIES:
         raise RuleError(f"la severidad debe ser una de {list(SEVERITIES)}")
@@ -138,8 +140,7 @@ def _session_matches(s, params: Dict[str, Any]) -> bool:
 
 
 def preview(rule: Rule, packets: Iterable[Packet], sessions: Iterable, linktype: int = ETHERNET) -> Dict[str, Any]:
-    """Qué pasaría con la captura actual: sesiones que cumplen el filtro y alertas que daría el umbral.
-    No guarda nada y no toca las alertas del análisis actual."""
+    """Qué pasaría con la captura actual: sesiones que cumplen el filtro y alertas que daría el umbral."""
     alerts = evaluate([rule], packets, linktype)
     return {
         "sessions": sum(1 for s in sessions if _session_matches(s, rule.params)),

@@ -1,11 +1,4 @@
-"""Quién es una IP, SIN salir a internet: un rol (tu red, multicast, servidor público…) y, para unos pocos
-proveedores grandes, el dueño del rango.
-
-La tabla de dueños es CHICA y a propósito conservadora: solo rangos que pertenecen a una empresa conocida.
-Es una pista, no una prueba: una IP de Amazon o de Microsoft puede estar alquilada a cualquiera (la nube se
-alquila), y los rangos cambian con el tiempo. Por eso la pantalla lo muestra como «rango de …», nunca como
-un hecho, y un nombre sacado de la propia captura (DNS o TLS) siempre le gana.
-"""
+"""Quién es una IP, SIN salir a internet."""
 from __future__ import annotations
 
 import ipaddress

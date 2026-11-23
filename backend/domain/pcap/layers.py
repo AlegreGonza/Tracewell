@@ -1,13 +1,4 @@
-"""Decodifica un paquete capa por capa, con el rango de bytes de cada campo.
-
-Sirve para el panel de detalle (como el de Wireshark): cada campo trae su valor
-legible, una pista en lenguaje simple y la posición `start:end` dentro del
-paquete, para resaltar esos bytes en el hex dump.
-
-Se decodifica a mano con `struct` (y no con dpkt) porque dpkt no informa en qué
-byte empieza cada campo. Un paquete cortado o raro NUNCA lanza: se muestra lo que
-se pueda leer y se marca la capa como incompleta.
-"""
+"""Decodifica un paquete capa por capa, con el rango de bytes de cada campo."""
 from __future__ import annotations
 
 import ipaddress
@@ -69,7 +60,7 @@ def _layer(name: str, start: int, end: int, fields: List[Field], note: Optional[
 
 
 def _truncated(name: str, start: int, data: bytes) -> Layer:
-    # start nunca pasa del final: el resaltado del hex dump depende de 0 <= start <= end <= largo.
+    # start nunca pasa del final
     return _layer(name, min(start, len(data)), len(data), [], "Capa incompleta: el paquete está cortado y no alcanza para leerla")
 
 
@@ -144,7 +135,7 @@ def _ipv4(d: bytes, p: int, layers: List[Layer]) -> Tuple[Optional[int], int]:
 
 
 def _ipv6_extensions(d: bytes, pos: int, nxt: int, fields: List[Field]) -> Tuple[Optional[int], int]:
-    """Salta cabeceras de extensión (salto a salto, enrutamiento, destino). (protocolo final o None, posición)."""
+    """Salta cabeceras de extensión (salto a salto, enrutamiento, destino)."""
     for _ in range(MAX_EXT_HEADERS):
         if nxt not in (0, 43, 60):
             return nxt, pos
@@ -153,7 +144,7 @@ def _ipv6_extensions(d: bytes, pos: int, nxt: int, fields: List[Field]) -> Tuple
         size = (d[pos + 1] + 1) * 8
         fields.append(_field("Cabecera de extensión", f"tipo {nxt}, {size} B", pos, min(pos + size, len(d))))
         nxt, pos = d[pos], pos + size
-        if pos > len(d):  # la extensión declara más bytes de los que hay: el paquete está cortado
+        if pos > len(d):  # la extensión declara más bytes de los que hay
             return None, len(d)
     return None, pos
 
@@ -289,10 +280,7 @@ _L4 = {6: _tcp, 17: _udp, 1: _icmp_like("ICMP", ICMP_TYPES), 58: _icmp_like("ICM
 
 
 def dissect(data: bytes) -> List[Layer]:
-    """Capas del paquete (Ethernet, IP, TCP/UDP/ICMP/ARP, datos) con el rango de bytes de cada campo.
-
-    Nunca lanza: ante cualquier problema devuelve las capas que pudo leer.
-    """
+    """Capas del paquete (Ethernet, IP, TCP/UDP/ICMP/ARP, datos) con el rango de bytes de cada campo."""
     layers: List[Layer] = []
     try:
         _walk(bytes(data), layers)

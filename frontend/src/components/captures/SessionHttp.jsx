@@ -3,7 +3,7 @@ import { api } from "../../api/client.js";
 import { formatBytes } from "../../lib/format.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Notas en lenguaje simple de un intercambio HTTP: lo que merece una mirada. Siempre texto.
+// Notas en lenguaje simple de un intercambio HTTP: lo que merece una mirada
 export function httpNotes(ex) {
   const notes = [];
   if (ex.sensitive_fields?.length) notes.push(`Envía un campo de contraseña SIN cifrar: ${ex.sensitive_fields.join(", ")}`);
@@ -35,7 +35,7 @@ export function FileCard({ file, href }) {
   );
 }
 
-// Peticiones y respuestas HTTP (sin cifrar) de UNA sesión, y los archivos que viajaron. No se muestra si no hay HTTP.
+// Peticiones y respuestas HTTP (sin cifrar) de UNA sesión, y los archivos que viajaron
 export default function SessionHttp({ session, onError }) {
   const [data, setData] = useState(null);
 

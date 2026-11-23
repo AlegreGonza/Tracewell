@@ -1,12 +1,4 @@
-"""Guarda un subconjunto de paquetes (una sesión, o lo que coincide con un filtro) como un .pcap nuevo.
-
-Sirve para llevarse SOLO la conversación que importa: abrirla en Wireshark o adjuntarla a un ticket
-sin arrastrar toda la captura. Los paquetes se copian tal cual; lo único que no se conserva es el
-"largo original" de un paquete recortado por snaplen (el formato que escribe dpkt no lo permite).
-
-Topes: en memoria se arma el archivo entero, así que se limita (`MAX_PACKETS`, `MAX_BYTES`); si se
-alcanza un tope el archivo sale COMPLETO HASTA AHÍ y se avisa (`truncated`), nunca en silencio.
-"""
+"""Guarda un subconjunto de paquetes (una sesión, o lo que coincide con un filtro) como un .pcap nuevo."""
 from __future__ import annotations
 
 import io
@@ -20,7 +12,7 @@ from backend.domain.pcap.reader import Packet
 MAX_PACKETS = 500_000
 MAX_BYTES = 100_000_000
 ETHERNET = 1
-_SNAPLEN = 262_144  # dpkt no recorta con este valor: es solo lo que se declara en la cabecera global
+_SNAPLEN = 262_144  # dpkt no recorta con este valor
 
 
 @dataclass(frozen=True)

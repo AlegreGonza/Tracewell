@@ -1,0 +1,14 @@
+# Finales de línea (política; detalle en docs/finales-de-linea.md)
+# text=auto: git decide qué es texto. Un archivo que YA tiene CRLF en el repo conserva CRLF (no se
+# renormaliza); los nuevos se guardan con LF y core.autocrlf del usuario decide el árbol de trabajo.
+* text=auto
+
+# Los scripts de shell tienen que ser LF siempre (un CR rompe el shebang en Linux).
+*.sh text eol=lf
+
+# Binarios: nunca se tocan.
+*.pcap binary
+*.pcapng binary
+*.png binary
+*.gif binary
+*.ico binary

@@ -1,4 +1,4 @@
-"""Garantía de SOLO LECTURA: ningún módulo de backend/domain/system (ni sus rutas) puede modificar el sistema."""
+"""Garantía de SOLO LECTURA."""
 import re
 from pathlib import Path
 
@@ -18,7 +18,7 @@ WRITE_OPEN = re.compile(r"open\([^)]*['\"][wa+x]b?['\"]")
 
 
 def code_of(path: Path) -> str:
-    """Código sin comentarios ni cadenas de documentación (para no confundir texto explicativo con llamadas)."""
+    """Código sin comentarios ni cadenas de documentación."""
     src = path.read_text(encoding="utf-8")
     src = re.sub(r'""".*?"""', "", src, flags=re.S)
     return "\n".join(line.split("#", 1)[0] for line in src.splitlines())
@@ -88,5 +88,5 @@ def test_corriendo_todo_con_un_psutil_que_explota_si_se_modifica(monkeypatch):
     net.listening_ports()
     net.connections()
     autostart.services()
-    # (si alguno hubiera llamado a kill/terminate/etc., FakeProcess/FakePsutil habrían lanzado AssertionError)
+    # 
     assert not {"kill", "terminate", "suspend", "resume", "nice"} & set(p.calls)

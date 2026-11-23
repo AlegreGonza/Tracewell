@@ -1,16 +1,15 @@
-"""Controlador de «analysis»: la lógica que las rutas HTTP de `api/routes/analysis.py` delegan (sin FastAPI de por medio
-cuando se puede). Las rutas solo traducen HTTP <-> estas funciones."""
+"""Controlador de «analysis»"""
 from __future__ import annotations
 
-from backend.controllers.state import VERSION, Ctx, CtxDep, _session_id, clear_analysis, current, set_analysis, summary
-from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
+from backend.controllers.state import Ctx, _session_id, set_analysis
+from backend.domain.analysis.analyzer import Analysis
 from backend.domain.analysis.direction import session_direction
 from backend.domain.analysis.wireshark_filter import alert_filter
-from backend.domain.export.json_export import build_report, session_to_dict, to_json
+from backend.domain.export.json_export import session_to_dict
 from dataclasses import asdict
 from fastapi.responses import Response
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
 
 def _analyze_path(ctx: Ctx, path: Path) -> dict:
@@ -37,13 +36,12 @@ def _process_of(ctx: Ctx, s) -> Optional[dict]:
 
 
 def _session_item(ctx: Ctx, a: Analysis, s) -> dict:
-    """Sesión serializada. La clave `process` solo existe si hay datos de procesos
-    (captura en vivo): su ausencia significa "no aplica", y `null`, "no identificado"."""
+    """Sesión serializada."""
     item = session_to_dict(_session_id(a, s), s)
     item["direction"] = session_direction(s)  # clave EXTRA de la API: el JSON exportado no la lleva
     if ctx.state.processes is not None:
         item["process"] = _process_of(ctx, s)
-    host = a.names.best_name(s)  # nombre del sitio (SNI o DNS de la propia captura); ausente si no se conoce
+    host = a.names.best_name(s)  # nombre del sitio (SNI o DNS de la propia captura)
     if host:
         item["host"] = host
     _add_triage(ctx, a, s, item)
@@ -79,8 +77,7 @@ def _rule_guide(rule) -> dict:
 
 
 def _alert_item(alert, rules=()) -> dict:
-    """Alerta serializada para la API. `wireshark_filter` y `guide` son claves EXTRA (no están en el JSON
-    exportado). El filtro se omite si las IP de la alerta no son válidas, en vez de romper la lista entera."""
+    """Alerta serializada para la API."""
     item = asdict(alert)
     rule = next((r for r in rules if r.id == alert.rule_id), None)
     guide = _rule_guide(rule) if rule is not None else {}

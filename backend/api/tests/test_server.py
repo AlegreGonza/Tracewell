@@ -1,8 +1,8 @@
-"""Servidor local en hilo (backend/api/server.py): puerto, loopback, ciclo de vida y errores de arranque."""
+"""Servidor local en hilo (backend/api/server.py)."""
 import socket
 import threading
 
-import httpx
+import httpx2 as httpx
 import pytest
 import uvicorn
 from fastapi import FastAPI

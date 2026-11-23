@@ -1,7 +1,4 @@
-"""Rutas de "entender la captura": equipos y grafo, tabla de DNS, explicación de una sesión, HTTP y archivos.
-
-Son vistas de LECTURA sobre el análisis actual; el cálculo vive en `core`.
-"""
+"""Rutas de "entender la captura"."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -70,8 +67,7 @@ def case_timeline(
     host: Optional[str] = Query(None, max_length=64),
     limit: int = Query(500, ge=1, le=2000),
 ):
-    """Alertas, DNS sospechoso, sesiones marcadas e IOC en orden cronológico (opcional: solo los de una IP).
-    Es una vista NUEVA: no reemplaza a `/api/timeline` (paquetes por intervalo)."""
+    """Alertas, DNS sospechoso, sesiones marcadas e IOC en orden cronológico (opcional: solo los de una IP)."""
     return _case_timeline(ctx, host, limit)
 
 
@@ -117,7 +113,7 @@ def http_of_session(session_id: int, ctx: CtxDep):
 
 @router.get("/sessions/{session_id}/http/{index}/body")
 def http_file(session_id: int, index: int, ctx: CtxDep):
-    """Descarga el cuerpo (archivo) de un intercambio HTTP como `.bin`. Son datos de la red: pueden ser malware."""
+    """Descarga el cuerpo (archivo) de un intercambio HTTP como `.bin`."""
     a, s = _session(ctx, session_id, tcp_only=True)
     raw = raw_directions(s, packets_of_sessions(a, [s]))
     found = http_body(raw.origin, raw.destination, index)
@@ -132,11 +128,11 @@ def http_file(session_id: int, index: int, ctx: CtxDep):
 
 @router.get("/sessions/{session_id}/tls")
 def tls_of_session(session_id: int, ctx: CtxDep):
-    """Lo que se sabe de una sesión TLS sin descifrarla: huella JA4, versión y certificado (si va en claro)."""
+    """Lo que se sabe de una sesión TLS sin descifrarla."""
     a, s = _session(ctx, session_id, tcp_only=True)
     raw = raw_directions(s, packets_of_sessions(a, [s]))
     client, server = raw.origin, raw.destination
-    # El «origen» puede estar invertido (captura iniciada a mitad): el cliente es quien manda el ClientHello.
+    # El «origen» puede estar invertido (captura iniciada a mitad)
     if parse_client_hello(server) is not None and parse_client_hello(client) is None:
         client, server = server, client
     result = analyze_tls(client, server, when=s.first_ts)

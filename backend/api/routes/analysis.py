@@ -1,7 +1,4 @@
-"""Rutas de análisis: cargar una captura y consultarla (sesiones, alertas, paquetes, export).
-
-Cada ruta solo traduce HTTP <-> `core`; el estado y las dependencias llegan por `Ctx`.
-"""
+"""Rutas de análisis: cargar una captura y consultarla (sesiones, alertas, paquetes, export)."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -15,6 +12,7 @@ from pydantic import BaseModel, Field
 from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
 from backend.domain.export.json_export import build_report, to_json
 from backend.domain.export.pcap_export import build_pcap
+from backend.domain.files import require_regular_file
 from backend.domain.rules.engine import SEVERITIES
 from backend.domain.sessions.query import compute_stats, filter_sessions
 
@@ -88,12 +86,7 @@ def health():
 
 @router.post("/analyze")
 def analyze_file(req: AnalyzeRequest, ctx: CtxDep):
-    path = Path(req.path).expanduser()
-    if not path.exists():
-        raise FileNotFoundError("el archivo no existe")
-    if path.is_dir():
-        raise IsADirectoryError("la ruta es una carpeta, no un archivo .pcap/.pcapng")
-    return _analyze_path(ctx, path)
+    return _analyze_path(ctx, require_regular_file(req.path, "archivo .pcap/.pcapng"))
 
 
 @router.post("/demo")
@@ -111,7 +104,7 @@ def capture(ctx: CtxDep):
 
 @router.delete("/capture")
 def close_capture(ctx: CtxDep):
-    """Descarta el análisis actual (volver a la pantalla de inicio). Es idempotente: sin análisis tampoco falla."""
+    """Descarta el análisis actual (volver a la pantalla de inicio)."""
     clear_analysis(ctx)
     return {"cleared": True}
 
@@ -210,7 +203,7 @@ def pcap_filtered(ctx: CtxDep, filters: FiltersDep):
 def export(
     ctx: CtxDep,
     filters: FiltersDep,
-    # Por defecto el reporte NO lleva procesos: se comparte, y los nombres de programas son datos del equipo.
+    # Por defecto el reporte NO lleva procesos
     processes: bool = Query(False, description="incluir el proceso de cada sesión (solo captura en vivo)"),
 ):
     a = current(ctx)

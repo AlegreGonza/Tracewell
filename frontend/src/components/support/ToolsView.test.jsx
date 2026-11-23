@@ -53,7 +53,7 @@ describe("ToolsView: ping", () => {
   });
 
   describe("ping continuo (timers falsos)", () => {
-    // Con timers falsos, userEvent necesita advanceTimers; se usa fireEvent para evitar enredos.
+    // Con timers falsos, userEvent necesita advanceTimers
     const start = async () => {
       render(<ToolsView />);
       const t = tool("Ping");

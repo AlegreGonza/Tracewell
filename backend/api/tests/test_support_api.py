@@ -1,4 +1,4 @@
-"""API de «Soporte de red → Red»: solo lectura; las funciones que salen a la red o a comandos se reemplazan por falsos."""
+"""API de «Soporte de red → Red»"""
 import pytest
 from fastapi.testclient import TestClient
 
@@ -73,7 +73,7 @@ def test_valores_invalidos_422(client, fake, path):
 
 
 def test_validacion_del_core_es_422(client, monkeypatch):
-    """Sin falsos: valid_host / servidor de hora no permitido salen como 422 con el motivo, y sin tocar la red."""
+    """Sin falsos: valid_host / servidor de hora no permitido salen como 422 con el motivo, y."""
     r = client.get("/api/support/ping", params={"host": "a;b"})
     assert r.status_code == 422 and "válido" in r.json()["detail"]
     for bad in ("a|b", "-n", "a$b", "a b"):
@@ -97,7 +97,7 @@ def test_monitor_post(client, fake):
 
 @pytest.mark.parametrize("p", ["start", "stop", "clear"])
 def test_monitor_get_a_post_es_405(fake, p):
-    # app mínima solo con el router: la app completa monta el frontend en «/» y esa montura tapa el 405 con un 404
+    # app mínima solo con el router
     from fastapi import FastAPI
     mini = FastAPI()
     mini.include_router(RS.router)

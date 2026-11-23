@@ -1,13 +1,4 @@
-"""Acceso remoto: quién se conecta a SSH, Telnet, SMB, RDP, WinRM o VNC, y cómo le fue.
-
-Agrupa por servicio las sesiones TCP cuyo puerto de servicio es uno de la tabla. Es la lista que un analista
-revisa primero ante un posible movimiento lateral o fuerza bruta: ¿quién entra a quién, cuántas veces
-reintentó y cuántas conexiones se cortaron con RST?
-
-Las señales salen solo de las banderas TCP que cuenta el agrupador (`syn_packets`, `rst_packets`) y son
-pistas: un RST puede ser un puerto cerrado, un firewall o un corte normal de la aplicación; varios SYN
-seguidos pueden ser un reintento por pérdida de paquetes y no un ataque.
-"""
+"""Acceso remoto: quién se conecta a SSH, Telnet, SMB, RDP, WinRM o VNC, y cómo le fue."""
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -19,7 +10,7 @@ REMOTE_PORTS: Dict[int, str] = {
     22: "SSH", 23: "Telnet", 445: "SMB", 3389: "RDP", 5985: "WinRM", 5986: "WinRM", 5900: "VNC",
 }
 SERVICES: Tuple[str, ...] = ("SSH", "Telnet", "SMB", "RDP", "WinRM", "VNC")  # orden de presentación
-MAX_ITEMS = 200  # sesiones que se detallan por servicio (el resumen cuenta todas)
+MAX_ITEMS = 200  # sesiones que se detallan por servicio
 _CLEARTEXT = {"Telnet": "Telnet viaja sin cifrar: usuario y contraseña se ven en la red."}
 
 
@@ -28,7 +19,7 @@ class UnknownService(ValueError):
 
 
 def normalize_service(name: Optional[str]) -> Optional[str]:
-    """Nombre canónico del servicio (sin distinguir mayúsculas), None si no se pidió; UnknownService si no existe."""
+    """Nombre canónico del servicio (sin distinguir mayúsculas), None si no se pidió."""
     if name is None:
         return None
     if isinstance(name, str):
@@ -39,8 +30,7 @@ def normalize_service(name: Optional[str]) -> Optional[str]:
 
 
 def service_of(session: Any) -> Optional[Tuple[str, int]]:
-    """(servicio, puerto) si la sesión es TCP a un puerto de acceso remoto, o None. El puerto de servicio es el del
-    destino y, si la captura empezó a mitad de la conversación (origen invertido), el del origen."""
+    """(servicio, puerto) si la sesión es TCP a un puerto de acceso remoto, o None."""
     if session.protocol != "TCP":
         return None
     for port in (session.dst_port, session.src_port):
@@ -94,8 +84,7 @@ def _group(service: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def remote_access(sessions: Iterable[Any], service: Optional[str] = None) -> Dict[str, Any]:
-    """Sesiones de acceso remoto agrupadas por servicio. El `id` de cada una es su posición en `sessions`
-    (el mismo id que usa el resto de la API). `service` limita a un servicio (UnknownService si no existe)."""
+    """Sesiones de acceso remoto agrupadas por servicio."""
     wanted = normalize_service(service)
     by_service: Dict[str, List[Dict[str, Any]]] = {}
     for index, session in enumerate(sessions):

@@ -1,4 +1,4 @@
-"""Tests de backend/domain/system/autostart.py (servicios y programas de inicio): todo con fakes, nada del sistema real."""
+"""Tests de backend/domain/system/autostart.py (servicios y programas de inicio)."""
 import json
 import subprocess
 import sys
@@ -386,9 +386,9 @@ def test_inicio_windows_carpetas_inicio(win_start, tmp_path):
 
 def test_inicio_windows_nunca_escribe_en_el_registro(win_start):
     mod = win_start({("HKCU", RUN): [("a", "x.exe")], ("HKLM", RUN): [("b", "y.exe")]})
-    startup_items()  # si llamara a SetValue/CreateKey/Delete* el fake lanza AssertionError
+    startup_items()  # si llamara a SetValue/CreateKey/Delete* el fake lanza
     assert {c[0] for c in mod.calls} == {"OpenKey"}
-    for c in mod.calls:  # y la apertura es la de lectura por defecto (sin pedir KEY_WRITE / KEY_SET_VALUE)
+    for c in mod.calls:  # y la apertura es la de lectura por defecto
         assert c[3] == () and c[4] == {}
 
 

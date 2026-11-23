@@ -10,7 +10,7 @@ import pytest
 
 from backend.domain.pcap import live
 from backend.domain.pcap.hexdump import _hex_line
-from backend.domain.pcap.live import CaptureError, CaptureSummary, LiveCapture, _check_limit, _resolve_out_path
+from backend.domain.pcap.live import CaptureSummary, LiveCapture, _check_limit, _resolve_out_path
 from backend.domain.pcap.reader import (
     PcapError, _PCAP_ENDIAN, _PCAPNG_MAGIC, _BlockTap, _TapFile, _make_reader, _raise_if_truncated, _read_magic,
 )

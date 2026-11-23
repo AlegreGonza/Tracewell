@@ -127,7 +127,7 @@ describe("Timeline", () => {
     show();
     const img = await screen.findByRole("img");
     expect(values()).toEqual([0, 0, 0]);
-    expect(peaks()).toEqual([true, true, true]); // getBarColor compara por valor: todos coinciden con el pico (0)
+    expect(peaks()).toEqual([true, true, true]); // getBarColor compara por valor
     expect(JSON.stringify(chart.props.data)).not.toMatch(/NaN/);
     expect(img.getAttribute("aria-label")).not.toMatch(/NaN/);
     expect(img.getAttribute("aria-label")).toContain("Pico de 0 paquetes a las 22:13:20.000 UTC");
@@ -180,7 +180,7 @@ describe("Timeline", () => {
     api.timeline.mockResolvedValue(data({ packets: [1, 1] }));
     rerender(<Timeline refreshKey={1} onError={onError} />);
     await waitFor(() => expect(chart.props?.data).toHaveLength(2));
-    resolveOld(data({ packets: [1, 2, 3, 4] })); // el fetch real lo rechazaría con AbortError; aquí solo no debe romper
+    resolveOld(data({ packets: [1, 2, 3, 4] })); // el fetch real lo rechazaría con AbortError
     await new Promise((r) => setTimeout(r, 0));
     expect(onError).not.toHaveBeenCalled();
   });

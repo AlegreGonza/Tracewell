@@ -8,10 +8,9 @@ const H = 620;
 const CX = W / 2;
 const CY = H / 2;
 const NODE_R = 18;
-const RING_CAP = 24; // equipos por anillo; si hay más, siguen en un segundo anillo más grande
+const RING_CAP = 24; // equipos por anillo
 
-// Forma de cada nodo según su rol: círculo = equipo de tu red, cuadrado = multicast, rombo = servidor en internet,
-// hexágono = proveedor conocido. Así el tipo se ve sin depender solo del color.
+// Forma de cada nodo según su rol
 const SHAPE_OF = { red_local: "circle", ipv6_local: "circle", multicast: "square", publica: "diamond", nube: "hexagon" };
 function NodeShape({ kind }) {
   const r = NODE_R;
@@ -29,13 +28,12 @@ const place = (i, n, rx, ry, offset = 0) => {
   return { x: CX + rx * cos, y: CY + ry * Math.sin(angle), cos, anchor: Math.abs(cos) < 0.2 ? "middle" : cos > 0 ? "start" : "end" };
 };
 
-// Disposición «telaraña»: tu red en el centro y el resto en anillos alrededor. El tamaño del dibujo NO depende de
-// cuántos equipos haya (antes, en dos columnas, cada fila nueva achicaba todo).
+// Disposición «telaraña»: tu red en el centro y el resto en anillos alrededor
 export function layoutGraph(nodes) {
   const inner = nodes.filter((n) => n.kind === "interna");
   const outer = nodes.filter((n) => n.kind !== "interna");
   const pos = {};
-  // Tu red: 1 equipo va al centro; si hay más, en hasta tres anillos chicos (10 + 20 + el resto) para que no se pisen.
+  // Tu red: 1 equipo va al centro
   if (inner.length === 1) pos[inner[0].ip] = { x: CX, y: CY, cos: 0, anchor: "middle", ring: 0 };
   else {
     const tiers = [[10, 100, 70], [20, 175, 125], [Infinity, 260, 185]];
@@ -55,8 +53,7 @@ export function layoutGraph(nodes) {
   return { pos, width: W, height: H, rings: second.length > 0 ? 2 : outer.length > 0 ? 1 : 0 };
 }
 
-// Qué se muestra como nombre de un equipo y de dónde sale: lo de la captura (DNS/TLS) manda; si no hay, el dueño
-// del rango (tabla local, es una pista) o qué es la dirección especial; si no, la IP.
+// Qué se muestra como nombre de un equipo y de dónde sale
 export function nodeLabel(n) {
   if (n.name) return { text: n.name, source: "captura" };
   if (n.owner) return { text: `${n.owner} · ${n.ip}`, source: "rango" };
@@ -70,7 +67,7 @@ const SOURCE_NOTE = {
   especial: "Dirección especial de la red",
 };
 
-// Dibujitos de 24×24 por tipo de equipo. Son formas fijas: nunca se arma nada con datos de la captura.
+// Dibujitos de 24×24 por tipo de equipo
 const ICONS = {
   // computadora de escritorio: torre + pantalla
   red_local: <><rect x="2.5" y="6" width="6" height="14" rx="1" /><path d="M4 9.5h3M5.5 17h.01" /><rect x="10" y="4" width="12" height="9" rx="1" /><path d="M16 13v3.5M12.5 17.5h7" /></>,
@@ -99,8 +96,7 @@ const Icon = ({ name, x = 0, y = 0 }) => (
 
 const short = (text, n = 30) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
-// «Equipos»: una fila por IP y un grafo de quién habla con quién (la red local a la izquierda, internet a la derecha).
-// Todo se dibuja como texto/SVG a partir de números y nombres de la captura: nunca como HTML.
+// «Equipos»: una fila por IP y un grafo de quién habla con quién
 export default function HostsView({ refreshKey, onError, onFilterIp }) {
   const [hosts, setHosts] = useState(null);
   const [graph, setGraph] = useState(null);
@@ -117,7 +113,7 @@ export default function HostsView({ refreshKey, onError, onFilterIp }) {
     return () => ctl.abort();
   }, [refreshKey, onError]);
 
-  // El hover cambia a cada pasada del ratón: el dibujo y los vecinos no se recalculan salvo que cambie el grafo/el equipo.
+  // El hover cambia a cada pasada del ratón
   const layout = useMemo(() => {
     if (!graph) return null;
     return { ...layoutGraph(graph.nodes), maxBytes: Math.max(...graph.edges.map((e) => e.bytes), 1) };
@@ -255,7 +251,7 @@ export default function HostsView({ refreshKey, onError, onFilterIp }) {
                   </td>
                   <td>
                     {h.role_label || KIND_LABEL[h.kind] || h.kind}
-                    {/* Perfil: roles inferidos de lo observado en la captura (pistas, no una auditoría). */}
+                    {/* Perfil: roles inferidos de lo observado en la captura */}
                     {h.roles?.length > 0 && (
                       <ul className="host-roles" aria-label="Perfil del equipo">
                         {h.roles.map((r) => (

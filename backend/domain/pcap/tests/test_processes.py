@@ -1,4 +1,4 @@
-"""Tests de backend/domain/pcap/processes.py: todo con psutil y proveedor FALSOS (nada del sistema real)."""
+"""Tests de backend/domain/pcap/processes.py."""
 import logging
 import socket
 import threading

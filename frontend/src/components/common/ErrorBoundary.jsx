@@ -1,10 +1,6 @@
 import { Component } from "react";
 
-// Un error al RENDERIZAR (un dato inesperado de la API, un bug) desmonta todo el
-// árbol de React y deja la pantalla en blanco. Un Error Boundary lo atrapa y
-// muestra un aviso. Tiene que ser una clase: React no ofrece equivalente con
-// hooks. No atrapa errores de eventos ni de código asíncrono: esos se manejan con
-// try/catch en cada handler. Ver react.dev/reference/react/Component
+// Un error al RENDERIZAR
 export default class ErrorBoundary extends Component {
   state = { failed: false };
 

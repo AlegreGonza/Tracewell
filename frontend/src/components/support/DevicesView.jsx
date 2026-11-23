@@ -3,8 +3,7 @@ import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 import { useAction } from "../../controllers/useAction.js";
 
-// «Dispositivos de la red»: quién está en tu red local. Al abrir muestra lo que tu PC ya conoce (tabla ARP);
-// «Buscar en la red» manda un ping a cada dirección para que contesten todos los encendidos.
+// «Dispositivos de la red»: quién está en tu red local
 export default function DevicesView() {
   const list = useAction((scan, s) => api.supportDevices(scan, s));
   const { run } = list;

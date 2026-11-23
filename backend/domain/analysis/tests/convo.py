@@ -18,7 +18,7 @@ def frame(src, sport, dst, dport, seq, flags, data=b"", ack=0):
 
 def conversation(c_ip="10.0.0.1", cport=40000, s_ip="93.184.216.34", sport=80, turns=(), handshake=True, close="fin",
                  c_isn=1000, s_isn=5000, mss=1200, t0=1.0):
-    """turns: [('c'|'s', bytes), ...] en orden. Devuelve [bytes de frame]. Los datos se parten en segmentos de `mss`."""
+    """turns: [('c'|'s', bytes), ...] en orden."""
     frames = []
     c_seq, s_seq = c_isn, s_isn
     if handshake:

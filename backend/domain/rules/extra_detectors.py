@@ -1,13 +1,4 @@
-"""Detectores adicionales: beaconing, inundación SYN, puertos sospechosos, DNS a un
-resolvedor no habitual subidas grandes de datos, fuerza bruta y la regla personalizada por umbral.
-
-Mismas reglas que el resto: la REGLA es un YAML (umbral, severidad, MITRE) y el
-DETECTOR es código chico. Cada detector guarda estado acotado (`_LRU`): un atacante
-no puede hacer crecer la memoria con millones de pares distintos.
-
-Registro: `engine.py` importa este módulo al final y suma `DETECTORS`; si alguien lo
-importa primero, se registra solo al terminar de cargarse (ver el final del archivo).
-"""
+"""Detectores adicionales."""
 from __future__ import annotations
 
 import ipaddress
@@ -20,7 +11,7 @@ from backend.domain.rules.engine import (
     Decoded, Detector, DnsSuspiciousDetector, _int_range, _LRU, _num_range, _port_list, is_pure_syn,
 )
 
-# Puertos de servicios que hablan a intervalos regulares de forma normal (DNS, NTP, mDNS, NetBIOS, SSDP, DHCP).
+# Puertos de servicios que hablan a intervalos regulares de forma normal
 _REGULAR_PORTS = [53, 123, 5353, 137, 138, 1900, 67, 68]
 # Resolvedores públicos conocidos: consultar DNS directamente a ellos no es raro.
 _PUBLIC_RESOLVERS = [
@@ -76,13 +67,7 @@ def _is_external(ip_text: str) -> bool:
 # ------------------------------------------------------------------ beaconing
 
 class BeaconingDetector(Detector):
-    """Conexiones (o datagramas) hacia un mismo destino a intervalos MUY regulares.
-
-    Un malware que "llama a casa" suele hacerlo cada N segundos con poca variación.
-    Se cuentan los intentos de conexión TCP (SYN) y los datagramas UDP; un humano o una
-    app normal navegan de forma irregular. Se ignoran intervalos cortos (`min_interval_seconds`):
-    un keep-alive de 1 segundo no es un beacon.
-    """
+    """Conexiones (o datagramas) hacia un mismo destino a intervalos MUY regulares."""
 
     PARAMS = {
         "min_events": (_int_range(4, 1000), 8),
@@ -177,8 +162,7 @@ class SuspiciousPortsDetector(Detector):
         self._alerted = _LRU()
 
     def feed(self, d):
-        # Solo el SYN que inicia la conexión: las respuestas del servidor van al puerto efímero del
-        # cliente, que podría coincidir por casualidad con uno de la lista.
+        # Solo el SYN que inicia la conexión
         if not is_pure_syn(d) or d.dport not in self.p["ports"]:
             return []
         key = (d.src, d.dst, d.dport)
@@ -191,11 +175,7 @@ class SuspiciousPortsDetector(Detector):
 # ------------------------------------------------------ DNS a resolvedor raro
 
 class DnsUnusualResolverDetector(Detector):
-    """Consultas DNS enviadas directo a un servidor público que no está en la lista de conocidos.
-
-    Un malware puede saltarse el resolvedor de la red y consultar su propio servidor. Los
-    destinos privados (el router, el DNS de la empresa) se consideran normales.
-    """
+    """Consultas DNS enviadas directo a un servidor público que no está en la lista de conocidos."""
 
     PARAMS = {"allowed_resolvers": (_ip_list, _PUBLIC_RESOLVERS)}
 
@@ -257,12 +237,7 @@ class LargeUploadDetector(Detector):
 # --------------------------------------------------------------- fuerza bruta
 
 class BruteForceDetector(Detector):
-    """Muchos intentos de conexión de una misma IP a SSH (22) o RDP (3389) en poco tiempo.
-
-    Cada intento de iniciar sesión abre una conexión nueva: se cuentan los SYN puros de un origen hacia
-    un mismo destino y puerto. Un usuario normal abre pocas; un programa que prueba contraseñas, decenas.
-    Es una pista: no mira si el inicio de sesión falló (el tráfico va cifrado).
-    """
+    """Muchos intentos de conexión de una misma IP a SSH (22) o RDP (3389) en poco tiempo."""
 
     PARAMS = {
         "min_attempts": (_int_range(3, 100_000), 10),
@@ -272,7 +247,7 @@ class BruteForceDetector(Detector):
 
     def __init__(self, rule):
         super().__init__(rule)
-        self._seen = _LRU()  # (origen, destino, puerto) -> instantes de los últimos intentos
+        self._seen = _LRU()  # (origen, destino, puerto) -> instantes de los últimos
         self._alerted = _LRU()
 
     def feed(self, d):
@@ -331,12 +306,7 @@ def _in_network(ip_text: str, network: str) -> bool:
 
 
 class ThresholdDetector(Detector):
-    """Regla creada por el analista: N eventos que cumplen un filtro en una ventana de tiempo.
-
-    Filtro: protocolo, red/IP de origen, red/IP de destino y puerto de destino (todo opcional).
-    En TCP se cuentan los intentos de conexión (SYN puros); en UDP y `any`, cada paquete.
-    Se cuenta por par origen -> destino y se alerta una vez por par.
-    """
+    """Regla creada por el analista: N eventos que cumplen un filtro en una ventana de tiempo."""
 
     PARAMS = {
         "protocol": (_protocol, "any"),
@@ -394,6 +364,5 @@ DETECTORS: Dict[str, Type[Detector]] = {
     "threshold": ThresholdDetector,
 }
 
-# Si este módulo se importó ANTES que engine, engine ya terminó de cargarse y no vio DETECTORS:
-# se registran aquí. (Si engine se importó primero, ya lo hizo él y esto es inocuo.)
+# Si este módulo se importó ANTES que engine, engine ya terminó de cargarse
 _engine.DETECTORS.update(DETECTORS)

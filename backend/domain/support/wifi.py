@@ -1,8 +1,4 @@
-"""Wi-Fi: estado de la conexión actual (señal, canal, velocidad) e historial de conexiones y desconexiones.
-
-Solo LEE. En Windows usa `netsh wlan show interfaces` (cuyo texto cambia de idioma: se reconocen los nombres en
-español e inglés y, si nada coincide, se muestra la salida cruda) y el registro de eventos de WLAN-AutoConfig.
-"""
+"""Wi-Fi: estado de la conexión actual (señal, canal, velocidad) e historial de conexiones."""
 from __future__ import annotations
 
 import re
@@ -33,7 +29,7 @@ def quality(signal: Optional[int]) -> Optional[str]:
 
 
 def parse_netsh(text: str) -> Optional[Dict[str, Any]]:
-    """Convierte la salida de `netsh wlan show interfaces` en un diccionario; None si no hay un adaptador Wi-Fi."""
+    """Convierte la salida de `netsh wlan show interfaces` en un diccionario."""
     info: Dict[str, Any] = {}
     for line in text.splitlines():
         if ":" not in line:
@@ -98,7 +94,7 @@ _HISTORY_SCRIPT = (
 
 
 def wifi_history(limit: int = 100) -> Dict[str, Any]:
-    """Conexiones y desconexiones de Wi-Fi que Windows anotó (más recientes primero). Llega hasta donde Windows guardó."""
+    """Conexiones y desconexiones de Wi-Fi que Windows anotó (más recientes primero)."""
     if not IS_WINDOWS:
         return {"available": False, "reason": "El historial de Wi-Fi solo se lee en Windows (registro de eventos WLAN-AutoConfig)."}
     data = powershell_json(_HISTORY_SCRIPT, timeout=30)

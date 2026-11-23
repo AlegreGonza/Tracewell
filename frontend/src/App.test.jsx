@@ -3,7 +3,7 @@ import { render, screen, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 
-// Las dos pantallas se reemplazan por componentes mínimos que registran sus props y cuántas veces se montaron.
+// Las dos pantallas se reemplazan por componentes mínimos que registran sus props
 const log = vi.hoisted(() => ({ app: 0, appUnmounts: 0, support: 0, supportUnmounts: 0, captures: null, support_props: null }));
 vi.mock("./views/CapturesView.jsx", () => ({
   default: function FakeCaptures(props) {
@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 const nav = () => screen.getByRole("navigation", { name: "Secciones de Tracewell" });
 const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-// El nombre accesible de un item puede llevar al final la insignia numérica (p. ej. «Alertas y ATT&CK3»).
+// El nombre accesible de un item puede llevar al final la insignia numérica
 const item = (name) => within(nav()).getByRole("button", { name: new RegExp(`^${esc(name)}\\s*\\d*$`) });
 const wrapper = (testId) => screen.getByTestId(testId).parentElement;
 const summary = (over = {}) => ({ source: "demo.pcap", alerts: 3, stats: { packets: 4500 }, ...over });

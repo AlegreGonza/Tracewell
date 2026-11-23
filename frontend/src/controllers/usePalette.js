@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 const KEY = "tracewell-palette";
 const VALID = ["esmeralda", "violeta", "terracota"];
 
-// El almacenamiento del navegador puede fallar (ventana privada, bloqueado): siempre se cae a la paleta por defecto.
+// El almacenamiento del navegador puede fallar (ventana privada, bloqueado)
 const read = () => {
   try {
     const v = window.localStorage.getItem(KEY);
@@ -13,7 +13,7 @@ const read = () => {
   }
 };
 
-// Paleta de color elegida: se recuerda entre sesiones y se aplica como data-palette en <html> (ver tokens.css).
+// Paleta de color elegida
 export function usePalette() {
   const [palette, setPaletteState] = useState(read);
 

@@ -1,9 +1,4 @@
-"""Exportación del análisis a JSON.
-
-Por qué un módulo aparte: el formato de salida es un CONTRATO con quien lo
-consuma (otro analista, un SIEM, un script). Lo aislamos para poder versionarlo
-(`schema_version`) y cambiarlo sin tocar el análisis.
-"""
+"""Exportación del análisis a JSON."""
 from __future__ import annotations
 
 import json
@@ -23,8 +18,7 @@ SCHEMA_VERSION = 1
 
 
 def _session_dict(index: int, s: Session) -> Dict[str, Any]:
-    # Armado a mano (no asdict): así un campo interno que agreguemos después a
-    # Session no se filtra al archivo exportado sin que lo decidamos.
+    # Armado a mano (no asdict)
     return {
         "id": index,
         "protocol": s.protocol,
@@ -46,11 +40,7 @@ def session_to_dict(index: int, s: Session) -> Dict[str, Any]:
 
 
 def _file_name(source) -> Optional[str]:
-    """Solo el nombre del archivo, sea cual sea el estilo de la ruta.
-
-    PureWindowsPath entiende `\\` y `/`; `Path` en Linux no separaría
-    `C:\\Users\\x\\cap.pcap` y el reporte filtraría la carpeta del usuario.
-    """
+    """Solo el nombre del archivo, sea cual sea el estilo de la ruta."""
     return PureWindowsPath(str(source)).name if source is not None else None
 
 
@@ -67,9 +57,7 @@ def _source_info(source, info: Optional[CaptureInfo]) -> Dict[str, Any]:
 def _stats_for(result: GroupingResult, sessions: Optional[List[Session]]):
     """Estadísticas de lo exportado (todo el análisis o solo `sessions`)."""
     stats = compute_stats(result if sessions is None else sessions)
-    # Aunque las cifras sean de lo filtrado, la bandera de "análisis parcial" es
-    # de la CAPTURA: un reporte filtrado de una captura truncada no puede
-    # decir que el análisis fue completo (quien lo reciba creería que vio todo).
+    # Aunque las cifras sean de lo filtrado, la bandera de "análisis parcial" es de la CAPTURA
     stats.truncated = result.truncated
     stats.untracked_packets = result.untracked_packets
     return stats
@@ -91,15 +79,7 @@ def build_report(
     filters: Optional[Dict[str, Any]] = None,
     generated_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    """Arma el reporte como dict (listo para json.dumps).
-
-    - `sessions`: si se pasa (p. ej. ya filtradas), se exportan esas y las
-      estadísticas se calculan sobre ellas, para que el reporte sea coherente
-      consigo mismo. Los ids siguen siendo los del análisis completo.
-    - `source`: se guarda solo el NOMBRE del archivo. Un reporte se comparte, y
-      la ruta completa filtraría el nombre de usuario y la estructura de carpetas.
-    - `generated_at` se inyecta para poder testear sin depender del reloj.
-    """
+    """Arma el reporte como dict (listo para json.dumps)."""
     when = generated_at or datetime.now(timezone.utc)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -113,9 +93,7 @@ def build_report(
 
 
 def to_json(report: Dict[str, Any], indent: Optional[int] = 2) -> str:
-    # allow_nan=False: NaN/Infinity no son JSON válido; preferimos un error
-    # claro a un archivo que otros parsers rechazan.
-    # ensure_ascii=False: la evidencia puede traer texto no ASCII legible.
+    # allow_nan=False
     return json.dumps(report, indent=indent, ensure_ascii=False, allow_nan=False)
 
 

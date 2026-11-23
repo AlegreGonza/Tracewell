@@ -65,9 +65,7 @@ export default function LivePanel({ onAnalyzed, onError, disabled }) {
     }
   }
 
-  // Sondeo mientras corre. Si la captura termina sola (por un límite) pedimos
-  // el análisis automáticamente en vez de dejar al usuario mirando un contador
-  // congelado.
+  // Sondeo mientras corre
   useEffect(() => {
     if (!running) return undefined;
     const id = setInterval(async () => {

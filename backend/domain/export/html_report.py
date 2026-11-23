@@ -1,9 +1,4 @@
-"""Informe de triaje en HTML: una sola página autocontenida, lista para adjuntar a un ticket.
-
-Todo lo que viene del tráfico o del analista se ESCAPA (`html.escape`): la
-evidencia de una alerta puede ser hostil. Sin scripts ni recursos externos (una
-política CSP lo refuerza). Del archivo solo va el NOMBRE, nunca la ruta.
-"""
+"""Informe de triaje en HTML: una sola página autocontenida, lista para adjuntar a un ticket."""
 from __future__ import annotations
 
 import html
@@ -11,9 +6,9 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-TOP_SESSIONS = 10  # además de las anotadas, con IOC o de las alertas, se listan las más pesadas
-TICKET_MAX_EVENTS = 40  # líneas de la línea de tiempo del ticket (un ticket no es un volcado)
-TICKET_MAX_EVIDENCE = 5  # alertas con su evidencia en el ticket (las de mayor severidad)
+TOP_SESSIONS = 10  # además de las anotadas, con IOC o de las alertas
+TICKET_MAX_EVENTS = 40  # líneas de la línea de tiempo del ticket
+TICKET_MAX_EVIDENCE = 5  # alertas con su evidencia en el ticket
 _VALUE_MAX = 120  # largo máximo de un valor de evidencia dentro del ticket
 _SEV_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
@@ -269,7 +264,7 @@ def _ticket_containment(report: Dict[str, Any], extras: Dict[int, Dict[str, Any]
 
 
 def build_ticket_text(report: Dict[str, Any], extras: Dict[int, Dict[str, Any]], ioc_source: Optional[str] = None) -> str:
-    """Texto plano del bloque «Para el ticket» (SIN escapar: quien lo muestre en HTML debe pasarlo por `_e`)."""
+    """Texto plano del bloque «Para el ticket»"""
     blocks = [
         _ticket_summary(report, extras), _ticket_timeline(report, extras),
         _ticket_iocs(report, extras, ioc_source), _ticket_evidence(report), _ticket_containment(report, extras),

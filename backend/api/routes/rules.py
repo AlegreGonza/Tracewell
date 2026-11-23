@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api")
 
 
 class RuleRequest(BaseModel):
-    name: str = Field(max_length=200)
+    name: str  # el largo y los caracteres los valida `builder.to_dict` (un solo límite y mensaje)
     severity: Literal["low", "medium", "high", "critical"] = "medium"
     description: str = Field("", max_length=2000)
     protocol: str = Field("any", max_length=10)

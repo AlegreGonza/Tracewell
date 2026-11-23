@@ -44,9 +44,7 @@ def _make_capture(ctx: Ctx, req: LiveStartRequest) -> LiveCapture:
     """Arma (sin iniciar) la captura pedida, con límites por defecto."""
     return LiveCapture(
         ctx.make_source(req.interface),
-        # Un nombre único por captura: con un nombre fijo, una captura
-        # nueva pisaría el pcap del que todavía depende el análisis previo.
-        # uuid4 y no time_ns: en Windows el reloj puede repetir el valor.
+        # Un nombre único por captura
         out_path=(Path(ctx.live_dir) / f"live-{uuid.uuid4().hex}.pcap") if ctx.live_dir else None,
         max_packets=req.max_packets or DEFAULT_MAX_PACKETS,
         max_seconds=req.max_seconds or DEFAULT_MAX_SECONDS,
@@ -54,8 +52,7 @@ def _make_capture(ctx: Ctx, req: LiveStartRequest) -> LiveCapture:
 
 
 def _start_sampler(ctx: Ctx) -> Optional[ProcessSampler]:
-    """Arranca el muestreador de procesos si hay uno disponible. Es una función
-    OPCIONAL: cualquier fallo se registra y la captura sigue sin la columna Proceso."""
+    """Arranca el muestreador de procesos si hay uno disponible."""
     if ctx.make_sampler is None:
         return None
     try:
@@ -78,7 +75,7 @@ def live_start(req: LiveStartRequest, ctx: CtxDep):
     state = ctx.state
     with state.lock:
         _release_previous(state)
-        _finish_sampler(state)  # un muestreador que quedó de una captura anterior no debe seguir corriendo
+        _finish_sampler(state)  # un muestreador que quedó de una captura anterior no debe
         cap = _make_capture(ctx, req)
         _start_or_cleanup(cap)
         state.live = cap
@@ -102,9 +99,7 @@ def live_stop(ctx: CtxDep):
     with state.stop_lock:
         if state.live is not cap:
             raise CaptureStateError("la captura cambió mientras se detenía")
-        # Idempotente de verdad: la primera llamada detiene y analiza; las
-        # siguientes devuelven el MISMO resultado sin reanalizar y, sobre todo,
-        # sin pisar el análisis que el usuario pudo haber abierto después.
+        # Idempotente de verdad
         if state.live_result is not None:
             return state.live_result
         return _stop_and_analyze(ctx, cap)

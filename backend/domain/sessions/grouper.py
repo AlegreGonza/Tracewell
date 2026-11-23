@@ -1,13 +1,4 @@
-"""Agrupa paquetes en sesiones (flujos de red).
-
-Una sesión es una conversación entre dos extremos: se identifica por la
-"5-tupla" (IP origen, puerto origen, IP destino, puerto destino, protocolo).
-
-Por qué agrupar: un analista no mira 2 millones de paquetes sueltos; mira
-"esta IP habló 40.000 veces con aquella en el puerto 21". La sesión es la
-unidad con la que razonan las reglas (escaneo de puertos = una IP, muchas
-sesiones a puertos distintos).
-"""
+"""Agrupa paquetes en sesiones (flujos de red)."""
 from __future__ import annotations
 
 import socket
@@ -18,7 +9,7 @@ import dpkt
 
 from backend.domain.pcap.reader import Packet
 
-ETHERNET = 1  # linktype soportado por ahora (el 99% de las capturas de escritorio)
+ETHERNET = 1  # linktype soportado por ahora
 
 # Tope de sesiones en memoria (~640 B c/u => ~320 MB en el peor caso).
 DEFAULT_MAX_SESSIONS = 500_000
@@ -46,16 +37,12 @@ class Session:
     bytes: int = 0
     first_ts: float = 0.0
     last_ts: float = 0.0
-    # Clave bidireccional de la sesión. Sirve para volver a encontrar sus
-    # paquetes más tarde sin guardarlos en memoria. Interna: no se exporta.
+    # Clave bidireccional de la sesión
     key: Optional[Tuple] = field(default=None, repr=False, compare=False)
-    # Banderas TCP contadas por sesión (0 en UDP/ICMP). Sirven para ver rechazos y reintentos (acceso
-    # remoto, escaneos). Internas: NO van al JSON exportado, que arma sus claves a mano.
-    syn_packets: int = 0  # SYN puros (intentos de abrir conexión), contando los reenviados
+    # Banderas TCP contadas por sesión (0 en UDP/ICMP)
+    syn_packets: int = 0  # SYN puros (intentos de abrir conexión)
     rst_packets: int = 0  # paquetes con RST (corte o rechazo)
-    # MAC de cada extremo, leídas del PRIMER paquete de la sesión (Ethernet). Solo dicen algo del equipo si
-    # está en la misma red local: tras un router, la MAC de un extremo remoto es la del router.
-    # Internas: NO van al JSON exportado.
+    # MAC de cada extremo, leídas del PRIMER paquete de la sesión (Ethernet)
     src_mac: Optional[str] = None
     dst_mac: Optional[str] = None
 
@@ -74,37 +61,29 @@ class GroupingResult:
     sessions: List[Session] = field(default_factory=list)
     non_ip: int = 0  # ARP, STP, etc.: no tienen IP, no pertenecen a una sesión
     malformed: int = 0  # IP/TCP/UDP ilegible (truncado o fragmento sin puertos)
-    # Análisis parcial: se alcanzó el tope de sesiones y las sesiones NUEVAS ya
-    # no se registraron. Se informa para que el analista no crea que vio todo.
+    # Análisis parcial
     truncated: bool = False
     untracked_packets: int = 0  # paquetes de sesiones que no se registraron por el tope
 
 
 def _inner_ethertype(eth) -> int:
-    """Ethertype real del contenido: con una etiqueta VLAN 802.1Q, dpkt deja
-    `eth.type` en 0x8100 y guarda el tipo interno en la última de `vlan_tags`."""
+    """Ethertype real del contenido."""
     tags = getattr(eth, "vlan_tags", None)
     return tags[-1].type if tags else eth.type
 
 
 def ip_layer(data: bytes):
-    """Ethernet -> capa IP: devuelve (ip, familia) o None si el paquete no es IP.
-
-    Lanza dpkt.UnpackError si está dañado o es un fragmento sin capa 4.
-    """
+    """Ethernet -> capa IP: devuelve (ip, familia) o None si el paquete no es IP."""
     eth = dpkt.ethernet.Ethernet(data)
     ip = eth.data
     if isinstance(ip, dpkt.ip.IP):
-        # Un fragmento que NO es el primero no trae cabecera TCP/UDP: sus
-        # "puertos" serían basura. Lo tratamos como dañado en vez de inventar.
+        # Un fragmento que NO es el primero no trae cabecera TCP/UDP: sus "puertos" serían basura
         if ip.offset:
             raise dpkt.UnpackError("fragmento IP sin cabecera de capa 4")
         return ip, socket.AF_INET
     if isinstance(ip, dpkt.ip6.IP6):
         return ip, socket.AF_INET6
-    # El Ethernet DICE llevar IP pero dpkt no pudo leerla (cabecera cortada) y
-    # dejó bytes crudos: es un paquete dañado, no uno "sin IP" como un ARP.
-    # Sin esto se contaba en `non_ip` y el analista no veía que había daño.
+    # El Ethernet DICE llevar IP pero dpkt no pudo leerla (cabecera cortada) y dejó bytes crudos
     if _inner_ethertype(eth) in _IP_ETHERTYPES:
         raise dpkt.UnpackError("cabecera IP ilegible")
     return None
@@ -112,10 +91,7 @@ def ip_layer(data: bytes):
 
 def _protocol_number(ip) -> int:
     """Protocolo del payload IP, aun en IPv6 con cabeceras de extensión."""
-    # En IPv6 dpkt solo setea `p` (protocolo del payload tras las cabeceras de
-    # extensión) si pudo seguir la cadena; con ESP (cifrado) no hay "siguiente"
-    # visible y `p` no existe. En ese caso la última cabecera de la cadena es
-    # lo más honesto que podemos reportar.
+    # En IPv6 dpkt solo setea `p` (protocolo del payload tras las cabeceras de extensión)
     proto = getattr(ip, "p", None)
     if proto is None:
         ext = list(ip.extension_hdrs)
@@ -135,10 +111,7 @@ def _l4_ports(ip, proto):
 
 
 def _endpoints_flags(data: bytes):
-    """((ip_src, sport, ip_dst, dport, proto), flags TCP) o None si no es IP (flags = 0 si no es TCP).
-
-    Lanza dpkt.UnpackError si el paquete está dañado.
-    """
+    """((ip_src, sport, ip_dst, dport, proto), flags TCP) o None si no es IP (flags = 0 si no es TCP)."""
     layer = ip_layer(data)
     if layer is None:
         return None
@@ -150,19 +123,14 @@ def _endpoints_flags(data: bytes):
 
 
 def _key(src, sport, dst, dport, proto) -> Tuple:
-    """Clave BIDIRECCIONAL: A->B y B->A caen en la misma sesión.
-
-    Ordenamos los dos extremos para que no importe quién habla. Sin esto, la
-    respuesta del servidor abriría una "sesión" aparte de la petición.
-    """
+    """Clave BIDIRECCIONAL: A->B y B->A caen en la misma sesión."""
     a = (src, -1 if sport is None else sport)
     b = (dst, -1 if dport is None else dport)
     return (min(a, b), max(a, b), proto)
 
 
 def packet_endpoints(data: bytes):
-    """(ip_src, sport, ip_dst, dport, proto) de un paquete, o None si no es IP
-    o está dañado. Versión que nunca lanza, para consultas sueltas."""
+    """(ip_src, sport, ip_dst, dport, proto) de un paquete, o None si no es IP o está dañado."""
     try:
         found = _endpoints_flags(data)
     except dpkt.UnpackError:
@@ -206,8 +174,7 @@ def _record_packet(sess: Session, pkt: Packet, flags: int = 0) -> None:
         sess.syn_packets += 1
     if flags & _TCP_RST:
         sess.rst_packets += 1
-    # origlen = bytes reales en el cable; len(data) puede ser menos si hubo
-    # snaplen. Para "cuánto tráfico fue" importa lo que viajó, no lo guardado.
+    # origlen = bytes reales en el cable; len(data) puede ser menos si hubo snaplen
     sess.bytes += pkt.origlen if pkt.origlen is not None else len(pkt.data)
     sess.last_ts = pkt.ts
 
@@ -231,14 +198,7 @@ def group_packets(
     linktype: int = ETHERNET,
     max_sessions: int = DEFAULT_MAX_SESSIONS,
 ) -> GroupingResult:
-    """Recorre los paquetes (en streaming) y arma las sesiones.
-
-    En memoria guardamos un resumen por sesión, no los paquetes: el costo
-    crece con la cantidad de sesiones (~640 B cada una), no con el tamaño del
-    archivo. Pero un escaneo o un DDoS puede generar millones de sesiones, así
-    que hay un TOPE: al alcanzarlo, las sesiones nuevas se descartan (las
-    existentes siguen actualizándose) y el resultado queda marcado `truncated`.
-    """
+    """Recorre los paquetes (en streaming) y arma las sesiones."""
     _check_group_args(linktype, max_sessions)
     sessions: Dict[Tuple, Session] = {}
     result = GroupingResult()

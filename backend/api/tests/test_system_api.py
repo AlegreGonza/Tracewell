@@ -1,4 +1,4 @@
-"""API de «Soporte de red → Sistema»: solo lectura, sin captura, con psutil falso (y un humo real al final)."""
+"""API de «Soporte de red → Sistema»"""
 import json
 import sys
 

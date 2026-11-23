@@ -5,8 +5,7 @@ import HelpTip from "../common/HelpTip.jsx";
 
 const n = (v) => v.toLocaleString("es-AR");
 
-// «DNS»: los nombres que se consultaron, cuántas veces, qué respondieron y qué salió mal.
-// Se ve de un vistazo a qué se conectaron los equipos y qué nombres no existen.
+// «DNS»: los nombres que se consultaron, cuántas veces, qué respondieron y qué salió mal
 export default function DnsView({ refreshKey, onError }) {
   const [query, setQuery] = useState("");
   const [applied, setApplied] = useState("");

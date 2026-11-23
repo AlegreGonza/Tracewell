@@ -1,4 +1,4 @@
-"""Controlador de «rules»: panel de reglas (vista previa, guardado y listado). Sin FastAPI de por medio."""
+"""Controlador de «rules»: panel de reglas (vista previa, guardado y listado)."""
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -16,7 +16,7 @@ def list_rules(ctx: Ctx) -> Dict[str, Any]:
 
 
 def preview_rule(ctx: Ctx, form: RuleForm) -> Dict[str, Any]:
-    """YAML en vivo y, si hay una captura abierta, cuántas sesiones y alertas daría la regla (sin guardarla)."""
+    """YAML en vivo y, si hay una captura abierta, cuántas sesiones y alertas daría la regla."""
     data = builder.to_dict(form)
     rule = builder.build_rule(data)  # RuleError -> 422 con el mensaje
     out: Dict[str, Any] = {

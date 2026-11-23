@@ -45,7 +45,7 @@ def test_la_respuesta_no_cambia_las_mac_de_origen():
 
 
 def test_origen_invertido_cada_mac_sigue_a_su_ip():
-    # el primer paquete visto es la respuesta del servidor: la MAC de origen es la del servidor
+    # el primer paquete visto es la respuesta del servidor
     [s] = sessions(tcp("10.0.0.9", 22, "10.0.0.5", 5000, MAC_B, MAC_A, 0x12))
     assert (s.src_ip, s.src_mac, s.dst_ip, s.dst_mac) == ("10.0.0.9", "aa:bb:cc:dd:ee:ff", "10.0.0.5", "00:11:22:33:44:55")
 

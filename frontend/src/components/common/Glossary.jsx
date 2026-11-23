@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GLOSSARY } from "../../lib/help.js";
 
-// Glosario con buscador: las palabras que asustan, explicadas sin vueltas. Contenido fijo de help.js.
+// Glosario con buscador: las palabras que asustan, explicadas sin vueltas
 export default function Glossary({ onClose }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();

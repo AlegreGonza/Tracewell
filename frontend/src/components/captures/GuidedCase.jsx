@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-// Salta (con scroll suave) a una sección de la pantalla por su id; no hace nada si todavía no está.
+// Salta (con scroll suave) a una sección de la pantalla por su id
 export const jumpTo = (id) => document.getElementById(id)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 
-// Los pasos del caso del demo. Son texto fijo: describen la captura de ejemplo (samples/demo.pcap).
+// Los pasos del caso del demo
 export const STEPS = [
   {
     title: "Mirá el panorama",
@@ -41,7 +41,7 @@ export const STEPS = [
   },
 ];
 
-// Recorrido guiado del demo: siete pasos para aprender a investigar. Se puede ocultar y los pasos se tildan.
+// Recorrido guiado del demo: siete pasos para aprender a investigar
 export default function GuidedCase({ onFilterIp, onJump }) {
   const [open, setOpen] = useState(true);
   const [done, setDone] = useState(() => new Set());

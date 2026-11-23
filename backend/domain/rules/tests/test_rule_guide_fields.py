@@ -1,5 +1,4 @@
-"""Campos explicativos opcionales de las reglas YAML: false_positives, investigation_steps, wireshark_filter."""
-from pathlib import Path
+"""Campos explicativos opcionales de las reglas YAML."""
 
 import pytest
 

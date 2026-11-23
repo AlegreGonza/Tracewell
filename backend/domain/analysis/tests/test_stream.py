@@ -1,4 +1,4 @@
-"""Tests de backend/domain/analysis/stream.py (follow stream) y analyzer.session_stream. Paquetes armados con dpkt."""
+"""Tests de backend/domain/analysis/stream.py (follow stream) y analyzer.session_stream."""
 import socket
 from types import SimpleNamespace
 

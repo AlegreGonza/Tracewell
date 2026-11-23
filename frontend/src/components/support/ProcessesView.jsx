@@ -14,7 +14,7 @@ const SORTS = [
   ["pid", "PID"],
 ];
 
-// «Procesos»: lo que corre en este equipo, ordenable por RAM o procesador. Solo lectura: no se puede terminar nada.
+// «Procesos»: lo que corre en este equipo, ordenable por RAM o procesador
 export default function ProcessesView({ active }) {
   const [sort, setSort] = useState("ram");
   const [query, setQuery] = useState("");

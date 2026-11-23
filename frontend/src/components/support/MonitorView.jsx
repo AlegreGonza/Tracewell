@@ -25,7 +25,7 @@ function Spark({ samples }) {
   );
 }
 
-// «Monitoreo de cortes»: mide en segundo plano y anota cuándo y por qué se cortó la conexión.
+// «Monitoreo de cortes»
 export default function MonitorView({ active }) {
   const [interval, setIntervalSec] = useState(2);
   const { data, error, reload } = useLoad((s) => api.monitorStatus(s), { every: 2000, active });

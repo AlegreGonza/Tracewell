@@ -1,14 +1,4 @@
-"""Nombre del sitio de cada sesión, sacado de la PROPIA captura (sin consultar a nadie).
-
-Dos fuentes, ambas visibles en claro dentro de una captura:
-- las respuestas DNS ("example.com" -> 93.184.216.34): sirven para ponerle nombre a una IP;
-- el SNI del saludo TLS (ClientHello): el nombre que el cliente le pide al servidor
-  al iniciar una conexión HTTPS, aunque el resto vaya cifrado.
-
-Límites (conscientes): una IP compartida (CDN) puede tener varios nombres y se guarda el
-PRIMERO visto; con ECH o DNS cifrado (DoH/DoT) el nombre no es visible; un ClientHello
-partido en varios segmentos TCP puede perder el SNI (solo se mira el primer paquete).
-"""
+"""Nombre del sitio de cada sesión, sacado de la PROPIA captura (sin consultar a nadie)."""
 from __future__ import annotations
 
 import ipaddress
@@ -73,16 +63,20 @@ def _clean_name(raw) -> Optional[str]:
 
 def _answer_ips(dns) -> List[str]:
     """IP (A y AAAA) de las respuestas de un mensaje DNS."""
-    ips: List[str] = []
-    for rr in dns.an:
-        try:
-            if rr.type == dpkt.dns.DNS_A:
-                ips.append(socket.inet_ntop(socket.AF_INET, rr.ip))
-            elif rr.type == dpkt.dns.DNS_AAAA:
-                ips.append(socket.inet_ntop(socket.AF_INET6, rr.ip6))
-        except (AttributeError, ValueError, OSError):
-            continue  # un registro raro no invalida los demás
-    return ips
+    ips = (_rr_ip(rr) for rr in dns.an)
+    return [ip for ip in ips if ip is not None]
+
+
+def _rr_ip(rr) -> Optional[str]:
+    """IP de un registro A/AAAA; None si es otro tipo o está roto (un registro raro no invalida los demás)."""
+    try:
+        if rr.type == dpkt.dns.DNS_A:
+            return socket.inet_ntop(socket.AF_INET, rr.ip)
+        if rr.type == dpkt.dns.DNS_AAAA:
+            return socket.inet_ntop(socket.AF_INET6, rr.ip6)
+    except (AttributeError, ValueError, OSError):
+        pass
+    return None
 
 
 def dns_names(payload: bytes) -> List[Tuple[str, str]]:
@@ -148,15 +142,14 @@ def _first_host_name(body: bytes) -> Optional[str]:
         return None
     size = _u16(body, 3)
     name = body[5:5 + size] if size else b""
-    # Si el paquete se cortó DENTRO del nombre, devolver el pedazo daría un sitio falso (y un IOC falso).
+    # Si el paquete se cortó DENTRO del nombre, devolver el pedazo daría un sitio falso
     return _clean_name(name) if size and len(name) == size else None
 
 
 # ------------------------------------------------------------------ recorrido
 
 def _l4_full(data: bytes):
-    """(protocolo, puerto origen, puerto destino, IP origen, IP destino, clave de sesión, payload) de un
-    paquete TCP/UDP, o None."""
+    """."""
     try:
         layer = ip_layer(data)
         if layer is None:

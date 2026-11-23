@@ -7,8 +7,7 @@ export function formatBytes(n) {
   const fmt = (x) => x.toFixed(x < 10 ? 2 : 1);
   let v = n / 1024;
   let i = 0;
-  // Se compara el valor YA redondeado: 1023,99 KB se muestra "1024.0", y eso
-  // debe pasar a "1.00 MB" en vez de quedar en la unidad anterior.
+  // Se compara el valor YA redondeado
   while (Number(fmt(v)) >= 1024 && i < units.length - 1) {
     v /= 1024;
     i++;
@@ -30,8 +29,7 @@ export function formatDuration(seconds) {
   return `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-// Epoch en segundos -> "HH:MM:SS.mmm" en UTC. UTC a propósito: un analista
-// que cruza capturas con logs de otros equipos necesita una hora sin ambigüedad.
+// Epoch en segundos -> "HH:MM:SS.mmm" en UTC
 export function formatTime(epoch) {
   if (!Number.isFinite(epoch)) return "—";
   return new Date(epoch * 1000).toISOString().slice(11, 23) + " UTC";

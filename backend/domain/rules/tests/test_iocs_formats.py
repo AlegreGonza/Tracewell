@@ -1,4 +1,4 @@
-"""IOC en CSV y STIX 2.1: detección de formato, columnas, patrones y los mismos errores del formato de texto."""
+"""IOC en CSV y STIX 2.1."""
 import ipaddress
 import json
 

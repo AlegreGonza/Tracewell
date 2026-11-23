@@ -1,8 +1,4 @@
-"""Procesos: lista con memoria y procesador, detalle de uno, y la huella y firma de su archivo.
-
-Cada lectura se hace con tolerancia a fallos: sin permisos de administrador algunos procesos (del sistema o de otros
-usuarios) no dejan ver todo, y eso se muestra como «—», no como un error. NUNCA se modifica ni se termina un proceso.
-"""
+"""Procesos: lista con memoria y procesador, detalle de uno, y la huella y firma de su archivo."""
 from __future__ import annotations
 
 import hashlib
@@ -79,7 +75,7 @@ def _row(p, ncpu: int, conns: Dict[int, int]) -> Dict[str, Any]:
 
 
 def process_detail(pid: int) -> Dict[str, Any]:
-    """Todo lo legible de UN proceso. Diccionario vacío si no existe. Lo que el sistema no deja ver va en null."""
+    """Todo lo legible de UN proceso."""
     ps = psutil_or_raise()
     try:
         p = ps.Process(pid)
@@ -135,7 +131,7 @@ def _conn_row(c) -> Dict[str, Any]:
 # ------------------------------------------------------------ huella y firma del archivo
 
 def file_info(pid: int) -> Dict[str, Any]:
-    """SHA-256 y firma digital del programa de un proceso. La ruta sale del PROPIO sistema, nunca del usuario."""
+    """SHA-256 y firma digital del programa de un proceso."""
     ps = psutil_or_raise()
     exe = safe(lambda: ps.Process(pid).exe())
     if not exe:
@@ -172,8 +168,7 @@ _SIGNATURE_TEXT = {
 
 
 def file_signature(path: str) -> Optional[Dict[str, Any]]:
-    """Firma digital (solo Windows). Consulta con un único comando de lectura; la ruta viaja en una variable de
-    entorno, no dentro del texto del comando, así un nombre de archivo raro no puede inyectar nada."""
+    """Firma digital (solo Windows)."""
     if not IS_WINDOWS:
         return {"status": None, "text": "La verificación de firma digital solo está disponible en Windows.", "subject": None}
     script = (

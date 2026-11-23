@@ -1,7 +1,7 @@
 import { ThemeIcon } from "@mantine/core";
 import { IconAlertTriangle, IconHistory, IconListDetails, IconPlugConnected, IconShieldSearch, IconTopologyStar3, IconWorldWww } from "@tabler/icons-react";
 
-// Qué muestra cada sección y con qué ícono. Se usa cuando todavía no hay una captura cargada.
+// Qué muestra cada sección y con qué ícono
 export const EMPTY_SECTIONS = {
   alertas: { icon: IconAlertTriangle, color: "orange", title: "Alertas y ATT&CK", shows: "las alertas que detectó Tracewell, con su evidencia, y el mapa MITRE ATT&CK de las técnicas involucradas" },
   equipos: { icon: IconTopologyStar3, color: "teal", title: "Equipos", shows: "quién habló con quién, con el dueño de cada IP, el programa que abrió cada conexión y un grafo de conversaciones" },
@@ -12,7 +12,7 @@ export const EMPTY_SECTIONS = {
   indicadores: { icon: IconShieldSearch, color: "pink", title: "Indicadores (IOC)", shows: "la lista de IP, redes y dominios maliciosos que cargues, para marcar las sesiones que coincidan" },
 };
 
-// Aviso de una sección sin captura: en vez de repetir la pantalla de inicio, dice qué vas a ver acá y cómo empezar.
+// Aviso de una sección sin captura
 export default function EmptySection({ section, onDemo, onHome }) {
   const info = Object.hasOwn(EMPTY_SECTIONS, section) ? EMPTY_SECTIONS[section] : null;
   if (!info) return null;

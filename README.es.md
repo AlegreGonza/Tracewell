@@ -137,7 +137,7 @@ python3 -m venv .venv
 The same dependencies are listed in `pyproject.toml`. Development-only packages (tests) are installed separately:
 
 ```bash
-.venv/bin/python -m pip install pytest pytest-cov httpx
+.venv/bin/python -m pip install pytest pytest-cov httpx2 ruff
 ```
 
 *(On Windows use `.\.venv\Scripts\python` instead of `.venv/bin/python`.)*

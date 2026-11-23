@@ -94,9 +94,7 @@ def test_pcap_solo_cabecera(tmp_path):
 
 
 def test_payload_truncado_lanza_pcaperror(tmp_path):
-    # Antes dpkt entregaba un buffer corto sin avisar (dato corrupto hacia las
-    # reglas). Ahora el reader lo detecta con el tap y lanza PcapError ANTES de
-    # entregar ese paquete; los anteriores si salen.
+    # Antes dpkt entregaba un buffer corto sin avisar (dato corrupto hacia las reglas)
     p = _write_pcap(tmp_path / "t.pcap", packets=[(1.0, b"B" * 8), (2.0, b"A" * 20)])
     p.write_bytes(p.read_bytes()[:-5])
     it = iter_packets(p)
@@ -139,7 +137,7 @@ def test_iter_packets_es_perezoso(tmp_path):
     assert isinstance(it, types.GeneratorType)
     assert not isinstance(it, list)
     assert inspect.isgenerator(it)
-    # no abrio nada hasta el primer next(): una ruta inexistente no falla al crear el generador
+    # no abrio nada hasta el primer next()
     gen = iter_packets(tmp_path / "no_existe.pcap")
     assert inspect.isgenerator(gen)
     assert next(it).data == PACKETS[0][1]  # primer paquete disponible
@@ -165,8 +163,7 @@ def test_bytes_basura(tmp_path):
 
 
 def test_pcapng_truncado_caracterizacion(tmp_path):
-    # Se observa el comportamiento real al cortar un pcapng en distintos puntos.
-    # El contrato deseado: o PcapError o una lectura parcial; nunca otra excepcion.
+    # Se observa el comportamiento real al cortar un pcapng en distintos puntos
     p = _write_pcapng(tmp_path / "ng.pcapng")
     data = p.read_bytes()
     resultados = {}
@@ -194,8 +191,7 @@ def _pcap_manual(endian, magic, pkts, snaplen=65535):
 
 
 def test_snaplen_limitado_no_es_error(tmp_path):
-    # Paquete con origlen (100) > caplen (4) en la cabecera: captura con snaplen
-    # bajo. Debe leerse sin error y marcarse snaplen_limited; el otro, normal.
+    # Paquete con origlen (100) > caplen (4) en la cabecera: captura con snaplen bajo
     p = _write_pcap(tmp_path / "s.pcap", packets=[(1.0, b""), (2.0, b"hola")])
     raw = bytearray(p.read_bytes())
     # cabecera del 1er paquete en offset 24: ts_sec, ts_usec, caplen, origlen (LE)
@@ -227,8 +223,7 @@ def test_pcap_endianness_y_nanosegundos(tmp_path, endian, magic):
 
 
 def test_ts_es_float_con_magic_nanosegundos(tmp_path):
-    # Regresion: con magic de nanosegundos dpkt entrega Decimal; Packet.ts debe
-    # ser float exacto (no Decimal) o las restas de duracion de sesion rompen.
+    # Regresion: con magic de nanosegundos dpkt entrega Decimal
     from decimal import Decimal
     pkts = [(10, 500_000_000, 2, 2, b"ab"), (12, 250_000_000, 2, 2, b"cd")]
     p = tmp_path / "ns.pcap"
@@ -243,8 +238,7 @@ def test_ts_es_float_con_magic_nanosegundos(tmp_path):
 
 
 def test_pcap_magic_modificado_origlen_none(tmp_path):
-    # Magic 0xa1b2cd34 (cabecera de paquete de 24 bytes): dpkt lo lee, el tap
-    # no lo inspecciona -> origlen None, sin error ni snaplen_limited.
+    # Magic 0xa1b2cd34 (cabecera de paquete de 24 bytes)
     out = struct.pack(">IHHiIII", 0xA1B2CD34, 2, 4, 0, 0, 65535, 1)
     for payload in (b"abcd", b"xy"):
         out += struct.pack(">IIIIIHBB", 7, 0, len(payload), len(payload), 0, 0, 0, 0) + payload
@@ -269,8 +263,7 @@ def test_paquete_vacio_caplen_cero_no_es_truncamiento(tmp_path):
 
 
 def test_caracterizacion_patron_de_lecturas_de_dpkt(tmp_path):
-    # Si dpkt cambia su patron (read(24); luego read(16)+read(caplen) por
-    # paquete), este test falla y avisa que el tap dejo de ser confiable.
+    # Si dpkt cambia su patron (read
     p = _write_pcap(tmp_path / "g.pcap")
     with open(p, "rb") as fh:
         tap = reader_mod._TapFile(fh)

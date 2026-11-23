@@ -1,7 +1,4 @@
-"""Pruebas de conectividad: ¿hay Internet?, latencia, ping, traceroute, puertos, RDP y diferencia de hora.
-
-Todas LEEN o MIDEN: abren conexiones o mandan un ping y cuentan lo que pasó. Ninguna cambia nada en el equipo.
-"""
+"""Pruebas de conectividad."""
 from __future__ import annotations
 
 import re
@@ -20,7 +17,7 @@ from .netinfo import default_gateway, network_config
 
 TCP_TIMEOUT = 2.0
 INTERNET_PROBES = (("1.1.1.1", 443), ("8.8.8.8", 443))
-DNS_PROBES = ("www.google.com", "one.one.one.one", "www.microsoft.com")  # alcanza con que UNO resuelva: un solo nombre da falsos positivos
+DNS_PROBES = ("www.google.com", "one.one.one.one", "www.microsoft.com")  # alcanza con que UNO resuelva
 TIME_SERVERS = ("time.windows.com", "pool.ntp.org", "time.cloudflare.com")
 MAX_PORTS = 20
 PING_COUNT = 3  # pings a la puerta de enlace en «¿hay Internet?»
@@ -46,7 +43,7 @@ def tcp_connect(host: str, port: int, timeout: float = TCP_TIMEOUT) -> Dict[str,
 
 
 def resolve(name: str, timeout: float = 3.0) -> Dict[str, Any]:
-    """Resuelve un nombre con el DNS del sistema. `getaddrinfo` no tiene tiempo límite: se corre en un hilo aparte."""
+    """Resuelve un nombre con el DNS del sistema."""
     box: Dict[str, Any] = {}
 
     def work() -> None:
@@ -74,25 +71,25 @@ def _min_max_avg(times: List[float]) -> Dict[str, Optional[float]]:
     return {"min": min(times), "max": max(times), "avg": round(statistics.fmean(times), 1)}
 
 
+def _reply_ms(line: str) -> Optional[float]:
+    """Milisegundos de una línea de respuesta del ping; 0.5 si dice «tiempo<1ms»; None si no hay dato."""
+    m = _TIMES.search(line)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    return 0.5 if "<" in line else None
+
+
 def ping(host: str, count: int = 4) -> Dict[str, Any]:
-    """Ping con el comando del sistema. Las respuestas se cuentan por la línea que trae `TTL=`, que es igual en
-    cualquier idioma (el texto «tiempo»/«time» cambia, el TTL no)."""
+    """Ping con el comando del sistema."""
     host = valid_host(host)
     count = max(1, min(int(count), 20))
     cmd = ["ping", "-n", str(count), "-w", "1500", host] if IS_WINDOWS else ["ping", "-c", str(count), "-W", "2", host]
     res = run(cmd, timeout=count * 3 + 5)
     if res.missing:
         return {"available": False, "host": host, "reason": "No se encontró el comando ping en este equipo."}
-    times: List[float] = []
-    received = 0
-    for line in res.out.splitlines():
-        if "ttl=" in line.lower():
-            received += 1
-            m = _TIMES.search(line)
-            if m:
-                times.append(float(m.group(1).replace(",", ".")))
-            elif "<" in line:
-                times.append(0.5)  # «tiempo<1ms»
+    replies = [ln for ln in res.out.splitlines() if "ttl=" in ln.lower()]
+    received = len(replies)
+    times = [t for t in map(_reply_ms, replies) if t is not None]
     return {
         "available": True, "host": host, "sent": count, "received": received,
         "loss_pct": round(100 * (count - received) / count, 1), "times": times, **_min_max_avg(times),
@@ -103,7 +100,7 @@ def ping(host: str, count: int = 4) -> Dict[str, Any]:
 # ------------------------------------------------------------------ ¿hay Internet?
 
 def _adapter_step(config: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
-    """Primer paso: ¿hay un adaptador con IP válida? Devuelve el paso y si hay red local (IP que no sea 169.254)."""
+    """Primer paso: ¿hay un adaptador con IP válida? Devuelve el paso y si hay red local."""
     live = [a for a in config["adapters"] if a["up"] and not a["loopback"] and a["ipv4"]]
     apipa = [a for a in live if a["apipa"]]
     good = [a for a in live if not a["apipa"]]
@@ -152,10 +149,7 @@ def _dns_step() -> Dict[str, Any]:
 
 
 def internet_check() -> Dict[str, Any]:
-    """Revisa capa por capa (adaptador → puerta de enlace → Internet por IP → DNS) y dice dónde se corta.
-
-    Contacta a 1.1.1.1 y 8.8.8.8 (solo abre y cierra una conexión TCP) y le pide a tu DNS la dirección de unos sitios conocidos.
-    """
+    """Revisa capa por capa (adaptador → puerta de enlace → Internet por IP → DNS) y dice dónde se corta."""
     config = network_config()
     adapter, has_network = _adapter_step(config)
     steps = [adapter, _gateway_step(config, has_network), _internet_step(), _dns_step()]
@@ -171,7 +165,7 @@ def _fix(windows: str, linux: str) -> str:
 
 
 def _verdict(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """El primer paso que falla marca dónde se corta. Los comandos son SOLO texto: Tracewell no los ejecuta."""
+    """El primer paso que falla marca dónde se corta."""
     by = {s["code"]: s for s in steps}
     if by["adapter"]["ok"] is False:
         apipa = "169.254" in by["adapter"]["detail"]
@@ -204,8 +198,7 @@ def _verdict(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
 # ------------------------------------------------------------------ latencia
 
 def latency_test(host: str = "1.1.1.1", port: int = 443, samples: int = 8) -> Dict[str, Any]:
-    """Latencia medida con el tiempo de abrir conexiones TCP (se parece al ping y funciona aunque el ICMP esté
-    bloqueado). Contacta a `host:port`. Además hace un ping corto al router para separar «mi red» de «Internet»."""
+    """Latencia medida con el tiempo de abrir conexiones TCP."""
     host, port = valid_host(host), valid_port(port)
     samples = max(3, min(int(samples), 30))
     times: List[float] = []
@@ -234,7 +227,7 @@ _IP = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]{3,}:[0-9a-fA-F:]+)")
 
 
 def traceroute(host: str, max_hops: int = 20) -> Dict[str, Any]:
-    """Los saltos hasta un destino (tracert / traceroute). Puede tardar hasta un minuto si hay saltos sin respuesta."""
+    """Los saltos hasta un destino (tracert / traceroute)."""
     host = valid_host(host)
     max_hops = max(1, min(int(max_hops), 30))
     cmd = (["tracert", "-d", "-h", str(max_hops), "-w", "800", host] if IS_WINDOWS
@@ -265,7 +258,7 @@ def port_check(host: str, ports: List[int]) -> Dict[str, Any]:
     if not clean:
         raise ValueError("indicá al menos un puerto")
     with ThreadPoolExecutor(max_workers=10) as pool:
-        results = list(pool.map(lambda p: (p, tcp_connect(host, p, 3.0)), clean))  # Windows tarda ~2 s en admitir que un puerto local está cerrado
+        results = list(pool.map(lambda p: (p, tcp_connect(host, p, 3.0)), clean))  # Windows tarda ~2 s en admitir que un puerto local está
     return {"host": host, "results": [
         {"port": p, "service": SERVICES.get(p), "state": r["state"], "ms": r["ms"], "detail": r["error"]} for p, r in results
     ]}
@@ -283,10 +276,9 @@ _NEG_SELECTED = {
 
 
 def rdp_check(host: str, port: int = 3389) -> Dict[str, Any]:
-    """Comprueba que un equipo ofrezca RDP y qué seguridad pide. Manda UNA solicitud de conexión y se corta: no
-    intenta iniciar sesión ni prueba usuarios ni contraseñas."""
+    """Comprueba que un equipo ofrezca RDP y qué seguridad pide."""
     host, port = valid_host(host), valid_port(port)
-    # TPKT (3, largo 19) + X.224 «Connection Request» + RDP_NEG_REQ pidiendo TLS, NLA y NLA temprana (0x0b).
+    # TPKT (3, largo 19) + X.224 «Connection Request» + RDP_NEG_REQ pidiendo TLS, NLA
     request = bytes.fromhex("03000013") + bytes.fromhex("0ee00000000000") + bytes.fromhex("010008000b000000")
     base = {"host": host, "port": port}
     try:

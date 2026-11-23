@@ -126,19 +126,19 @@ def test_error_en_linea_uno():
         parse_iocs("???")
 
 
-def test_error_trunca_el_texto_repetido_a_60_caracteres():
+def test_error_no_reproduce_el_texto_de_la_linea():
+    # solo número de línea y motivo: el contenido del archivo no vuelve en el mensaje (ni a la API)
     with pytest.raises(IocError) as e:
         parse_iocs("x!" * 100)
     msg = str(e.value)
-    assert "x!" * 30 in msg and "x!" * 31 not in msg
-    assert len(msg) < 150
+    assert msg.startswith("línea 1:") and "x!" not in msg
 
 
-def test_error_de_red_tambien_trunca():
+def test_error_de_red_tampoco_reproduce_el_texto():
     with pytest.raises(IocError) as e:
         parse_iocs("1" * 100 + "/8")
     msg = str(e.value)
-    assert "1" * 60 in msg and "1" * 61 not in msg
+    assert "línea 1" in msg and "111" not in msg
 
 
 def test_el_comentario_no_se_cuenta_como_parte_del_error():

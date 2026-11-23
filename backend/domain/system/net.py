@@ -45,7 +45,7 @@ def _names(ps) -> Dict[int, str]:
 
 
 def _inet_connections(ps) -> Optional[list]:
-    """Sockets del sistema, o None si el sistema no deja listarlos (p. ej. macOS sin permisos de administrador)."""
+    """Sockets del sistema, o None si el sistema no deja listarlos."""
     try:
         return list(ps.net_connections(kind="inet"))
     except Exception:  # noqa: BLE001 - AccessDenied u otro fallo de lectura: se informa como "limitado"

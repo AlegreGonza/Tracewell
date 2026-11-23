@@ -6,6 +6,8 @@ import logging
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from backend.api.security import SECURITY_HEADERS
+from backend.domain.files import NotRegularFile
 from backend.domain.rules.builder import RuleExists
 from backend.domain.rules.engine import RuleError
 from backend.domain.rules.iocs import IocError
@@ -29,6 +31,7 @@ ERROR_STATUS = (
     (CaptureStateError, 409),
     (CaptureError, 503),
     (IsADirectoryError, 400),
+    (NotRegularFile, 400),
     (PermissionError, 403),
 )
 
@@ -41,11 +44,10 @@ def _handler_for(status: int):
 
 
 async def _unexpected_handler(request, exc):
-    """Red de seguridad: un fallo imprevisto responde JSON genérico (igual que el
-    resto de la API) y el detalle va solo al log del servidor. El mensaje de `exc`
-    NO se devuelve: podría traer rutas del usuario o datos internos."""
+    """Red de seguridad."""
     logger.error("error no controlado en %s %s", request.method, request.url.path, exc_info=exc)
-    return JSONResponse(status_code=500, content={"detail": "error interno"})
+    # Este handler corre fuera de los middlewares: las cabeceras se agregan acá
+    return JSONResponse(status_code=500, content={"detail": "error interno"}, headers=SECURITY_HEADERS)
 
 
 def register_error_handlers(app: FastAPI) -> None:

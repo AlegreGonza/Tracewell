@@ -1,0 +1,154 @@
+# Documentación de `backend/domain/rules`
+
+Texto completo movido desde el código. En los `.py` quedan solo comentarios cortos.
+
+
+## builder.py
+
+Constructor de reglas: arma una regla por umbral a partir de los campos de un formulario.
+
+Lógica pura (sin FastAPI): valida el formulario, genera el YAML con el MISMO formato que las reglas
+de `rules/`, calcula la vista previa sobre una captura y guarda el archivo. La regla usa el detector
+`threshold` (extra_detectors.py): el analista elige filtros y umbral, no escribe código.
+
+Nunca modifica ni desactiva reglas existentes: guardar con un id o un archivo que ya existe falla.
+
+
+### Funciones y clases
+
+
+**`preview`**: Qué pasaría con la captura actual: sesiones que cumplen el filtro y alertas que daría el umbral. No guarda nada y no toca las alertas del análisis actual.
+
+
+### Notas del código
+
+- `<módulo>`: Nombres de dispositivo de Windows: un archivo con ese nombre (con.yaml, nul.yaml...) es problemático.
+
+
+## engine.py
+
+Motor de reglas: carga reglas YAML y las evalúa sobre el tráfico.
+
+Idea central: la REGLA (YAML) es dato (nombre, severidad, técnica MITRE,
+umbrales) y el DETECTOR (Python) es la lógica que sabe buscar un patrón.
+Así un analista ajusta umbrales o cambia la severidad sin tocar código, pero
+no ejecutamos código arbitrario que venga de un archivo.
+
+Una sola pasada: cada paquete se decodifica una vez y se ofrece a todos los
+detectores. Memoria acotada por detector, no por el tamaño del pcap.
+
+
+### Funciones y clases
+
+
+**`_suffix_list`**: Lista (puede ser vacía) de sufijos de dominio; se normalizan a minúsculas y sin puntos en los bordes.
+
+
+**`_decode`**: Ethernet -> IP -> TCP/UDP, o None si no aplica o está dañado. Un paquete ilegible NO debe tumbar el análisis: en una herramienta de seguridad el tráfico malicioso a veces está malformado a propósito.
+
+
+**`PortScanDetector`**: Una IP origen envía SYN a muchos puertos distintos de un mismo destino en poco tiempo. Contamos SYN "puros" (sin ACK): son los intentos de abrir conexión; una conversación normal repite pocos puertos.
+
+
+**`FtpCleartextDetector`**: Comandos USER/PASS de FTP viajando sin cifrar. Por seguridad la alerta NO guarda la contraseña: la evidencia dice que existió y de qué largo era. Los reportes se comparten; una contraseña en texto claro dentro de un JSON sería una filtración nueva.
+
+
+**`DnsSuspiciousDetector`**: Consultas DNS con nombres que parecen datos y no nombres humanos. Malware que usa DNS para C2 o para sacar datos (túneles, DGA) mete información codificada en el primer label: es largo y de alta entropía.
+
+
+**`_text_list`**: Lista de textos no vacíos de un campo opcional (ausente = vacía); falla si el tipo no es una lista de texto.
+
+
+**`evaluate`**: Pasa cada paquete por todos los detectores y devuelve las alertas ordenadas por tiempo.
+
+
+### Notas del código
+
+- `Rule`: Campos explicativos OPCIONALES del YAML: ayudan al analista a decidir. Solo se muestran en la interfaz; NO viajan en el JSON exportado (el contrato schema_version 1 no cambia).
+- `Alert`: Evidencia: por qué saltó la alerta, con datos concretos. Sin esto el analista tiene que creerle a la herramienta; con esto puede verificar.
+- `<módulo>`: Tope de entradas por estructura de estado de un detector. Sin tope, un atacante (o un DDoS) que genere millones de pares origen/destino distintos haría crecer la memoria sin límite. Costo asumido: con más pares que el tope se "olvida" a los menos recientes (un escaneo muy lento repartido entre más de MAX_TRACKED pares podría pasar inadvertido). Preferimos eso a quedarnos sin RAM.
+- `PortScanDetector.__init__`: (origen, destino) -> {puerto: último instante visto}. Un dict por puerto (y no una lista de SYN) acota la memoria: repetir el mismo puerto un millón de veces ocupa una sola entrada.
+- `PortScanDetector.feed`: Llegamos al umbral: descartamos los puertos fuera de la ventana y recién entonces decidimos (con puertos viejos no hay escaneo "rápido").
+- `<módulo>`: Detectores adicionales (beaconing, inundación SYN, puertos sospechosos, DNS no habitual, subidas grandes). Van en otro archivo para que este no crezca sin fin; se importan AL FINAL porque usan las clases de este módulo. Importarlos antes causaría una importación circular.
+- `<módulo>`: getattr: si alguien importó extra_detectors ANTES que este módulo, `_extra` está a medio cargar y todavía no tiene DETECTORS; en ese caso se registra él mismo al terminar de cargarse.
+
+
+## extra_detectors.py
+
+Detectores adicionales: beaconing, inundación SYN, puertos sospechosos, DNS a un
+resolvedor no habitual subidas grandes de datos, fuerza bruta y la regla personalizada por umbral.
+
+Mismas reglas que el resto: la REGLA es un YAML (umbral, severidad, MITRE) y el
+DETECTOR es código chico. Cada detector guarda estado acotado (`_LRU`): un atacante
+no puede hacer crecer la memoria con millones de pares distintos.
+
+Registro: `engine.py` importa este módulo al final y suma `DETECTORS`; si alguien lo
+importa primero, se registra solo al terminar de cargarse (ver el final del archivo).
+
+
+### Funciones y clases
+
+
+**`BeaconingDetector`**: Conexiones (o datagramas) hacia un mismo destino a intervalos MUY regulares. Un malware que "llama a casa" suele hacerlo cada N segundos con poca variación. Se cuentan los intentos de conexión TCP (SYN) y los datagramas UDP; un humano o una app normal navegan de forma irregular. Se ignoran intervalos cortos (`min_interval_seconds`): un keep-alive de 1 segundo no es un beacon.
+
+
+**`DnsUnusualResolverDetector`**: Consultas DNS enviadas directo a un servidor público que no está en la lista de conocidos. Un malware puede saltarse el resolvedor de la red y consultar su propio servidor. Los destinos privados (el router, el DNS de la empresa) se consideran normales.
+
+
+**`BruteForceDetector`**: Muchos intentos de conexión de una misma IP a SSH (22) o RDP (3389) en poco tiempo. Cada intento de iniciar sesión abre una conexión nueva: se cuentan los SYN puros de un origen hacia un mismo destino y puerto. Un usuario normal abre pocas; un programa que prueba contraseñas, decenas. Es una pista: no mira si el inicio de sesión falló (el tráfico va cifrado).
+
+
+**`ThresholdDetector`**: Regla creada por el analista: N eventos que cumplen un filtro en una ventana de tiempo. Filtro: protocolo, red/IP de origen, red/IP de destino y puerto de destino (todo opcional). En TCP se cuentan los intentos de conexión (SYN puros); en UDP y `any`, cada paquete. Se cuenta por par origen -> destino y se alerta una vez por par.
+
+
+### Notas del código
+
+- `<módulo>`: Puertos de servicios que hablan a intervalos regulares de forma normal (DNS, NTP, mDNS, NetBIOS, SSDP, DHCP).
+- `SuspiciousPortsDetector.feed`: Solo el SYN que inicia la conexión: las respuestas del servidor van al puerto efímero del cliente, que podría coincidir por casualidad con uno de la lista.
+- `<módulo>`: Si este módulo se importó ANTES que engine, engine ya terminó de cargarse y no vio DETECTORS: se registran aquí. (Si engine se importó primero, ya lo hizo él y esto es inocuo.)
+- `BruteForceDetector.__init__`: (origen, destino, puerto) -> instantes de los últimos intentos
+
+
+## iocs.py
+
+Lista de indicadores de compromiso (IOC) cargada desde un archivo local.
+
+Un IOC es una IP, una red (CIDR) o un dominio que ya se sabe malicioso. El
+analista carga su lista y Tracewell marca las sesiones que coinciden. Todo es
+local: no se consulta ningún servicio externo (mandar IP de tu red a un tercero
+filtraría datos).
+
+Formatos (se detectan por la extensión y, si no alcanza, por el contenido):
+- texto: un indicador por línea, `#` para comentarios (el formato original);
+- CSV/TSV: con una columna de valor (`value`, `valor`, `indicator`, `ioc`, `ip`, `domain`...);
+- STIX 2.1 (JSON): indicadores con patrón `ipv4-addr`, `ipv6-addr`, `domain-name` o `network-traffic`.
+Las mismas validaciones valen para los tres (red /0 rechazada, IP mal escrita, límites de tamaño).
+
+
+### Funciones y clases
+
+
+**`_parse_entry`**: ('ip'|'red'|'dominio', valor) de un valor ya limpio; IocError indicando DÓNDE falló (por defecto, «línea N»).
+
+
+**`parse_csv_iocs`**: CSV/TSV con una columna de valor. Con una sola columna se admite sin encabezado. Los errores indican la fila (`línea N`, contando también el encabezado y los comentarios).
+
+
+**`_pattern_values`**: Valores de IP/dominio comparados con `=` (o con `IN`) en un patrón STIX. Un `NOT` lo descarta: sería lo contrario.
+
+
+**`parse_stix_iocs`**: STIX 2.1 en JSON. Solo se leen indicadores de IP/dominio/tráfico de red; hashes, URL y demás se ignoran.
+
+
+**`detect_format`**: 'stix', 'csv' o 'texto': por la extensión (.json/.stix, .csv/.tsv, .txt) y, si no dice nada, por el contenido.
+
+
+**`load_iocs`**: Lee y valida un archivo de IOC (texto, CSV o STIX). FileNotFoundError si no existe (la API lo traduce a 404).
+
+
+### Notas del código
+
+- `IocSet`: Índice por (versión, prefijo) -> {dirección de red: (orden, red)}; se arma una vez en __post_init__.
+- `<módulo>`: cada sesión se compara contra todas las redes: se acota el costo
+- `_parse_entry`: ningún dominio real termina en un número: es una IP mal escrita
+

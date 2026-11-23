@@ -49,7 +49,6 @@ def test_sin_hora_de_arranque_uptime_none(monkeypatch):
 
 
 def test_uptime_se_calcula(monkeypatch):
-    import time
     monkeypatch.setattr(ov.time, "time", lambda: 5_000.0)
     assert run(monkeypatch, boot=1_000.0)["uptime_seconds"] == 4000
 

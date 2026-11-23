@@ -10,16 +10,14 @@ const SEVERITIES = [["low", "Baja"], ["medium", "Media"], ["high", "Alta"], ["cr
 const PROTOCOLS = [["any", "Cualquiera"], ["tcp", "TCP"], ["udp", "UDP"]];
 const DEBOUNCE_MS = 300;
 
-// Convierte lo escrito en el formulario al cuerpo de la API; null si un número todavía no es válido.
+// Convierte lo escrito en el formulario al cuerpo de la API
 export function toBody(form) {
   const port = Number(form.port), minEvents = Number(form.min_events), window = Number(form.window_seconds);
   if (![port, minEvents, window].every(Number.isFinite) || form.port === "" || form.min_events === "" || form.window_seconds === "") return null;
   return { ...form, port, min_events: minEvents, window_seconds: window };
 }
 
-// «Reglas»: arma una alerta nueva (filtros + umbral), muestra el YAML en vivo y cuántas sesiones y alertas daría
-// con la captura abierta ANTES de guardarla. Guardar crea un archivo nuevo en rules/; nunca toca las reglas existentes.
-// Todo lo que viene del servidor o de la captura se muestra como texto (React lo escapa).
+// «Reglas»: arma una alerta nueva (filtros + umbral), muestra el YAML en vivo
 export default function RulesPanel({ onError, refreshKey }) {
   const [form, setForm] = useState(EMPTY);
   const [rules, setRules] = useState(null);
@@ -38,7 +36,7 @@ export default function RulesPanel({ onError, refreshKey }) {
 
   useEffect(() => { loadRules(); }, [loadRules]);
 
-  // Vista previa en vivo: espera a que termines de escribir y consulta al servidor (sin guardar nada).
+  // Vista previa en vivo
   useEffect(() => {
     const body = toBody(form);
     if (!form.name.trim() || body === null) {

@@ -1,13 +1,4 @@
-"""Reconstruye lo que se dijo en una sesión TCP ("Follow TCP Stream" de Wireshark).
-
-Junta los datos de cada sentido en orden de número de secuencia, descarta
-retransmisiones y marca los huecos (bytes que faltan en la captura). Con protocolos en
-claro (FTP, HTTP, Telnet, SMTP) se lee la conversación entera; con TLS el contenido va
-cifrado y solo se informa eso.
-
-Límites (conscientes): se leen como máximo `MAX_BYTES` de datos y `MAX_PACKETS` paquetes;
-un segmento que llega desordenado después de un hueco se muestra tal como llegó.
-"""
+"""Reconstruye lo que se dijo en una sesión TCP ("Follow TCP Stream" de Wireshark)."""
 from __future__ import annotations
 
 import socket
@@ -21,7 +12,7 @@ from backend.domain.sessions.grouper import ip_layer
 
 MAX_BYTES = 1_000_000  # datos reconstruidos (suma de los dos sentidos)
 MAX_PACKETS = 50_000
-MAX_GAP = 1_000_000  # un salto de secuencia mayor se toma como una conexión distinta, no como un hueco
+MAX_GAP = 1_000_000  # un salto de secuencia mayor se toma como una conexión
 TEXT_CHUNK = 20_000  # caracteres máximos por bloque que se devuelven a la interfaz
 TCP_SYN = 0x02
 
@@ -31,7 +22,7 @@ class Stream:
     chunks: List[Dict[str, Any]] = field(default_factory=list)
     origin_bytes: int = 0
     destination_bytes: int = 0
-    encrypted: bool = False  # el primer dato parece un registro TLS: el contenido no se puede leer
+    encrypted: bool = False  # el primer dato parece un registro TLS
     truncated: bool = False  # se llegó a un tope: lo que falta no está en `chunks`
 
 
@@ -69,7 +60,7 @@ def _looks_tls(data: bytes) -> bool:
 
 
 def _emit(stream: Stream, who: str, data: bytes) -> None:
-    """Agrega datos: si el bloque anterior es del mismo sentido, se une (una conversación se lee por turnos)."""
+    """Agrega datos."""
     if who == "origen":
         stream.origin_bytes += len(data)
     else:
@@ -127,13 +118,12 @@ def follow_stream(session, packets: Iterable[Packet]) -> Stream:
 class RawDirections:
     origin: bytes  # todo lo que mandó el extremo de origen, en orden
     destination: bytes
-    has_gaps: bool  # faltan bytes en la captura: lo reconstruido puede estar incompleto
+    has_gaps: bool  # faltan bytes en la captura
     truncated: bool  # se llegó a un tope
 
 
 def raw_directions(session, packets: Iterable[Packet]) -> RawDirections:
-    """Los bytes de cada sentido por separado y sin recortar (los analizadores de protocolo los necesitan
-    enteros: una cabecera HTTP o un certificado TLS no se puede leer a pedazos)."""
+    """Los bytes de cada sentido por separado y sin recortar."""
     stream = _collect(session, packets)
     parts: Dict[str, List[bytes]] = {"origen": [], "destino": []}
     for chunk in stream.chunks:

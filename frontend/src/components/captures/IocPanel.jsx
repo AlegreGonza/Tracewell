@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import HelpTip from "../common/HelpTip.jsx";
 
-// Lista de indicadores de compromiso (IP, redes o dominios malos) cargada desde un archivo LOCAL.
-// Las sesiones que coinciden se marcan en la tabla. Nada sale del equipo.
-// `refreshKey` cambia con cada análisis nuevo: la lista de IOC sobrevive, pero cuántas sesiones coinciden no.
+// Lista de indicadores de compromiso
 export default function IocPanel({ refreshKey, onChange, onError }) {
   const [status, setStatus] = useState(null);
   const [path, setPath] = useState("");

@@ -6,7 +6,7 @@ import HelpTip from "../common/HelpTip.jsx";
 
 const n = (v) => v.toLocaleString("es-AR");
 
-// Color de cada protocolo en la dona y en las barras (colores de datos: la severidad conserva el suyo).
+// Color de cada protocolo en la dona y en las barras
 const PROTO_COLOR = { TCP: "var(--data-1)", UDP: "var(--data-2)", ICMP: "var(--data-3)", ICMPv6: "var(--data-3)" };
 const colorOf = (proto) => PROTO_COLOR[proto] ?? "var(--data-n)";
 
@@ -65,7 +65,7 @@ export default function Summary({ capture }) {
             data={rows.map(([proto, st]) => ({ name: proto, value: st.packets, color: colorOf(proto) }))}
           />
         </div>
-        <ul className="bars">
+        <ul className="proto-legend">
           {rows.map(([proto, s]) => {
             const pct = percent(s.packets, stats.packets);
             return (

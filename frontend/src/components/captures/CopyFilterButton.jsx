@@ -1,8 +1,6 @@
 import { useState } from "react";
 
-// Botón «Copiar filtro Wireshark». El filtro llega ya armado (`filter`) o se pide al hacer clic (`load`).
-// Si el portapapeles no está disponible, el filtro queda a la vista para copiarlo a mano.
-// El filtro puede incluir texto del tráfico (nombres DNS): se muestra siempre como texto, nunca como HTML.
+// Botón «Copiar filtro Wireshark»
 export default function CopyFilterButton({ filter, load, onError, label = "Copiar filtro Wireshark" }) {
   const [text, setText] = useState(null);
   const [copied, setCopied] = useState(false);

@@ -96,16 +96,16 @@ describe("Toolbar", () => {
     it("pywebview inyectado después del montaje: aparece Examinar, pick_file se llama una vez y analiza", async () => {
       const { onAnalyze } = renderBare();
       expect(examinar()).toBeNull();
-      const pick_file = vi.fn().mockResolvedValue("E:\y.pcap");
+      const pick_file = vi.fn().mockResolvedValue("E:\\y.pcap");
       window.pywebview = { api: { pick_file } };
       ready();
       expect(examinar()).toBeInTheDocument();
       expect(pick_file).not.toHaveBeenCalled();
       await userEvent.click(examinar());
       expect(pick_file).toHaveBeenCalledTimes(1);
-      expect(screen.getByLabelText(/Ruta del archivo/)).toHaveValue("E:\y.pcap");
+      expect(screen.getByLabelText(/Ruta del archivo/)).toHaveValue("E:\\y.pcap");
       expect(onAnalyze).toHaveBeenCalledTimes(1);
-      expect(onAnalyze).toHaveBeenCalledWith("E:\y.pcap");
+      expect(onAnalyze).toHaveBeenCalledWith("E:\\y.pcap");
     });
 
     it("pick_file cancelado (null) no cambia el campo ni analiza", async () => {

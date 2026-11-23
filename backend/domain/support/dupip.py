@@ -1,8 +1,4 @@
-"""IP duplicada: dos equipos con la misma dirección en la red (provoca cortes intermitentes difíciles de explicar).
-
-Dos pistas, ambas de lectura: los avisos de conflicto que Windows ya registró (evento 4199 de Tcpip) y, si hay Npcap
-y permisos, una sonda ARP que pregunta «¿quién tiene mi IP?» y mira si contesta alguien con OTRA dirección física.
-"""
+"""IP duplicada."""
 from __future__ import annotations
 
 import logging
@@ -10,7 +6,7 @@ from typing import Any, Dict, List
 
 from .common import IS_WINDOWS, powershell_json
 from .devices import fmt_mac, norm_mac
-from .netinfo import network_config
+from .netinfo import active_ipv4, network_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +26,12 @@ def _windows_conflicts() -> List[Dict[str, Any]]:
 
 
 def _arp_probe(ip: str, own_mac: str) -> Dict[str, Any]:
-    """Pregunta por ARP quién tiene `ip`. Si contesta una MAC distinta de la nuestra, hay otro equipo con esa IP."""
+    """Pregunta por ARP quién tiene `ip`."""
     try:
-        from scapy.all import ARP, Ether, conf, srp  # type: ignore[attr-defined]  # import perezoso: es pesado
+        from scapy.all import ARP, Ether, srp  # type: ignore[attr-defined]  # import perezoso: es pesado
 
-        conf.verb = 0
-        answered, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip), timeout=2, retry=1)
+        # verbose=0 por llamada: no se toca la configuración global de Scapy (conf.verb)
+        answered, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip), timeout=2, retry=1, verbose=0)
         macs = sorted({norm_mac(r.hwsrc) for _s, r in answered})
     except Exception as e:  # noqa: BLE001 - sin Npcap, sin permisos o sin interfaz: la sonda no está disponible
         logger.debug("sonda ARP no disponible para %s", ip, exc_info=True)
@@ -46,25 +42,26 @@ def _arp_probe(ip: str, own_mac: str) -> Dict[str, Any]:
 
 def check_duplicate_ip(probe: bool = True) -> Dict[str, Any]:
     config = network_config()
-    probes: List[Dict[str, Any]] = []
-    if probe:
-        for a in config["adapters"]:
-            if a["up"] and not a["loopback"] and not a["apipa"] and a["mac"]:
-                for v4 in a["ipv4"]:
-                    probes.append({"adapter": a["name"], **_arp_probe(v4["ip"], a["mac"])})
+    probes = [
+        {"adapter": a["name"], **_arp_probe(v4["ip"], a["mac"])}
+        for a, v4 in (active_ipv4(config, need_mac=True) if probe else ())
+    ]
     conflicts = _windows_conflicts() if IS_WINDOWS else []
     duplicate = any(p.get("duplicate") for p in probes)
-    if duplicate:
-        summary = "¡Otro equipo está usando la misma IP que esta PC!"
-    elif conflicts:
-        summary = "Windows registró conflictos de IP en el pasado (mirá las fechas): puede haber pasado y resolverse."
-    elif probes and all(p.get("probed") for p in probes):
-        summary = "Nadie más contestó por la IP de esta PC: no se detectó duplicado."
-    elif probes:
-        summary = "No se pudo hacer la sonda ARP; solo se revisaron los avisos del sistema."
-    else:
-        summary = "Esta PC no tiene una IP válida para revisar."
     return {
-        "summary": summary, "duplicate": duplicate, "probes": probes, "conflicts": conflicts,
+        "summary": _summary(duplicate, conflicts, probes), "duplicate": duplicate, "probes": probes, "conflicts": conflicts,
         "advice": ("Cambiá la IP fija de uno de los dos equipos o reservá IPs distintas en el router (DHCP)." if duplicate else None),
     }
+
+
+def _summary(duplicate: bool, conflicts: List[Dict[str, Any]], probes: List[Dict[str, Any]]) -> str:
+    """Frase de resultado según lo que se encontró."""
+    if duplicate:
+        return "¡Otro equipo está usando la misma IP que esta PC!"
+    if conflicts:
+        return "Windows registró conflictos de IP en el pasado (mirá las fechas): puede haber pasado y resolverse."
+    if not probes:
+        return "Esta PC no tiene una IP válida para revisar."
+    if all(p.get("probed") for p in probes):
+        return "Nadie más contestó por la IP de esta PC: no se detectó duplicado."
+    return "No se pudo hacer la sonda ARP; solo se revisaron los avisos del sistema."

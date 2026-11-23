@@ -61,8 +61,27 @@ def test_el_id_se_arma_del_nombre_sin_tildes():
 
 
 def test_texto_hostil_no_rompe_el_yaml():
-    data = builder.to_dict(form(name="x: [y] {z} # w\n- q", description="a: b\n\nc: d"))
+    data = builder.to_dict(form(name="x: [y] {z} # w - q", description="a: b\n\nc: d"))
     assert yaml.safe_load(builder.render_yaml(data)) == data
+
+
+def test_nombre_con_salto_de_linea_o_nul_se_rechaza():
+    # lo que antes llegaba al YAML ahora ni entra (los caracteres de control se rechazan)
+    for name in ("x\n- q", "a\x00b", "a\rb", "a\x1bb"):
+        with pytest.raises(RuleError, match="control"):
+            builder.to_dict(form(name=name))
+
+
+def test_id_con_salto_de_linea_final_se_rechaza():
+    with pytest.raises(RuleError, match="el id debe empezar"):
+        builder.to_dict(form(id="regla\n"))
+    assert builder.to_dict(form(id="regla"))["id"] == "regla"
+
+
+def test_nombre_largo_y_limite_unico():
+    assert builder.to_dict(form(name="n" * builder.MAX_NAME))["name"] == "n" * builder.MAX_NAME
+    with pytest.raises(RuleError, match=f"hasta {builder.MAX_NAME} caracteres"):
+        builder.to_dict(form(name="n" * (builder.MAX_NAME + 1)))
 
 
 def test_vista_previa_cuenta_sesiones_y_alertas(tmp_path):

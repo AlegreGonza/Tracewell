@@ -1,18 +1,4 @@
-"""Captura en vivo desde una interfaz de red.
-
-AISLAMIENTO (regla de diseño): todo lo que toca la red real vive acá y solo
-acá. El resto del sistema recibe un archivo .pcap normal; la captura en vivo
-es "un productor de pcaps", y todo lo demás (sesiones, reglas, API) ya sabe
-leerlos. Por eso este módulo no se prueba contra la red real en CI: sus tests
-usan una fuente simulada y la validación real va en docs/checklist_hardware.md.
-
-Dos piezas:
-- Una FUENTE de paquetes (`PacketSource`): la real usa Scapy; los tests usan
-  una falsa. Scapy se importa recién cuando hace falta, así el resto de la app
-  arranca aunque Scapy o Npcap no estén instalados.
-- `LiveCapture`: gestiona hilos, límites y escritura del pcap, sin saber de
-  dónde vienen los paquetes.
-"""
+"""Captura en vivo desde una interfaz de red."""
 from __future__ import annotations
 
 import logging
@@ -31,14 +17,11 @@ import dpkt
 logger = logging.getLogger("tracewell")  # sin handlers acá: los configura main/api
 
 ETHERNET = 1
-# Límites por defecto: una captura olvidada no debe llenar el disco ni correr
-# para siempre. El usuario puede subirlos explícitamente.
+# Límites por defecto: una captura olvidada no debe llenar el disco ni correr para siempre
 DEFAULT_MAX_PACKETS = 1_000_000
 DEFAULT_MAX_SECONDS = 600.0
 DEFAULT_MAX_BYTES = 200 * 1024 * 1024
-# Las carpetas temporales de captura empiezan con este prefijo (y la limpieza
-# de restos viejos solo toca las que lo tienen). STALE_AFTER: 24 h, mucho más que
-# lo que puede durar una captura (la API la limita a 1 h).
+# Las carpetas temporales de captura empiezan con este prefijo
 TEMP_PREFIX = "tracewell_"
 STALE_AFTER = 24 * 3600.0
 # Cuánto esperamos a que la fuente se detenga antes de cerrar el archivo igual.
@@ -118,13 +101,7 @@ def _is_virtual(info: InterfaceInfo) -> bool:
 
 
 class ScapySource:
-    """Fuente real basada en Scapy.
-
-    Por qué Scapy y no pcapy-ng: instala con pip en Windows/Linux/macOS sin
-    compilar nada (pcapy-ng necesita headers de libpcap/Npcap SDK), y lista
-    interfaces de forma portable. Costo: es una dependencia pesada para el
-    ejecutable; por eso se importa de forma perezosa y solo se usa acá.
-    """
+    """Fuente real basada en Scapy."""
 
     def __init__(self, interface: str, bpf_filter: Optional[str] = None):
         if not isinstance(interface, str) or not interface.strip():
@@ -138,9 +115,7 @@ class ScapySource:
         scapy = _import_scapy()
 
         def handle(pkt):
-            # Escribimos el pcap como Ethernet (linktype 1). Un paquete de otra
-            # capa 2 (p. ej. loopback) se interpretaría mal: lo descartamos
-            # contando cuántos, en vez de escribir datos corruptos.
+            # Escribimos el pcap como Ethernet (linktype 1)
             if pkt.__class__.__name__ != "Ether":
                 self.non_ethernet_dropped += 1
                 return
@@ -158,12 +133,7 @@ class ScapySource:
             raise self._start_error(exc) from exc
 
     def _wait_started(self, ready: threading.Event, timeout: float = START_TIMEOUT) -> None:
-        """Espera a que el hilo de Scapy abra el socket; si murió antes, relanza su error.
-
-        Por qué: AsyncSniffer.start() vuelve YA, y los fallos de apertura (sin
-        permisos, interfaz inexistente) ocurren después, dentro de su hilo. Sin
-        esta espera la captura "empezaba bien" y terminaba con 0 paquetes y sin aviso.
-        """
+        """Espera a que el hilo de Scapy abra el socket; si murió antes, relanza su error."""
         deadline = time.monotonic() + timeout
         while not ready.wait(0.05):
             if self._sniffer.exception is not None:
@@ -199,16 +169,13 @@ class CaptureSummary:
     bytes: int
     seconds: float
     reason: str  # "manual", "max_packets", "max_seconds", "max_bytes", "error"
-    # Algo salió mal sin impedir cerrar el archivo (la fuente no se detuvo a
-    # tiempo, falló al detenerse, error de escritura). Sin esto, quien mire solo
-    # el resumen creería que todo terminó bien.
+    # Algo salió mal sin impedir cerrar el archivo
     warning: Optional[str] = None
 
 
 def _is_finite_number(v) -> bool:
     """Número real y finito (ni bool, ni NaN, ni infinito)."""
-    # isfinite: NaN no es <= 0 ni < 0 (toda comparación con NaN da False) y pasaría
-    # una validación de rango, dejando un "límite" que nunca vence.
+    # isfinite: NaN no es <= 0 ni < 0 (toda comparación con NaN da False)
     return not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v)
 
 
@@ -220,9 +187,7 @@ def _check_limit(name: str, v) -> None:
 
 def _resolve_out_path(out_path):
     """(ruta del pcap, carpeta temporal propia o None)."""
-    # Si no nos dan ruta, creamos una carpeta temporal PROPIA: la recordamos
-    # en `temp_dir` para poder borrarla con cleanup() (si no, cada captura
-    # dejaría una carpeta huérfana en el disco del usuario).
+    # Si no nos dan ruta, creamos una carpeta temporal PROPIA
     if out_path:
         return Path(out_path), None
     temp_dir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
@@ -251,17 +216,8 @@ def _remove_if_stale(entry: os.DirEntry, cutoff: float) -> bool:
 
 
 def cleanup_stale_temp_dirs(max_age: float = STALE_AFTER, temp_root=None) -> List[Path]:
-    """Borra las carpetas temporales de capturas que quedaron por un cierre abrupto.
-
-    Si el programa se mata (cerrar la terminal, cortar el proceso) no corre la
-    limpieza normal y la carpeta `tracewell_*` con el pcap queda en el disco del
-    usuario. Esto se llama al arrancar. Es conservador a propósito: solo toca
-    carpetas `tracewell_*` dentro de la carpeta temporal, con más de `max_age`
-    segundos y que contengan únicamente `live.pcap`; nunca lanza por un fallo de
-    disco (limpiar es opcional, arrancar no). Devuelve las rutas borradas.
-    """
-    # Con NaN todo contaba como "viejo" (borraba también las carpetas recientes);
-    # en una función que borra, un valor así tiene que fallar fuerte.
+    """Borra las carpetas temporales de capturas que quedaron por un cierre abrupto."""
+    # Con NaN todo contaba como "viejo" (borraba también las carpetas recientes)
     if not _is_finite_number(max_age) or max_age < 0:
         raise ValueError(f"max_age debe ser un número finito >= 0, recibí {max_age!r}")
     root = Path(temp_root) if temp_root else Path(tempfile.gettempdir())
@@ -274,12 +230,7 @@ def cleanup_stale_temp_dirs(max_age: float = STALE_AFTER, temp_root=None) -> Lis
 
 
 class LiveCapture:
-    """Captura de una fuente a un archivo .pcap, con límites y detención segura.
-
-    Hilos: la fuente llama a `_on_packet` desde SU hilo; un hilo monitor es el
-    único que llama a `source.stop()` y cierra el archivo. Detener desde el
-    propio hilo del sniffer podría bloquearse esperándose a sí mismo.
-    """
+    """Captura de una fuente a un archivo .pcap, con límites y detención segura."""
 
     def __init__(
         self,
@@ -344,11 +295,7 @@ class LiveCapture:
         return self._started_at is not None and not self._finished.is_set()
 
     def cleanup(self) -> None:
-        """Borra la carpeta temporal que creó esta captura (si la creó ella).
-
-        No se puede llamar con la captura en curso. Las rutas que pasó el
-        llamador (`out_path`) NUNCA se borran: no son nuestras.
-        """
+        """Borra la carpeta temporal que creó esta captura (si la creó ella)."""
         if self.running:
             raise CaptureStateError("no se puede limpiar una captura en curso")
         if self.temp_dir is not None:
@@ -385,7 +332,7 @@ class LiveCapture:
         """Escribe el paquete al pcap; ante error de E/S registra y corta la captura."""
         try:
             self._writer.writepkt(data, ts=ts)
-        except Exception as exc:  # borde del hilo del sniffer: disco lleno, archivo cerrado, dato raro
+        except Exception as exc:  # borde del hilo del sniffer
             self.error = exc
             self._reason = "error"
             self._done.set()
@@ -443,19 +390,12 @@ class LiveCapture:
             self._finished.set()
 
     def _stop_source(self) -> None:
-        """Detiene la fuente SIN poder quedarse colgado más de STOP_TIMEOUT.
-
-        `source.stop()` puede bloquearse (un driver que no responde, un join que
-        nunca vuelve). Lo corremos en un hilo aparte y esperamos con tope: si
-        vence, seguimos adelante y cerramos el archivo igual; los paquetes que
-        lleguen después se ignoran porque `_done` ya está marcado.
-        """
+        """Detiene la fuente SIN poder quedarse colgado más de STOP_TIMEOUT."""
         def run():
             try:
                 self._source.stop()
             except Exception as exc:
-                # Un fallo al detener la fuente no debe dejar un traceback suelto
-                # en el hilo ni impedir cerrar el archivo: lo guardamos en `error`.
+                # Un fallo al detener la fuente no debe dejar un traceback suelto en el hilo ni impedir
                 self.error = self.error or exc
 
         worker = threading.Thread(target=run, name="tracewell-live-stop", daemon=True)
@@ -466,9 +406,7 @@ class LiveCapture:
                 f"la fuente no se detuvo en {STOP_TIMEOUT:g} s; se cerró el archivo igual")
 
     def _close_file(self) -> None:
-        """Vacía y cierra el pcap. Un error de E/S (disco lleno) queda en `error`
-        y no impide marcar la captura como terminada: si se propagara desde el
-        hilo monitor, `stop()` esperaría para siempre."""
+        """Vacía y cierra el pcap."""
         fh = self._fh
         if fh is None or fh.closed:
             return
