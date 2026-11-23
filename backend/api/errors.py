@@ -6,6 +6,8 @@ import logging
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from backend.domain.rules.builder import RuleExists
+from backend.domain.rules.engine import RuleError
 from backend.domain.rules.iocs import IocError
 from backend.domain.pcap.live import CaptureError, CaptureStateError, PermissionDenied
 from backend.domain.pcap.reader import PcapError
@@ -21,6 +23,8 @@ ERROR_STATUS = (
     (UnsupportedLinktype, 422),
     (InvalidFilter, 422),
     (IocError, 422),
+    (RuleError, 422),
+    (RuleExists, 409),
     (PermissionDenied, 403),
     (CaptureStateError, 409),
     (CaptureError, 503),

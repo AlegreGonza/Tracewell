@@ -24,6 +24,7 @@ from backend.domain.support.monitor import monitor
 from .routes import analysis as routes_analysis
 from .routes import insights as routes_insights
 from .routes import live as routes_live
+from .routes import rules as routes_rules
 from .routes import support as routes_support
 from .routes import system as routes_system
 from .routes import triage as routes_triage
@@ -104,6 +105,7 @@ def create_app(
         # Se resuelve al llamar (no al crear): así `backend.api.app.analyze` sigue siendo parcheable.
         analyze=lambda path, rls: analyze(path, rls),
         make_sampler=sampler_factory,
+        rules_dir=Path(rules_dir),
     )
     install_local_only(app, allowed_hosts)
     register_error_handlers(app)
@@ -111,6 +113,7 @@ def create_app(
     app.include_router(routes_live.router)
     app.include_router(routes_triage.router)
     app.include_router(routes_insights.router)
+    app.include_router(routes_rules.router)
     app.include_router(routes_system.router)
     app.include_router(routes_support.router)
     _mount_frontend(app, frontend_dir)

@@ -52,6 +52,7 @@ class Ctx:
     interface_lister: Optional[Callable]
     analyze: Callable[[Path, list[Rule]], Analysis]
     make_sampler: Optional[Callable[[], Optional[ProcessSampler]]] = None  # None: sin columna Proceso
+    rules_dir: Optional[Path] = None  # carpeta donde el panel de reglas guarda las reglas nuevas
 
 
 def get_ctx(request: Request) -> Ctx:
