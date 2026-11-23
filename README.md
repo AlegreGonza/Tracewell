@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/tracewell-header.png" alt="Tracewell: network traffic analysis for SOC triage" width="900">
+  <img src="docs/assets/tracewell-portada.webp" alt="Tracewell: network traffic analysis for SOC triage" width="900">
 </p>
 
 # Tracewell
