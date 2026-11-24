@@ -14,7 +14,8 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from backend.domain.analysis.analyzer import analyze
-from backend.domain.pcap.live import CaptureError, PacketSource, ScapySource
+from backend.domain.pcap.dumpcap import make_source
+from backend.domain.pcap.live import CaptureError, PacketSource
 from backend.domain.pcap.processes import ProcessSampler, make_default_sampler
 from backend.domain.files import resolve_allowed_dirs
 from backend.domain.rules.engine import load_all_rules
@@ -136,7 +137,7 @@ def create_app(
         rules=rules,
         samples_dir=Path(samples_dir),
         live_dir=Path(live_dir) if live_dir else None,
-        make_source=source_factory or (lambda iface: ScapySource(iface)),
+        make_source=source_factory or make_source,
         interface_lister=interface_lister,
         # Se resuelve al llamar (no al crear)
         analyze=lambda path, rls: analyze(path, rls),

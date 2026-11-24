@@ -59,7 +59,7 @@ function Grid({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
           {rows.map((cells, i) => (
             <TableRow key={i}>
               {cells.map((c, j) => (
-                <TableCell key={j} className='max-w-80 break-words'>
+                <TableCell key={j} className='max-w-80 whitespace-normal break-all'>
                   {c ?? <Dash />}
                 </TableCell>
               ))}

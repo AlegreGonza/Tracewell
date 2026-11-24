@@ -102,10 +102,10 @@ def _is_virtual(info: InterfaceInfo) -> bool:
 
 PERMISSION_HELP = (
     "permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux). "
-    "Alternativas sin correr todo como root: en Linux, "
-    "`sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))` "
-    "(vale para ese intérprete y todo lo que corra con él); en Windows, reinstalá Npcap "
-    "y desmarcá \"Restrict Npcap driver's access to Administrators only\""
+    "Sin correr todo como root, en Linux: instalá Wireshark (dumpcap) y dale el permiso solo a él con "
+    "`sudo setcap cap_net_raw,cap_net_admin+ep $(readlink -f $(which dumpcap))`; Tracewell lo usa solo. "
+    "En Windows conviene abrirlo como administrador (el modo de Npcap para no administradores "
+    "deja capturar a cualquier usuario del equipo)"
 )
 
 

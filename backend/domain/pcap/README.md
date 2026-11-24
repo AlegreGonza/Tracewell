@@ -11,7 +11,11 @@ pcapng menor a 8: dpkt leía un número negativo de bytes y escapaba un `ValueEr
 
 ## Permisos de captura (`ScapySource`)
 
-Si falta permiso, el error (`PermissionDenied`, `403`) ofrece alternativas a correr todo como administrador o root. En Linux: `sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))` (aplica a ese intérprete y a todo lo que corra con él). En Windows: reinstalar Npcap y desmarcar "Restrict Npcap driver's access to Administrators only". El texto vive en `PERMISSION_HELP` (`live.py`).
+Si falta permiso, el error (`PermissionDenied`, `403`) ofrece alternativas a correr todo como administrador o root. El texto vive en `PERMISSION_HELP` (`live.py`).
+
+## Captura sin privilegios en Linux (`dumpcap.py`)
+
+Como Wireshark, solo un programa chico lleva el permiso: si `dumpcap` está instalado (y no se fuerza `TRACEWELL_CAPTURE=scapy`), `make_source` lo usa (`dumpcap -i IFACE -P -q -w - [-f FILTRO]`) y lee el pcap por la tubería; la API corre sin privilegios. Permiso: `sudo setcap cap_net_raw,cap_net_admin+ep $(readlink -f $(which dumpcap))` o `sudo dpkg-reconfigure wireshark-common` y el grupo `wireshark`. No se da `setcap` al intérprete de Python: valdría para todo lo que corra con él. Si dumpcap no está (o en Windows) se usa Scapy como antes. En Windows no se recomienda el modo de Npcap para no administradores: deja capturar a cualquier usuario del equipo. Solo se aceptan interfaces Ethernet (como con Scapy). Con setcap pueden capturar todos los usuarios del equipo; para limitarlo a un grupo, `chgrp`/`chmod 750` sobre dumpcap antes del setcap (documentación de Wireshark). Solo se aceptan nombres simples de interfaz: dumpcap también acepta números, `-` (stdin), rutas, `rpcap://` y `TCP@host:puerto`, que se rechazan. Se detiene con SIGINT, la forma documentada (Ctrl-C). Probado con dumpcap simulado: falta validarlo con tráfico real.
 
 ## hexdump.py
 

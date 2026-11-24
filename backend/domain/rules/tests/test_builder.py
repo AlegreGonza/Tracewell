@@ -130,3 +130,25 @@ def test_id_reservado_de_windows_se_rechaza():
     for reservado in ("con", "nul", "com1", "lpt9"):
         with pytest.raises(RuleError):
             to_dict(RuleForm(id=reservado, name="Prueba", severity="low"))
+
+
+@pytest.mark.parametrize("over", [
+    {"description": "!!python/object/apply:os.system ['calc']"},
+    {"description": "&a [*a]"},
+    {"name": "x\nseverity: critical"},
+    {"description": "a\r\nid: pwn"},
+    {"src_ip": "1.2.3.4\nport: 1"},
+    {"src_ip": "999.1.1.1"},
+    {"dst_ip": "10.0.0.0/99"},
+    {"port": -1}, {"port": 70000}, {"min_events": 0}, {"min_events": -5},
+    {"window_seconds": float("nan")}, {"window_seconds": float("inf")}, {"window_seconds": -1},
+    {"protocol": "tcp: {a: b}"}, {"severity": "critical\nx: y"},
+])
+def test_entradas_hostiles_se_rechazan_o_viajan_como_dato(over):
+    try:
+        data = builder.to_dict(form(**over))
+        builder.build_rule(data)  # el motor valida los parámetros
+    except RuleError:
+        return
+    text = builder.render_yaml(data)
+    assert yaml.safe_load(text) == data and "!!" not in text.replace(over.get("description", ""), "")

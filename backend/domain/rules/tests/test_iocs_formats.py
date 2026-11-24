@@ -1,6 +1,7 @@
 """IOC en CSV y STIX 2.1."""
 import ipaddress
 import json
+import time
 
 import pytest
 
@@ -250,3 +251,15 @@ def test_load_csv_con_bom_y_crlf(tmp_path):
     f = tmp_path / "bom.csv"
     f.write_bytes("﻿value,note\r\n1.2.3.4,x\r\n".encode("utf-8"))
     assert load_iocs(f).ips == frozenset({"1.2.3.4"})
+
+
+@pytest.mark.parametrize("pattern", [
+    "[ipv4-addr:value = '" + "\\" * 200_000,  # comilla sin cerrar, solo barras
+    "[ipv4-addr:value = '" + "a\'" * 100_000,  # escapes sin cierre
+    "[ipv4-addr:value IN (" + "'x'," * 100_000,  # lista IN sin paréntesis de cierre
+    "[" + "domain-name:value = '" * 50_000,  # muchos inicios de literal
+])
+def test_patron_stix_largo_no_causa_redos(pattern):
+    start = time.perf_counter()
+    iocs._pattern_values(pattern)
+    assert time.perf_counter() - start < 2

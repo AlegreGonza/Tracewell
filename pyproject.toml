@@ -47,3 +47,5 @@ select = ["F"]
 [tool.bandit]
 # Los tests usan assert y datos falsos a propósito: se auditan solo los módulos de producción.
 exclude_dirs = ["tests", "**/tests"]
+# subprocess con lista fija de argumentos y sin shell (ping, systemctl, powershell): B404/B603/B607 son ruido.
+skips = ["B404", "B603", "B607"]

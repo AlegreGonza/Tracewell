@@ -458,7 +458,7 @@ class FtpCleartextDetector(Detector):
         self._alerted[(d.src, d.dst, user)] = True
         return [self._alert(d, {
             "username": user,
-            "password": "<oculta>",
+            "password": "<oculta>",  # nosec B105 - marcador de texto
             "password_length": len(value.strip()),
             "port": d.dport,
             "protocol": self._protocol(d),

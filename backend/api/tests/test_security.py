@@ -192,7 +192,7 @@ CABECERAS = {"x-frame-options": "DENY", "x-content-type-options": "nosniff", "re
 def _csp_ok(r):
     csp = r.headers["content-security-policy"]
     assert "default-src 'self'" in csp and "frame-ancestors 'none'" in csp and "script-src 'self'" in csp
-    assert "style-src 'self' 'unsafe-inline'" in csp  # Mantine usa estilos en línea
+    assert "style-src 'self' 'unsafe-inline'" in csp  # la UI (Radix/sonner) usa estilos en línea
     assert "unsafe-eval" not in csp and "script-src 'self' 'unsafe-inline'" not in csp
 
 
