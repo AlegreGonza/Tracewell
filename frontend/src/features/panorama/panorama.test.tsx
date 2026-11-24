@@ -15,6 +15,17 @@ describe('Panorama', () => {
     ).toBeInTheDocument()
   })
 
+  it('con la demo muestra «Quién más habla» y el caso guiado', async () => {
+    await renderRoute('/capturas/panorama', { capture: true })
+    expect(await screen.findByText('Quién más habla')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Caso guiado: investigá esta demo')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Filtrar por 192.168.1.66' })
+    ).toBeInTheDocument()
+  })
+
   it('el puntaje suma por severidad y tiene tope de 100', () => {
     const a = (severity: string) => ({ severity }) as never
     expect(riskScore([a('high'), a('medium')])).toBe(37)

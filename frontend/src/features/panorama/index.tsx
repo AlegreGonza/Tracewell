@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useAlerts, useStats } from '@/lib/api/queries'
+import { useCapture } from '@/context/capture-provider'
 import { type Stats } from '@/lib/api/schemas'
 import { formatBytes } from '@/lib/format'
 import { RequireCapture } from '@/components/empty-capture'
@@ -9,8 +10,10 @@ import { QueryBoundary } from '@/components/query-boundary'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Activity } from './activity'
+import { GuidedCase } from './guided-case'
 import { Protocols } from './protocols'
 import { RiskCard } from './risk-card'
+import { TopTalkers } from './top-talkers'
 
 const n = (v: number | undefined) => (v ?? 0).toLocaleString('es-AR')
 
@@ -56,8 +59,11 @@ function StatsCard({ stats, alerts }: { stats: Stats; alerts: number }) {
 function PanoramaContent() {
   const stats = useStats()
   const alerts = useAlerts()
+  const { capture } = useCapture()
+  const isDemo = /(^|[\\/])demo\.pcap$/.test(capture?.source ?? '')
   return (
     <div className='space-y-4'>
+      {isDemo && <GuidedCase />}
       <QueryBoundary query={stats}>
         {(s) => <StatsCard stats={s} alerts={alerts.data?.length ?? 0} />}
       </QueryBoundary>
@@ -67,7 +73,10 @@ function PanoramaContent() {
         </QueryBoundary>
         {stats.data && <Protocols stats={stats.data} />}
       </div>
-      <Activity />
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <TopTalkers />
+        <Activity />
+      </div>
       <p className='text-sm'>
         <Link
           to='/capturas/alertas'

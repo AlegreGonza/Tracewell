@@ -38,8 +38,16 @@ web (ventana pywebview o navegador). No es un servicio de red ni está pensado p
 - **Un atacante con ejecución de código en tu cuenta o con privilegios administrativos** puede leer el token del
   proceso o la memoria, o leer directamente los archivos: la defensa es contra páginas web y otros procesos
   sin esos privilegios, no contra un equipo ya comprometido.
-- **El token y la API viajan por HTTP sin cifrar en el bucle local.** Cualquier proceso con permiso para
-  inspeccionar el tráfico local o la lista de procesos del mismo usuario podría verlos.
+- **El token y la API viajan por HTTP sin cifrar en el bucle local (riesgo aceptado).** El servidor solo
+  escucha en `127.0.0.1`, así que ese tráfico no sale de la máquina; verlo exige capturar en loopback, y eso
+  pide privilegios de administrador. Quien tiene esos privilegios, o ejecuta código en tu cuenta, también puede
+  leer el token de la memoria del proceso o del `sessionStorage` del navegador, de modo que cifrar el canal
+  no cambiaría el resultado. Un HTTPS local con certificado autofirmado además guardaría su clave al alcance
+  del mismo usuario, mostraría advertencias en el navegador y complicaría la ventana de escritorio, por eso no
+  se usa. Lo que sí se hace: el token es aleatorio en cada arranque, va en el fragmento `#` de la URL (no llega
+  al servidor ni al `Referer`), la ventana de escritorio lo recibe en memoria y no por la línea de comandos, y
+  se validan `Host` y `Origin`. Con `--serve-only` la URL con el token se imprime en la consola para poder
+  abrirla: no compartas esa salida ni la pegues en un reporte.
 - **Las capturas son entrada hostil.** El análisis es lectura de datos con `dpkt` y `scapy`, bibliotecas que
   parsean formatos complejos: un pcap malicioso podría explotar un defecto de esas bibliotecas o de Tracewell
   (caídas, consumo excesivo). Los límites mitigan el agotamiento de recursos, no garantizan ausencia de fallos.
