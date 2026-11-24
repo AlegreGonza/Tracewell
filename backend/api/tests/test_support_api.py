@@ -38,16 +38,32 @@ def fake(monkeypatch):
     return calls
 
 
-GETS = [("config", "network_config"), ("config/raw", "raw_config"), ("internet", "internet_check"), ("latency", "latency_test"),
-        ("ping?host=1.1.1.1", "ping"), ("traceroute?host=1.1.1.1", "traceroute"), ("ports?host=1.1.1.1&ports=22,80", "port_check"),
-        ("rdp?host=1.1.1.1", "rdp_check"), ("time", "time_offset"), ("devices", "list_devices"), ("wifi", "wifi_status"),
-        ("wifi/history", "wifi_history"), ("duplicate-ip", "check_duplicate_ip")]
+# Lecturas del estado local: GET. Los sondeos que envían tráfico a la red son POST (un GET sin
+# Origin, p. ej. un <img> de una página ajena, no pasaría por el chequeo de Origin).
+GETS = [("config", "network_config"), ("config/raw", "raw_config"), ("wifi", "wifi_status"), ("wifi/history", "wifi_history")]
+POSTS = [("internet", "internet_check"), ("latency", "latency_test"),
+         ("ping?host=1.1.1.1", "ping"), ("traceroute?host=1.1.1.1", "traceroute"), ("ports?host=1.1.1.1&ports=22,80", "port_check"),
+         ("rdp?host=1.1.1.1", "rdp_check"), ("time", "time_offset"), ("devices", "list_devices"), ("duplicate-ip", "check_duplicate_ip")]
 
 
 @pytest.mark.parametrize("path,fn", GETS)
 def test_lecturas_200_y_no_store(client, fake, path, fn):
     r = client.get("/api/support/" + path)
     assert r.status_code == 200 and r.json()["fn"] == fn and r.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("path,fn", POSTS)
+def test_sondeos_200_y_no_store(client, fake, path, fn):
+    r = client.post("/api/support/" + path)
+    assert r.status_code == 200 and r.json()["fn"] == fn and r.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("path,fn", POSTS)
+def test_sondeos_no_se_ejecutan_con_get(client, fake, path, fn):
+    # regresión de seguridad: un GET cross-site sin Origin no puede disparar el sondeo
+    # (404 si el montaje estático atrapa la ruta, 405 en una app solo con el router)
+    assert client.get("/api/support/" + path).status_code in (404, 405)
+    assert fn not in fake
 
 
 def test_monitor_get(client, fake):
@@ -57,30 +73,34 @@ def test_monitor_get(client, fake):
 
 
 def test_argumentos_se_pasan(client, fake):
-    client.get("/api/support/ports?host=h.local&ports=22, 80,443")
+    client.post("/api/support/ports?host=h.local&ports=22, 80,443")
     assert fake["port_check"][0] == ("h.local", [22, 80, 443])
-    client.get("/api/support/devices?scan=true")
+    client.post("/api/support/devices?scan=true")
     assert fake["list_devices"][0] == (True,)
 
 
 @pytest.mark.parametrize("path", [
     "ping?host=1.1.1.1&count=21", "ping?host=1.1.1.1&count=0", "ports?host=1.1.1.1&ports=abc", "ports?host=1.1.1.1",
     "latency?samples=2", "latency?samples=31", "latency?port=0", "traceroute?host=1.1.1.1&max_hops=31", "rdp?host=1.1.1.1&port=70000",
-    "wifi/history?limit=0", "wifi/history?limit=301",
 ])
 def test_valores_invalidos_422(client, fake, path):
+    assert client.post("/api/support/" + path).status_code == 422
+
+
+@pytest.mark.parametrize("path", ["wifi/history?limit=0", "wifi/history?limit=301"])
+def test_valores_invalidos_422_en_lecturas(client, fake, path):
     assert client.get("/api/support/" + path).status_code == 422
 
 
 def test_validacion_del_core_es_422(client, monkeypatch):
     """Sin falsos: valid_host / servidor de hora no permitido salen como 422 con el motivo, y."""
-    r = client.get("/api/support/ping", params={"host": "a;b"})
+    r = client.post("/api/support/ping", params={"host": "a;b"})
     assert r.status_code == 422 and "válido" in r.json()["detail"]
     for bad in ("a|b", "-n", "a$b", "a b"):
-        assert client.get("/api/support/ping", params={"host": bad}).status_code == 422
-    r = client.get("/api/support/time", params={"server": "evil.example.com"})
+        assert client.post("/api/support/ping", params={"host": bad}).status_code == 422
+    r = client.post("/api/support/time", params={"server": "evil.example.com"})
     assert r.status_code == 422 and "no permitido" in r.json()["detail"]
-    assert client.get("/api/support/ports", params={"host": "1.1.1.1", "ports": "abc"}).status_code == 422
+    assert client.post("/api/support/ports", params={"host": "1.1.1.1", "ports": "abc"}).status_code == 422
 
 
 def test_monitor_intervalo_invalido(client, fake):
@@ -104,7 +124,7 @@ def test_monitor_get_a_post_es_405(fake, p):
     assert TestClient(mini).get("/api/support/monitor/" + p).status_code == 405
 
 
-@pytest.mark.parametrize("path", ["config", "internet", "monitor"])
+@pytest.mark.parametrize("path", ["config", "config/raw", "wifi", "monitor"])
 def test_las_lecturas_no_aceptan_post(fake, path):
     from fastapi import FastAPI
     mini = FastAPI()

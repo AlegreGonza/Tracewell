@@ -13,6 +13,10 @@ mitre:
 params:
   min_attempts: 10     # intentos de conexión para disparar
   window_seconds: 60   # ventana de tiempo
+  # Fuerza bruta lenta: segunda ventana larga (0 = apagada). Un chequeo de monitoreo
+  # cada 60 s da 5 intentos en 300 s: no alcanza el umbral.
+  long_window_seconds: 300
+  long_attempts: 10
   ports: [22, 3389]    # SSH y RDP
 
 # Campos explicativos OPCIONALES: se muestran en la alerta de la interfaz (no van en el JSON exportado).

@@ -13,6 +13,12 @@ params:
   max_label_length: 40
   min_entropy: 3.5
   entropy_min_label: 20
+  # Túneles con etiquetas cortas: subdominios (sin el dominio registrable) de al menos
+  # estos caracteres en total, en 2 o más etiquetas y con la entropía mínima. 0 = apagado.
+  min_total_length: 50
+  # Volumen (apagado por defecto): subdominios únicos de un mismo dominio en la ventana.
+  min_unique_subdomains: 0
+  volume_window_seconds: 60
   # Dominios de confianza que se omiten (el dominio exacto y todo lo que cuelga de él).
   # Los balanceadores de AWS generan nombres largos y legibles que parecen DGA.
   ignore_suffixes:

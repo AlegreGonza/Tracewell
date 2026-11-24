@@ -24,7 +24,7 @@ Windows 10 (1809 o posterior) y Windows 11 traen `winget`. Si no lo tenés, el s
 Con el zip, descomprimí, entrá a la carpeta `tracewell-<versión>` y seguí con la instalación de abajo. Junto al zip se publica un archivo `.sha256` para verificar que la descarga no se corrompió:
 
 ```powershell
-(Get-FileHash .\tracewell-0.2.1.zip -Algorithm SHA256).Hash
+(Get-FileHash .\tracewell-0.3.0.zip -Algorithm SHA256).Hash
 ```
 
 El resultado tiene que coincidir con el contenido del `.sha256` (en minúsculas allá). En Linux/macOS los scripts `.sh` salen del zip sin permiso de ejecución: usá `bash instalar.sh` y `bash iniciar.sh`.
@@ -53,7 +53,7 @@ El script hace, en orden:
 
 1. **Python:** busca 3.12, 3.13 o 3.11 (en ese orden de preferencia) y después cualquier 3.11+. Si no hay, ofrece instalar Python 3.12.
 2. **Entorno virtual:** crea `.venv` en la carpeta del proyecto.
-3. **Paquetes:** instala `requirements.txt` dentro de `.venv` (nada global).
+3. **Paquetes:** instala `requirements.lock` (versiones exactas con hashes; si falta, `requirements.txt`) dentro de `.venv` (nada global).
 4. **Interfaz:** si falta `frontend\dist`, la compila (instalando Node.js si hace falta).
 5. **WebView2:** lo detecta; si falta, ofrece instalarlo.
 6. **Npcap:** lo detecta y, si falta, te explica cómo instalarlo (no lo instala él).
@@ -124,7 +124,7 @@ Todo vive dentro de la carpeta del proyecto, salvo lo que haya instalado `winget
 | Python 3.12, Node.js LTS, WebView2 Runtime | `winget` (repositorio de Microsoft) | Solo si faltan y confirmás |
 | Dependencias de la interfaz (`npm install`) | registro de npm | Solo si falta `frontend\dist` |
 
-Los paquetes de Python **no están fijados a una versión exacta** (`requirements.txt` sin versiones): se instalan las más nuevas. Si una versión futura rompe algo, fijá la versión conocida en `requirements.txt`. Para ver lo que quedó instalado: `.\.venv\Scripts\python -m pip freeze`.
+`requirements.txt` fija solo cotas compatibles (`>=mínima,<siguiente mayor`); `requirements.lock` fija versiones exactas con hashes (ver `docs/desarrollo.md`, sección "Dependencias fijadas"). Para ver lo que quedó instalado: `.\.venv\Scripts\python -m pip freeze`.
 
 ## Solución de problemas
 

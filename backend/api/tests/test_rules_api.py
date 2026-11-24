@@ -20,8 +20,13 @@ def rules_dir(tmp_path):
 
 
 @pytest.fixture
-def client(rules_dir):
-    return TestClient(create_app(rules_dir=rules_dir, sampler_factory=None))
+def user_dir(tmp_path):
+    return tmp_path / "usuario" / "rules"  # no existe: se crea al guardar
+
+
+@pytest.fixture
+def client(rules_dir, user_dir):
+    return TestClient(create_app(rules_dir=rules_dir, user_rules_dir=user_dir, sampler_factory=None))
 
 
 def test_lista_reglas_y_trae_el_ejemplo(client):
@@ -58,21 +63,21 @@ def test_formulario_invalido_422(client, over):
     assert client.post("/api/rules", json={**BODY, **over}).status_code == 422
 
 
-def test_guardar_crea_el_yaml_y_la_regla_se_usa_en_la_proxima_captura(client, rules_dir):
+def test_guardar_crea_el_yaml_y_la_regla_se_usa_en_la_proxima_captura(client, user_dir):
     r = client.post("/api/rules", json=BODY)
     assert r.status_code == 201 and r.json()["file"] == "mucho_syn.yaml"
-    assert yaml.safe_load((rules_dir / "mucho_syn.yaml").read_text(encoding="utf-8"))["detector"] == "threshold"
+    assert yaml.safe_load((user_dir / "mucho_syn.yaml").read_text(encoding="utf-8"))["detector"] == "threshold"
     assert any(x["id"] == "mucho_syn" and x["custom"] for x in client.get("/api/rules").json()["items"])
     demo = client.post("/api/demo").json()
     assert "mucho_syn" in {x["id"] for x in demo["rules"]}
     assert "mucho_syn" in {a["rule_id"] for a in client.get("/api/alerts").json()}
 
 
-def test_guardar_dos_veces_da_409_y_no_pisa(client, rules_dir):
+def test_guardar_dos_veces_da_409_y_no_pisa(client, user_dir):
     assert client.post("/api/rules", json=BODY).status_code == 201
-    first = (rules_dir / "mucho_syn.yaml").read_bytes()
+    first = (user_dir / "mucho_syn.yaml").read_bytes()
     assert client.post("/api/rules", json={**BODY, "min_events": 99}).status_code == 409
-    assert (rules_dir / "mucho_syn.yaml").read_bytes() == first
+    assert (user_dir / "mucho_syn.yaml").read_bytes() == first
 
 
 def test_no_se_pueden_modificar_las_reglas_existentes(client, rules_dir):

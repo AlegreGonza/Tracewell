@@ -12,6 +12,8 @@ HANDSHAKE, CLIENT_HELLO, SERVER_HELLO, CERTIFICATE = 0x16, 1, 2, 11
 EXT_SNI, EXT_ALPN, EXT_SIGALGS, EXT_VERSIONS = 0x0000, 0x0010, 0x000D, 0x002B
 MAX_CERT_NAMES = 20
 MAX_DER_DEPTH = 6
+MAX_RECORDS = 1_000  # registros TLS que se leen por flujo
+MAX_TLS_BYTES = 4_000_000  # bytes del flujo que se examinan
 
 _VERSION_CODES = {0x0304: "13", 0x0303: "12", 0x0302: "11", 0x0301: "10", 0x0300: "s3", 0x0200: "s2"}
 VERSION_NAMES = {0x0304: "TLS 1.3", 0x0303: "TLS 1.2", 0x0302: "TLS 1.1", 0x0301: "TLS 1.0", 0x0300: "SSL 3.0"}
@@ -42,7 +44,8 @@ class ClientHello:
 def _records(data: bytes) -> List[Tuple[int, bytes]]:
     """(tipo, contenido) de los registros TLS de un flujo; se corta en el primero que no encaja."""
     out, pos = [], 0
-    while pos + 5 <= len(data):
+    data = data[:MAX_TLS_BYTES]
+    while pos + 5 <= len(data) and len(out) < MAX_RECORDS:
         kind, major, length = data[pos], data[pos + 1], _u16(data, pos + 3)
         if major != 3 or length is None or length > 1 << 15:
             break
@@ -311,7 +314,10 @@ def _cert_view(info: Dict[str, Any], when: Optional[float]) -> Dict[str, Any]:
     view = dict(info)
     view["expired"] = None
     if when is not None and info.get("not_after") and info.get("not_before"):
-        moment = datetime.fromtimestamp(when, timezone.utc).isoformat()
+        try:
+            moment = datetime.fromtimestamp(when, timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):  # fecha de captura absurda
+            return view
         view["expired"] = moment > info["not_after"]
         view["not_yet_valid"] = moment < info["not_before"]
     return view

@@ -1,4 +1,5 @@
 // Cliente de la API
+import { getToken } from "./token.js";
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -36,12 +37,18 @@ export function buildQuery(params = {}) {
   return s ? `?${s}` : "";
 }
 
+function tokenHeader() {
+  const token = getToken();
+  return token ? { "X-Tracewell-Token": token } : {};
+}
+
 async function request(path, { method = "GET", body, signal } = {}) {
   let res;
+  const headers = { ...(body ? { "Content-Type": "application/json" } : {}), ...tokenHeader() };
   try {
     res = await fetch(path, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });
@@ -93,6 +100,12 @@ export const api = {
   // La exportación y el informe son descargas: devolvemos la URL para un <a download>.
   exportUrl: (filters) => `/api/export${buildQuery(filters)}`,
   reportUrl: () => "/api/report",
+  // Un <a download> no lleva cabeceras: se pide un ticket de un solo uso para esa ruta y se agrega a la URL.
+  ticketUrl: async (url) => {
+    const path = url.split("?")[0];
+    const { ticket, query } = await request("/api/download-ticket", { method: "POST", body: { path } });
+    return `${url}${url.includes("?") ? "&" : "?"}${query}=${encodeURIComponent(ticket)}`;
+  },
   // Descargas de .pcap
   sessionPcapUrl: (id) => `/api/sessions/${encodeURIComponent(id)}/pcap`,
   filteredPcapUrl: (filters) => `/api/pcap${buildQuery(filters)}`,
@@ -116,17 +129,17 @@ export const api = {
   // Soporte de red → Red: pruebas de solo lectura
   supportConfig: (signal) => request("/api/support/config", { signal }),
   supportConfigRaw: (signal) => request("/api/support/config/raw", { signal }),
-  supportInternet: (signal) => request("/api/support/internet", { signal }),
-  supportLatency: (params, signal) => request(`/api/support/latency${buildQuery(params)}`, { signal }),
-  supportPing: (host, count, signal) => request(`/api/support/ping${buildQuery({ host, count })}`, { signal }),
-  supportTraceroute: (host, signal) => request(`/api/support/traceroute${buildQuery({ host })}`, { signal }),
-  supportPorts: (host, ports, signal) => request(`/api/support/ports${buildQuery({ host, ports })}`, { signal }),
-  supportRdp: (host, port, signal) => request(`/api/support/rdp${buildQuery({ host, port })}`, { signal }),
-  supportTime: (server, signal) => request(`/api/support/time${buildQuery({ server })}`, { signal }),
-  supportDevices: (scan, signal) => request(`/api/support/devices${buildQuery({ scan: scan ? "true" : "" })}`, { signal }),
+  supportInternet: (signal) => request("/api/support/internet", { method: "POST", signal }),
+  supportLatency: (params, signal) => request(`/api/support/latency${buildQuery(params)}`, { method: "POST", signal }),
+  supportPing: (host, count, signal) => request(`/api/support/ping${buildQuery({ host, count })}`, { method: "POST", signal }),
+  supportTraceroute: (host, signal) => request(`/api/support/traceroute${buildQuery({ host })}`, { method: "POST", signal }),
+  supportPorts: (host, ports, signal) => request(`/api/support/ports${buildQuery({ host, ports })}`, { method: "POST", signal }),
+  supportRdp: (host, port, signal) => request(`/api/support/rdp${buildQuery({ host, port })}`, { method: "POST", signal }),
+  supportTime: (server, signal) => request(`/api/support/time${buildQuery({ server })}`, { method: "POST", signal }),
+  supportDevices: (scan, signal) => request(`/api/support/devices${buildQuery({ scan: scan ? "true" : "" })}`, { method: "POST", signal }),
   supportWifi: (signal) => request("/api/support/wifi", { signal }),
   supportWifiHistory: (signal) => request("/api/support/wifi/history", { signal }),
-  supportDuplicateIp: (signal) => request("/api/support/duplicate-ip", { signal }),
+  supportDuplicateIp: (signal) => request("/api/support/duplicate-ip", { method: "POST", signal }),
   monitorStatus: (signal) => request("/api/support/monitor", { signal }),
   monitorStart: (interval) => request(`/api/support/monitor/start${buildQuery({ interval })}`, { method: "POST" }),
   monitorStop: () => request("/api/support/monitor/stop", { method: "POST" }),

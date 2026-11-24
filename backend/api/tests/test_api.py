@@ -54,7 +54,7 @@ def loaded(client):
 def test_health(client):
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "version": "0.2.1"}
+    assert r.json() == {"status": "ok", "version": "0.3.0"}
 
 
 # ------------------------------------------------- sin análisis cargado

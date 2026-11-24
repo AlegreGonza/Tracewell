@@ -59,7 +59,9 @@ detectores. Memoria acotada por detector, no por el tamaño del pcap.
 **`_text_list`**: Lista de textos no vacíos de un campo opcional (ausente = vacía); falla si el tipo no es una lista de texto.
 
 
-**`evaluate`**: Pasa cada paquete por todos los detectores y devuelve las alertas ordenadas por tiempo.
+**`RuleRunner`**: Pasa paquetes ya decodificados (`decode_layer`) por los detectores; `analyze` lo usa para compartir la pasada y la decodificación con las sesiones.
+
+**`evaluate`**: Pasa cada paquete por todos los detectores y devuelve las alertas ordenadas por tiempo (usa `RuleRunner`).
 
 
 ### Notas del código
@@ -152,3 +154,54 @@ Las mismas validaciones valen para los tres (red /0 rechazada, IP mal escrita, l
 - `<módulo>`: cada sesión se compara contra todas las redes: se acota el costo
 - `_parse_entry`: ningún dominio real termina en un número: es una IP mal escrita
 
+
+
+## Parámetros de detección lenta, por contenido y DNS agregado
+
+Todos son opcionales en el YAML de la regla (carpeta `rules/`); sin ellos rigen los valores por defecto.
+
+### `port_scan`: escaneo lento
+- `long_window_seconds` (defecto 0 = apagada; la regla del repo usa 900): segunda ventana, larga.
+- `long_threshold` (defecto 20): puertos distintos para alertar dentro de la ventana larga.
+- Solo cuentan los puertos que NO respondieron SYN+ACK: un cliente que usa muchos servicios reales
+  de un servidor no suma. Estado acotado: `_LRU` (MAX_TRACKED), purga por antigüedad al llegar al
+  umbral y tope de 1024 puertos con respuesta recordados por par. Una alerta por par origen/destino.
+- Costo: un escáner lento contra un host con muchos puertos abiertos (todos responden) no se ve por esta vía.
+
+### `brute_force_remote`: fuerza bruta lenta
+- `long_window_seconds` (defecto 0 = apagada; la regla del repo usa 300) y `long_attempts` (defecto 10).
+- Un chequeo de monitoreo cada 60 s da 5 intentos en 300 s y no alerta; uno cada 30 s o menos sí.
+  Con 900 s ese chequeo de 60 s alertaría (15 intentos), por eso la ventana larga es de 300 s.
+- La evidencia (`threshold`, `window_seconds`) refleja la ventana que disparó la alerta.
+
+### `ftp_cleartext`: por contenido
+- Detecta `USER <usuario>` seguido de `PASS <clave>` en el mismo flujo TCP, en cualquier puerto.
+- `ports` (defecto [21]) son los puertos de confianza: ahí un `PASS` sin `USER` visto también alerta.
+- El `USER` debe llevar un solo argumento imprimible (el `USER` de IRC lleva varios y se descarta).
+- POP3 usa los mismos comandos y también expone credenciales: se alerta igual, y `evidence.protocol`
+  es `POP3` si el servidor saludó con `+OK`, `FTP` si saludó con `220` (o el puerto es 21) y
+  `USER/PASS` si no se vio el banner. La contraseña nunca se guarda (`<oculta>` y su largo).
+
+### `dns_suspicious`: túneles con etiquetas cortas
+- `min_total_length` (defecto 50, 0 = apagado): subdominios sin el dominio registrable (aproximado:
+  últimas 2 etiquetas, o 3 en `co.uk`/`com.ar`...), de al menos esos caracteres en total, en 2 o más
+  etiquetas y con entropía >= `min_entropy`. Una sola etiqueta larga ya la cubre el análisis por etiqueta.
+- `min_unique_subdomains` (defecto 0 = apagado) y `volume_window_seconds` (defecto 60): alerta si un
+  origen consulta tantos subdominios únicos de un mismo dominio padre en la ventana. Apagado porque
+  CDN y trackers legítimos generan muchos subdominios; actívelo en redes donde no ocurra.
+- Se respeta `ignore_suffixes` en ambas medidas.
+
+## Carpeta de reglas del usuario (`paths.py`, `load_all_rules`)
+
+Las reglas nuevas del panel se guardan en una carpeta escribible fuera de la instalación:
+Windows `%APPDATA%\Tracewell\rules`; otros sistemas `$XDG_CONFIG_HOME/tracewell/rules` o `~/.config/tracewell/rules`.
+`TRACEWELL_USER_RULES_DIR` (o `create_app(user_rules_dir=...)`) la reemplaza; los tests la usan con `tmp_path`.
+
+Criterio de carga (`engine.load_all_rules(incluidas, usuario)`):
+1. Las reglas incluidas (`rules/`) se cargan estrictas: si una está mal, la app no arranca (como siempre).
+2. Las del usuario se suman después. Si la carpeta no existe se omite (se crea al guardar la primera regla).
+3. Una regla de usuario cuyo id ya existe (incluida, o un archivo de usuario anterior en orden alfabético)
+   se IGNORA y se registra un aviso en el log `tracewell`: una regla de usuario no puede pisar ni
+   desactivar una incluida. Un archivo de usuario roto también se ignora con aviso, para no impedir el arranque.
+4. Guardar (`builder.save`) crea la carpeta si falta, rechaza ids ya activos (`409`) y traduce los errores de
+   disco: `RuleSaveDenied` (`403`, sin permiso) y `RuleSaveError` (`500`, otro fallo), con mensaje en español.

@@ -43,6 +43,9 @@ lógica de análisis acá, va en `domain`.
 ### Funciones y clases
 
 
+**`make_token_check`**: Dependencia global que exige el token de la API (cabecera `X-Tracewell-Token`, con `secrets.compare_digest` sobre bytes) o, solo en un GET de descarga, un ticket de un solo uso (`TicketStore`, `?ticket=`). El token es obligatorio (vacío o `None` lanzan `ValueError`); `create_app` genera uno al azar si no se le pasa y apaga siempre `/docs`, `/redoc` y `/openapi.json`. Ver `docs/desarrollo.md`.
+
+
 **`install_local_only`**: Instala los chequeos de Host y de Origin. La API puede leer rutas locales (/api/analyze) y escuchar en localhost, y CUALQUIER página que el usuario abra en su navegador puede intentar pegarle a localhost (CSRF) o resolver su propio dominio a 127.0.0.1 (DNS rebinding). Dos defensas baratas: 1. Host: solo nombres locales (frena el DNS rebinding, que llega con el Host del dominio atacante). 2. Origin: si el navegador manda uno, debe ser local (frena el CSRF). Sin Origin (curl, TestClient, la propia app al navegar) se permite.
 
 
@@ -72,3 +75,8 @@ Dos decisiones de seguridad y robustez:
 
 - `start_in_thread`: La app se arma ANTES de abrir el socket: si las reglas están mal, no queda un socket abierto.
 
+## Carpetas permitidas y reglas de usuario (parámetros de `create_app`)
+
+- `allowed_dirs`: carpetas desde las que `/api/analyze` y `/api/iocs` abren archivos (variable `TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos, Escritorio, `<temp>/tracewell`; `samples/` y la carpeta de captura en vivo se suman siempre). La ruta se resuelve con `Path.resolve()`; fuera de la lista responde `403` y `/api/analyze` solo admite `.pcap`, `.pcapng`, `.cap` (`400`). Lógica en `backend/domain/files.py`.
+- `user_rules_dir`: carpeta escribible donde `POST /api/rules` guarda las reglas nuevas (variable `TRACEWELL_USER_RULES_DIR`; ver `backend/domain/rules/README.md`). Errores de escritura: `403` sin permiso, `500` otro fallo de disco.
+- `api_token`: opcional; si falta se genera uno aleatorio y queda en `app.state.api_token`.

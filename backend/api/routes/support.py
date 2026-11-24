@@ -1,4 +1,4 @@
-"""Rutas de «Soporte de red → Red»: pruebas y consultas de red de SOLO LECTURA."""
+"""Rutas de «Soporte de red → Red»: SOLO LECTURA; las que sondean la red son POST (ver README)."""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -37,27 +37,27 @@ def config_raw():
     return _call(netinfo.raw_config)
 
 
-@router.get("/internet")
+@router.post("/internet")
 def internet():
     return _call(checks.internet_check)
 
 
-@router.get("/latency")
+@router.post("/latency")
 def latency(host: str = "1.1.1.1", port: int = Query(443, ge=1, le=65535), samples: int = Query(8, ge=3, le=30)):
     return _call(lambda: checks.latency_test(host, port, samples))
 
 
-@router.get("/ping")
+@router.post("/ping")
 def ping(host: str, count: int = Query(4, ge=1, le=20)):
     return _call(lambda: checks.ping(host, count))
 
 
-@router.get("/traceroute")
+@router.post("/traceroute")
 def traceroute(host: str, max_hops: int = Query(20, ge=1, le=30)):
     return _call(lambda: checks.traceroute(host, max_hops))
 
 
-@router.get("/ports")
+@router.post("/ports")
 def ports(host: str, ports: str = Query(..., max_length=200)):
     def work() -> Any:
         try:
@@ -69,17 +69,17 @@ def ports(host: str, ports: str = Query(..., max_length=200)):
     return _call(work)
 
 
-@router.get("/rdp")
+@router.post("/rdp")
 def rdp(host: str, port: int = Query(3389, ge=1, le=65535)):
     return _call(lambda: checks.rdp_check(host, port))
 
 
-@router.get("/time")
+@router.post("/time")
 def time_offset(server: str = "time.windows.com"):
     return _call(lambda: checks.time_offset(server))
 
 
-@router.get("/devices")
+@router.post("/devices")
 def list_devices(scan: bool = False):
     return _call(lambda: devices.list_devices(scan))
 
@@ -94,7 +94,7 @@ def wifi_history(limit: int = Query(100, ge=1, le=300)):
     return _call(lambda: wifi.wifi_history(limit))
 
 
-@router.get("/duplicate-ip")
+@router.post("/duplicate-ip")
 def duplicate_ip(probe: bool = True):
     return _call(lambda: dupip.check_duplicate_ip(probe))
 

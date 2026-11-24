@@ -1,8 +1,11 @@
 id: ftp_cleartext
 name: Credenciales FTP en texto claro
 description: >
-  Se observaron comandos USER/PASS de FTP sin cifrar. Cualquiera en el camino
-  de red puede leer el usuario y la contraseña. La alerta no guarda la contraseña.
+  Se observaron comandos USER/PASS (FTP, y también POP3, que usa los mismos
+  comandos) sin cifrar. Cualquiera en el camino de red puede leer el usuario y
+  la contraseña. Se detecta por contenido en cualquier puerto TCP; la evidencia
+  indica el protocolo (FTP o POP3 según el banner del servidor). La alerta no
+  guarda la contraseña.
 severity: medium
 detector: ftp_cleartext
 mitre:
@@ -10,4 +13,6 @@ mitre:
   name: Network Sniffing
   tactic: Credential Access
 params:
+  # Puertos de confianza: ahí un PASS alerta aunque no se haya visto el USER.
+  # En cualquier otro puerto TCP hace falta USER seguido de PASS en el mismo flujo.
   ports: [21]

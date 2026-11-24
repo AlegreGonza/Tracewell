@@ -1,6 +1,7 @@
 """Política de errores de la API: handler global, cierre robusto, 404 sin contexto, socket de arranque."""
 import logging
 import socket
+import tempfile
 
 import pytest
 from fastapi import HTTPException
@@ -80,7 +81,7 @@ def test_error_mapeado_no_lo_pisa_el_global(client):
 
 def test_mapeados_reales_conservan_codigo(client):
     # 404 (archivo), 422 (validación) y 409 (captura no iniciada) intactos
-    assert client.post("/api/analyze", json={"path": "C:/no/existe.pcap"}).status_code == 404
+    assert client.post("/api/analyze", json={"path": str(tempfile.gettempdir()) + "/no/existe.pcap"}).status_code == 404
     assert client.post("/api/analyze", json={}).status_code == 422
     r = client.post("/api/live/stop")
     assert r.status_code == 409 and r.json()["detail"]

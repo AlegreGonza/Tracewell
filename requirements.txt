@@ -1,8 +1,8 @@
 # Dependencias de ejecución de Tracewell (las mismas que pyproject.toml).
-dpkt        # lectura de pcap/pcapng y decodificación de capas
-pyyaml      # reglas
-fastapi     # API
-uvicorn     # servidor de la API
-scapy       # SOLO captura en vivo (backend/domain/pcap/live.py, import perezoso)
-pywebview   # SOLO la ventana de escritorio (main.py, import perezoso)
-psutil      # OPCIONAL: columna "Proceso" en la captura en vivo (backend/domain/pcap/processes.py, import perezoso)
+dpkt>=1.9.8,<2  # lectura de pcap/pcapng y decodificación de capas
+pyyaml>=6.0.3,<7  # reglas
+fastapi>=0.163.2,<1  # API
+uvicorn>=0.54,<1  # servidor de la API
+scapy>=2.8,<3  # SOLO captura en vivo (backend/domain/pcap/live.py, import perezoso)
+pywebview>=6.2.1,<7  # SOLO la ventana de escritorio (main.py, import perezoso)
+psutil>=7.2.2,<8  # OPCIONAL: columna "Proceso" en la captura en vivo (backend/domain/pcap/processes.py, import perezoso)

@@ -2,20 +2,24 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend.domain.analysis.analyzer import analyze
 from backend.domain.pcap.live import CaptureError, PacketSource, ScapySource
 from backend.domain.pcap.processes import ProcessSampler, make_default_sampler
-from backend.domain.rules.engine import load_rules
+from backend.domain.files import resolve_allowed_dirs
+from backend.domain.rules.engine import load_all_rules
+from backend.domain.rules.paths import default_user_rules_dir
 from backend.domain.support.monitor import monitor
 
 from .routes import analysis as routes_analysis
+from .routes import downloads as routes_downloads
 from .routes import insights as routes_insights
 from .routes import live as routes_live
 from .routes import rules as routes_rules
@@ -23,7 +27,7 @@ from .routes import support as routes_support
 from .routes import system as routes_system
 from .routes import triage as routes_triage
 from .errors import register_error_handlers
-from .security import LOCAL_HOSTS, install_local_only, install_security_headers
+from .security import LOCAL_HOSTS, TicketStore, install_local_only, install_security_headers, make_token_check
 from backend.controllers.state import VERSION, Ctx, _rmtree, _State
 
 logger = logging.getLogger("tracewell")
@@ -82,11 +86,26 @@ def create_app(
     live_dir=None,
     allowed_hosts: Sequence[str] = LOCAL_HOSTS,
     sampler_factory: Optional[Callable[[], Optional[ProcessSampler]]] = make_default_sampler,
+    api_token: Optional[str] = None,
+    allowed_dirs: Optional[Sequence] = None,
+    user_rules_dir=None,
 ) -> FastAPI:
-    """Fábrica de la app."""
-    rules = load_rules(rules_dir)  # falla al arrancar si una regla está mal, no a mitad de uso
+    """Fábrica de la app; toda ruta de la API exige token (si no se pasa, se genera uno al azar)."""
+    # Falla al arrancar si una regla está mal, no a mitad de uso.
+    user_dir = Path(user_rules_dir) if user_rules_dir is not None else default_user_rules_dir()
+    rules = load_all_rules(rules_dir, user_dir)
     state = _State()
-    app = FastAPI(title="Tracewell", version=VERSION, lifespan=_make_lifespan(state))
+    token = api_token if api_token is not None else secrets.token_urlsafe(32)
+    check = make_token_check(token)
+    # No se publica el mapa de la API (/docs, /redoc, /openapi.json).
+    docs = {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    app = FastAPI(
+        title="Tracewell", version=VERSION, lifespan=_make_lifespan(state),
+        dependencies=[Depends(check)], **docs,
+    )
+    app.state.api_token = token
+    app.state.token_generated = api_token is None
+    app.state.tickets = TicketStore()
     app.state.ctx = Ctx(
         state=state,
         rules=rules,
@@ -97,12 +116,15 @@ def create_app(
         # Se resuelve al llamar (no al crear)
         analyze=lambda path, rls: analyze(path, rls),
         make_sampler=sampler_factory,
-        rules_dir=Path(rules_dir),
+        rules_dir=user_dir,
+        allowed_dirs=resolve_allowed_dirs(
+            allowed_dirs, extra=(Path(samples_dir), Path(live_dir) if live_dir else None)),
     )
     install_local_only(app, allowed_hosts)
     install_security_headers(app)  # al final: envuelve también los rechazos de Host/Origin
     register_error_handlers(app)
     app.include_router(routes_analysis.router)
+    app.include_router(routes_downloads.router)
     app.include_router(routes_live.router)
     app.include_router(routes_triage.router)
     app.include_router(routes_insights.router)

@@ -152,16 +152,29 @@ def preview(rule: Rule, packets: Iterable[Packet], sessions: Iterable, linktype:
     }
 
 
+class RuleSaveError(Exception):
+    """No se pudo escribir la regla en disco (disco lleno, ruta inválida, etc.)."""
+
+
+class RuleSaveDenied(RuleSaveError):
+    """La carpeta de reglas no admite escritura (permisos)."""
+
+
 def save(rules_dir, data: Dict[str, Any], existing_ids: Iterable[str]) -> Path:
     """Escribe `<id>.yaml` en la carpeta de reglas. Falla si el id o el archivo ya existen (no pisa nada)."""
     if data["id"] in set(existing_ids):
         raise RuleExists(f"ya existe una regla con el id {data['id']!r}")
     path = Path(rules_dir) / f"{data['id']}.yaml"
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)  # la carpeta de usuario puede no existir aún
         with open(path, "x", encoding="utf-8", newline="\n") as f:  # "x": falla si el archivo existe
             f.write(render_yaml(data))
     except FileExistsError:
         raise RuleExists(f"ya existe el archivo {path.name}") from None
+    except PermissionError:
+        raise RuleSaveDenied(f"no hay permiso para escribir en la carpeta de reglas ({path.parent})") from None
+    except OSError as exc:
+        raise RuleSaveError(f"no se pudo guardar la regla en {path.parent}: {exc.strerror or exc}") from None
     return path
 
 

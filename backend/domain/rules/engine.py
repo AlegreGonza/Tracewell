@@ -1,6 +1,7 @@
 """Motor de reglas: carga reglas YAML y las evalúa sobre el tráfico."""
 from __future__ import annotations
 
+import logging
 import math
 import re
 import socket
@@ -15,6 +16,8 @@ import yaml
 
 from backend.domain.pcap.reader import Packet
 from backend.domain.sessions.grouper import ETHERNET, UnsupportedLinktype, ip_layer
+
+logger = logging.getLogger("tracewell")
 
 SEVERITIES = ("low", "medium", "high", "critical")
 _TECHNIQUE_RE = re.compile(r"^T\d{4}(\.\d{3})?$")
@@ -138,17 +141,16 @@ def _l4_info(l4):
     return None
 
 
-def _decode(pkt: Packet) -> Optional[Decoded]:
-    """Ethernet -> IP -> TCP/UDP, o None si no aplica o está dañado."""
+def decode_layer(pkt: Packet, layer) -> Optional[Decoded]:
+    """TCP/UDP de una capa IP ya leída (`ip_layer`), o None si no aplica o está dañado."""
+    if layer is None:
+        return None
+    ip, family = layer
+    info = _l4_info(ip.data)
+    if info is None:
+        return None
+    l4 = ip.data
     try:
-        layer = ip_layer(pkt.data)  # fragmento sin capa 4 => UnpackError => None
-        if layer is None:
-            return None
-        ip, family = layer
-        info = _l4_info(ip.data)
-        if info is None:
-            return None
-        l4 = ip.data
         return Decoded(
             pkt.ts, socket.inet_ntop(family, ip.src), socket.inet_ntop(family, ip.dst),
             info[0], l4.sport, l4.dport, info[1], bytes(l4.data),
@@ -157,10 +159,20 @@ def _decode(pkt: Packet) -> Optional[Decoded]:
         return None
 
 
+def _decode(pkt: Packet) -> Optional[Decoded]:
+    """Ethernet -> IP -> TCP/UDP, o None si no aplica o está dañado."""
+    try:
+        return decode_layer(pkt, ip_layer(pkt.data))  # fragmento sin capa 4 => UnpackError => None
+    except (dpkt.UnpackError, ValueError, IndexError, struct.error):
+        return None
+
+
 # ---------------------------------------------------------------- detectores
 
 # Tope de entradas por estructura de estado de un detector
 MAX_TRACKED = 100_000
+# Tope de puertos con respuesta recordados por par (escaneo lento)
+_MAX_ANSWERED_PORTS = 1024
 
 
 class _LRU(OrderedDict):
@@ -209,23 +221,29 @@ class PortScanDetector(Detector):
     PARAMS = {
         "min_ports": (_int_range(2, 65535), 15),
         "window_seconds": (_num_range(0.001), 60.0),
+        # Segunda ventana, larga y con umbral propio, para escaneos lentos (0 = apagada).
+        "long_window_seconds": (_num_range(0.0), 0.0),
+        "long_threshold": (_int_range(2, 65535), 20),
     }
 
     def __init__(self, rule):
         super().__init__(rule)
         # (origen, destino) -> {puerto: último instante visto}
         self._seen = _LRU()
+        self._seen_long = _LRU()  # ventana larga: solo puertos que no respondieron
+        self._answered = _LRU()  # (origen, destino) -> puertos que respondieron SYN+ACK
         self._alerted = _LRU()
 
     _is_pure_syn = staticmethod(is_pure_syn)  # alias: los tests lo usan desde la clase
 
-    def _record_port(self, key, d: Decoded) -> Dict[int, float]:
+    def _record_port(self, key, d: Decoded, seen=None) -> Dict[int, float]:
         """Anota el puerto visto para el par y refresca su recencia."""
-        ports = self._seen.get(key)
+        seen = self._seen if seen is None else seen
+        ports = seen.get(key)
         if ports is None:
             ports = {}
         ports[d.dport] = d.ts
-        self._seen[key] = ports  # refresca la recencia del par
+        seen[key] = ports  # refresca la recencia del par
         return ports
 
     @staticmethod
@@ -243,12 +261,25 @@ class PortScanDetector(Detector):
             "threshold": minimum,
         }, ts=min(ports.values()))
 
-    def feed(self, d):
-        if not self._is_pure_syn(d):
-            return []
-        key = (d.src, d.dst)
-        if key in self._alerted:  # una alerta por par; no inundar al analista
-            return []
+    def _note_answer(self, d: Decoded) -> None:
+        """Un SYN+ACK del servidor marca ese puerto como servicio real, no sondeo."""
+        if not self.p.get("long_window_seconds", 0) or d.proto != 6:
+            return
+        if d.flags & (TCP_SYN | TCP_ACK) != TCP_SYN | TCP_ACK:
+            return
+        key = (d.dst, d.src)  # el SYN+ACK va en sentido inverso al SYN
+        answered = self._answered.get(key)
+        if answered is None:
+            answered = set()
+        if len(answered) < _MAX_ANSWERED_PORTS:
+            answered.add(d.sport)
+        self._answered[key] = answered
+        long_ports = self._seen_long.get(key)
+        if long_ports:
+            long_ports.pop(d.sport, None)
+
+    def _feed_short(self, key, d: Decoded) -> List[Alert]:
+        """Ventana corta: muchos puertos en pocos segundos."""
         ports = self._record_port(key, d)
         minimum = self.p["min_ports"]
         if len(ports) < minimum:
@@ -258,19 +289,48 @@ class PortScanDetector(Detector):
         self._prune_old(ports, d.ts, window)
         if len(ports) < minimum:
             return []
-        self._alerted[key] = True
-        del self._seen[key]  # liberar memoria
         return [self._build_alert(d, ports, window, minimum)]
+
+    def _feed_long(self, key, d: Decoded) -> List[Alert]:
+        """Ventana larga: pocos puertos por minuto pero muchos en total (evasión por lentitud)."""
+        window = self.p.get("long_window_seconds", 0)
+        if not window or d.dport in self._answered.get(key, ()):
+            return []
+        ports = self._record_port(key, d, self._seen_long)
+        minimum = self.p.get("long_threshold", 20)
+        if len(ports) < minimum:
+            return []
+        self._prune_old(ports, d.ts, window)
+        if len(ports) < minimum:
+            return []
+        return [self._build_alert(d, ports, window, minimum)]
+
+    def feed(self, d):
+        if not self._is_pure_syn(d):
+            self._note_answer(d)
+            return []
+        key = (d.src, d.dst)
+        if key in self._alerted:  # una alerta por par; no inundar al analista
+            return []
+        alerts = self._feed_short(key, d) or self._feed_long(key, d)
+        if alerts:
+            self._alerted[key] = True
+            self._seen.pop(key, None)  # liberar memoria
+            self._seen_long.pop(key, None)
+            self._answered.pop(key, None)
+        return alerts
 
 
 class FtpCleartextDetector(Detector):
-    """Comandos USER/PASS de FTP viajando sin cifrar."""
+    """Credenciales USER/PASS (FTP, POP3) viajando sin cifrar, en cualquier puerto TCP."""
 
+    # `ports`: puertos de confianza; ahí un PASS suelto alerta. Fuera, exige USER antes.
     PARAMS = {"ports": (_port_list, [21])}
 
     def __init__(self, rule):
         super().__init__(rule)
-        self._users = _LRU()  # (origen, destino, puerto origen) -> usuario
+        self._users = _LRU()  # (origen, destino, puerto origen, puerto destino) -> usuario
+        self._banners = _LRU()  # mismo flujo (lado cliente) -> protocolo según el banner
         self._alerted = _LRU()
 
     @staticmethod
@@ -278,6 +338,20 @@ class FtpCleartextDetector(Detector):
         """(comando de 5 bytes en mayúsculas, argumento) de la primera línea."""
         line = payload.split(b"\r\n", 1)[0].split(b"\n", 1)[0]
         return line[:5].upper(), line[5:]
+
+    def _note_banner(self, d: Decoded) -> None:
+        """Recuerda si el servidor se presentó como POP3 (+OK) o FTP (220)."""
+        if d.payload.startswith(b"+OK"):
+            self._banners[(d.dst, d.src, d.dport, d.sport)] = "POP3"
+        elif d.payload.startswith(b"220"):
+            self._banners[(d.dst, d.src, d.dport, d.sport)] = "FTP"
+
+    def _protocol(self, d: Decoded) -> str:
+        """FTP o POP3 según el banner; sin banner, por el puerto o 'USER/PASS'."""
+        known = self._banners.get((d.src, d.dst, d.sport, d.dport))
+        if known:
+            return known
+        return "FTP" if d.dport == 21 else "USER/PASS"
 
     def _password_alert(self, d: Decoded, value: bytes, user: str) -> List[Alert]:
         """Alerta (una por origen/destino/usuario) sin guardar la contraseña."""
@@ -289,19 +363,31 @@ class FtpCleartextDetector(Detector):
             "password": "<oculta>",
             "password_length": len(value.strip()),
             "port": d.dport,
+            "protocol": self._protocol(d),
         })]
 
+    @staticmethod
+    def _valid_user(value: bytes) -> bool:
+        """USER de FTP/POP3: un solo argumento imprimible (el USER de IRC lleva varios)."""
+        text = value.strip()
+        return bool(text) and all(32 < c < 127 for c in text)
+
     def feed(self, d):
-        if d.proto != 6 or d.dport not in self.p["ports"] or not d.payload:
+        if d.proto != 6 or not d.payload:
             return []
         cmd, value = self._split_command(d.payload)
-        flow = (d.src, d.dst, d.sport)
+        flow = (d.src, d.dst, d.sport, d.dport)
         if cmd == b"USER ":
-            self._users[flow] = value.decode("latin-1").strip()[:64]
+            if self._valid_user(value):
+                self._users[flow] = value.decode("latin-1").strip()[:64]
             return []
         if cmd != b"PASS ":
+            self._note_banner(d)
             return []
-        return self._password_alert(d, value, self._users.get(flow, "<no visto>"))
+        user = self._users.get(flow)
+        if user is None and d.dport not in self.p["ports"]:
+            return []  # en un puerto desconocido, PASS sin USER previo no basta
+        return self._password_alert(d, value, user or "<no visto>")
 
 
 def _entropy(s: str) -> float:
@@ -310,6 +396,18 @@ def _entropy(s: str) -> float:
         return 0.0
     n = len(s)
     return -sum(c / n * math.log2(c / n) for c in Counter(s).values())
+
+
+_SECOND_LEVEL = {"co", "com", "org", "net", "gov", "edu", "ac"}  # co.uk, com.ar...
+
+
+def split_registrable(name: str) -> Tuple[str, str]:
+    """(subdominios, dominio registrable aproximado) de un nombre; sin lista pública de sufijos."""
+    labels = name.rstrip(".").split(".")
+    keep = 2
+    if len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL:
+        keep = 3
+    return ".".join(labels[:-keep]), ".".join(labels[-keep:])
 
 
 class DnsSuspiciousDetector(Detector):
@@ -321,11 +419,17 @@ class DnsSuspiciousDetector(Detector):
         "entropy_min_label": (_int_range(1, 63), 20),
         # Dominios de confianza: nombres largos pero legítimos (p. ej. balanceadores de nube).
         "ignore_suffixes": (_suffix_list, []),
+        # Medida agregada: subdominios (sin el dominio registrable) largos y de alta entropía.
+        "min_total_length": (_int_range(0, 253), 50),  # 0 = apagada
+        # Volumen: subdominios únicos hacia un mismo dominio padre en la ventana (0 = apagado).
+        "min_unique_subdomains": (_int_range(0, 100_000), 0),
+        "volume_window_seconds": (_num_range(0.001), 60.0),
     }
 
     def __init__(self, rule):
         super().__init__(rule)
         self._alerted = _LRU()
+        self._volume = _LRU()  # (origen, dominio padre) -> {subdominio: instante}
 
     def _is_ignored(self, name: str) -> bool:
         """True si el nombre es un dominio ignorado o cuelga de uno (con límite de label)."""
@@ -350,14 +454,50 @@ class DnsSuspiciousDetector(Detector):
             reasons.append(f"entropía {entropy} >= {self.p['min_entropy']}")
         return reasons
 
+    def _aggregate_reason(self, sub: str) -> Optional[str]:
+        """Motivo si el conjunto de subdominios (varias etiquetas cortas) parece datos."""
+        minimum = self.p.get("min_total_length", 0)
+        joined = sub.replace(".", "")
+        if not minimum or "." not in sub or len(joined) < minimum:
+            return None  # una sola etiqueta ya la cubre el análisis por etiqueta
+        entropy = round(_entropy(joined), 2)
+        if entropy < self.p["min_entropy"]:
+            return None
+        return f"{len(joined)} caracteres en {sub.count('.') + 1} etiquetas, entropía {entropy}"
+
+    def _volume_reason(self, d: Decoded, sub: str, parent: str) -> Optional[str]:
+        """Motivo si el origen consultó muchos subdominios únicos del mismo dominio padre."""
+        minimum = self.p.get("min_unique_subdomains", 0)
+        vkey = ("volumen", d.src, parent)
+        if not minimum or not sub or vkey in self._alerted:
+            return None
+        window = self.p.get("volume_window_seconds", 60.0)
+        seen = self._volume.get((d.src, parent)) or {}
+        seen[sub] = d.ts
+        for old in [k for k, t in seen.items() if d.ts - t > window]:
+            del seen[old]
+        self._volume[(d.src, parent)] = seen
+        if len(seen) < minimum:
+            return None
+        self._alerted[vkey] = True
+        self._volume.pop((d.src, parent), None)
+        return f"{len(seen)} subdominios únicos de {parent} en {window:g} s"
+
     def _query_alert(self, d: Decoded, q) -> Optional[Alert]:
         """Alerta para una consulta sospechosa aún no avisada, o None."""
         name = q.name.lower()
         if self._is_ignored(name):
             return None
+        sub, parent = split_registrable(name)
         label = name.split(".")[0]
         entropy = round(_entropy(label), 2)
         reasons = self._reasons(label, entropy)
+        aggregate = self._aggregate_reason(sub)
+        if aggregate:
+            reasons.append(aggregate)
+        volume = self._volume_reason(d, sub, parent)
+        if volume:
+            reasons.append(volume)
         key = (d.src, name)
         if not reasons or key in self._alerted:
             return None
@@ -536,22 +676,55 @@ def load_rules(path) -> List[Rule]:
     return rules
 
 
+def load_all_rules(bundled_dir, user_dir=None) -> List[Rule]:
+    """Reglas incluidas (estrictas) más las del usuario; ver el README de `rules/` por el criterio."""
+    rules = load_rules(bundled_dir)
+    if user_dir is None or not Path(user_dir).is_dir():
+        return rules
+    seen = {r.id: "las incluidas" for r in rules}
+    for f in _rule_files(Path(user_dir)):
+        try:
+            rule = _parse_rule(_read_yaml(f), f.name)
+        except RuleError as exc:  # un archivo del usuario roto no impide arrancar
+            logger.warning("regla de usuario ignorada: %s", exc)
+            continue
+        if rule.id in seen:
+            logger.warning("regla de usuario %s ignorada: el id %r ya existe en %s", f.name, rule.id, seen[rule.id])
+            continue
+        seen[rule.id] = f.name
+        rules.append(rule)
+    return rules
+
+
 # ---------------------------------------------------------------- evaluación
+
+class RuleRunner:
+    """Pasa paquetes ya decodificados por los detectores (así comparte la pasada con otros)."""
+
+    def __init__(self, rules: Iterable[Rule], linktype: int = ETHERNET):
+        if linktype != ETHERNET:
+            raise UnsupportedLinktype(f"linktype {linktype} no soportado (solo Ethernet = 1)")
+        self._detectors = [DETECTORS[r.detector](r) for r in rules]
+        self._alerts: List[Alert] = []
+
+    def feed(self, d: Optional[Decoded]) -> None:
+        """Alimenta los detectores con un paquete decodificado (None = no aplica)."""
+        if d is None:
+            return
+        for det in self._detectors:
+            self._alerts.extend(det.feed(d))
+
+    def alerts(self) -> List[Alert]:
+        """Las alertas ordenadas por tiempo."""
+        return sorted(self._alerts, key=lambda a: a.first_ts)
+
 
 def evaluate(rules: Iterable[Rule], packets: Iterable[Packet], linktype: int = ETHERNET) -> List[Alert]:
     """Pasa cada paquete por todos los detectores y devuelve las alertas ordenadas por tiempo."""
-    if linktype != ETHERNET:
-        raise UnsupportedLinktype(f"linktype {linktype} no soportado (solo Ethernet = 1)")
-    detectors = [DETECTORS[r.detector](r) for r in rules]
-    alerts: List[Alert] = []
+    runner = RuleRunner(rules, linktype)
     for pkt in packets:
-        d = _decode(pkt)
-        if d is None:
-            continue
-        for det in detectors:
-            alerts.extend(det.feed(d))
-    alerts.sort(key=lambda a: a.first_ts)
-    return alerts
+        runner.feed(_decode(pkt))
+    return runner.alerts()
 
 
 # Detectores adicionales

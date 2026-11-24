@@ -17,7 +17,7 @@ from backend.domain.rules.engine import Rule
 from backend.domain.sessions.query import compute_stats
 
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 
 class _State:
@@ -46,7 +46,8 @@ class Ctx:
     interface_lister: Optional[Callable]
     analyze: Callable[[Path, list[Rule]], Analysis]
     make_sampler: Optional[Callable[[], Optional[ProcessSampler]]] = None  # None: sin columna Proceso
-    rules_dir: Optional[Path] = None  # carpeta donde el panel de reglas guarda las reglas nuevas
+    rules_dir: Optional[Path] = None  # carpeta de usuario donde el panel guarda las reglas nuevas
+    allowed_dirs: tuple[Path, ...] = ()  # carpetas desde donde se abren archivos del usuario
 
 
 def get_ctx(request: Request) -> Ctx:

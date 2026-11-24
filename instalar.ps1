@@ -5,7 +5,8 @@
 .DESCRIPTION
     Detecta lo que falta y lo instala con winget (previa confirmación):
       Python 3.11+, Node.js (solo si falta frontend\dist), WebView2.
-    Crea el entorno virtual .venv, instala las dependencias de requirements.txt
+    Crea el entorno virtual .venv, instala las dependencias de requirements.lock
+    (versiones exactas con hashes; si falta, requirements.txt)
     y corre la autoprueba de la ventana. Se puede ejecutar varias veces: lo que
     ya está listo se omite.
     NO instala Npcap (captura en vivo): su licencia no permite instalarlo en
@@ -139,14 +140,20 @@ function Test-Dependencies($venvPy) {
 
 function Step-Packages($venvPy) {
     Write-Step "3. Paquetes de Python"
-    if ($Dev) { $reqs = "requirements-dev.txt" } else { $reqs = "requirements.txt" }
+    # Se prefiere el lock (versiones exactas + hashes); sin él, las cotas de requirements*.txt.
+    if ($Dev) { $reqs = "requirements-dev.lock" } else { $reqs = "requirements.lock" }
+    $pipArgs = @("--require-hashes")
+    if (-not (Test-Path $reqs)) {
+        $pipArgs = @()
+        if ($Dev) { $reqs = "requirements-dev.txt" } else { $reqs = "requirements.txt" }
+    }
     if (-not (Test-Path $reqs)) {
         throw "Falta $reqs. El zip 'solo para usar' no trae las dependencias de desarrollo ni los tests: usá el repositorio completo."
     }
     if (-not $Dev -and (Test-Dependencies $venvPy)) { Write-Ok "Dependencias ya instaladas"; return }
     if ($Check) { $script:Missing.Add("paquetes de Python ($reqs)"); Write-Bad "Faltan paquetes de Python"; return }
     Write-Host "  Instalando $reqs desde PyPI (puede tardar un minuto)..."
-    & $venvPy -m pip install --disable-pip-version-check -r $reqs
+    & $venvPy -m pip install --disable-pip-version-check @pipArgs -r $reqs
     if ($LASTEXITCODE -ne 0) { throw "pip no pudo instalar las dependencias." }
     Write-Ok "Paquetes instalados"
 }

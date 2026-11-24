@@ -1,0 +1,277 @@
+version: 1
+sintetico: true
+semilla: 20260101
+pcaps:
+- id: pos_escaneo_rapido
+  ruta: corpus/pos_escaneo_rapido.pcap
+  descripcion: 30 puertos en ~2 s contra un servidor
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: port_scan
+    origen: 10.0.0.66
+    destino: 10.0.0.5
+- id: pos_escaneo_lento
+  ruta: corpus/pos_escaneo_lento.pcap
+  descripcion: 25 puertos, uno cada ~10 s (evasión por lentitud)
+  etiquetas:
+  - positivo
+  - evasion
+  esperadas:
+  - regla: port_scan
+    origen: 10.0.0.66
+    destino: 10.0.0.5
+- id: pos_ssh_fuerza_bruta
+  ruta: corpus/pos_ssh_fuerza_bruta.pcap
+  descripcion: 18 conexiones SSH en ~18 s desde fuera
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: brute_force_remote
+    origen: 203.0.113.50
+    destino: 10.0.0.5
+- id: pos_rdp_fuerza_bruta
+  ruta: corpus/pos_rdp_fuerza_bruta.pcap
+  descripcion: 12 conexiones RDP en ~24 s
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: brute_force_remote
+    origen: 10.0.0.77
+    destino: 10.0.0.6
+- id: pos_ssh_lento
+  ruta: corpus/pos_ssh_lento.pcap
+  descripcion: 12 intentos SSH, uno cada ~20 s con variación (evasión por lentitud)
+  etiquetas:
+  - positivo
+  - evasion
+  esperadas:
+  - regla: brute_force_remote
+    origen: 203.0.113.50
+    destino: 10.0.0.5
+- id: pos_syn_flood
+  ruta: corpus/pos_syn_flood.pcap
+  descripcion: 300 SYN de orígenes falsificados en 3 s contra :80
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: syn_flood
+    destino: 10.0.0.5
+- id: pos_beaconing_tcp
+  ruta: corpus/pos_beaconing_tcp.pcap
+  descripcion: 12 conexiones cada 60 s con 2% de variación
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: beaconing
+    origen: 10.0.0.20
+    destino: 104.21.45.12
+- id: pos_beaconing_udp
+  ruta: corpus/pos_beaconing_udp.pcap
+  descripcion: 10 datagramas UDP cada 30 s
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: beaconing
+    origen: 10.0.0.20
+    destino: 91.121.5.9
+- id: pos_beaconing_jitter
+  ruta: corpus/pos_beaconing_jitter.pcap
+  descripcion: 12 conexiones cada 60 s con 35% de variación (evasión por jitter)
+  etiquetas:
+  - positivo
+  - evasion
+  esperadas:
+  - regla: beaconing
+    origen: 10.0.0.20
+    destino: 104.21.45.12
+- id: pos_dns_tunel
+  ruta: corpus/pos_dns_tunel.pcap
+  descripcion: 6 consultas con etiqueta hex de 52 caracteres
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: dns_suspicious
+    origen: 10.0.0.20
+    destino: 10.0.0.1
+- id: pos_dns_dga
+  ruta: corpus/pos_dns_dga.pcap
+  descripcion: 5 dominios de 22 caracteres aleatorios
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: dns_suspicious
+    origen: 10.0.0.20
+    destino: 10.0.0.1
+- id: pos_dns_tunel_etiquetas_cortas
+  ruta: corpus/pos_dns_tunel_etiquetas_cortas.pcap
+  descripcion: datos repartidos en 2a etiqueta (evasión)
+  etiquetas:
+  - positivo
+  - evasion
+  esperadas:
+  - regla: dns_suspicious
+    origen: 10.0.0.20
+    destino: 10.0.0.1
+- id: pos_ftp_claro
+  ruta: corpus/pos_ftp_claro.pcap
+  descripcion: USER/PASS por el puerto 21
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: ftp_cleartext
+    origen: 10.0.0.20
+    destino: 10.0.0.5
+- id: pos_ftp_puerto_2121
+  ruta: corpus/pos_ftp_puerto_2121.pcap
+  descripcion: USER/PASS por un puerto FTP no estándar (evasión)
+  etiquetas:
+  - positivo
+  - evasion
+  esperadas:
+  - regla: ftp_cleartext
+    origen: 10.0.0.20
+    destino: 10.0.0.5
+- id: pos_subida_grande
+  ruta: corpus/pos_subida_grande.pcap
+  descripcion: 10 MB subidos a un destino público
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: large_upload
+    origen: 10.0.0.20
+    destino: 93.184.216.34
+- id: pos_puerto_4444
+  ruta: corpus/pos_puerto_4444.pcap
+  descripcion: conexión al puerto 4444 de un host público
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: suspicious_ports
+    origen: 10.0.0.20
+    destino: 45.77.12.8
+- id: pos_resolver_raro
+  ruta: corpus/pos_resolver_raro.pcap
+  descripcion: consultas DNS a un resolvedor público fuera de la lista
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: dns_unusual_resolver
+    origen: 10.0.0.20
+    destino: 185.228.168.9
+- id: pos_ataque_combinado
+  ruta: corpus/pos_ataque_combinado.pcap
+  descripcion: escaneo + fuerza bruta SSH + FTP en claro del mismo origen
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: port_scan
+    origen: 10.0.0.66
+    destino: 10.0.0.5
+  - regla: brute_force_remote
+    origen: 10.0.0.66
+    destino: 10.0.0.5
+  - regla: ftp_cleartext
+    origen: 10.0.0.66
+    destino: 10.0.0.5
+- id: ben_navegacion
+  ruta: corpus/ben_navegacion.pcap
+  descripcion: 'navegación normal: DNS local y 40 conexiones HTTPS irregulares'
+  etiquetas:
+  - benigno
+  esperadas: ninguna
+- id: ben_cdn_rafaga
+  ruta: corpus/ben_cdn_rafaga.pcap
+  descripcion: 70 conexiones HTTPS a un CDN en ~6 s (navegador)
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_pico_visitas
+  ruta: corpus/ben_pico_visitas.pcap
+  descripcion: 250 clientes distintos a un servidor web en ~8 s (pico legítimo)
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_ssh_automatizado
+  ruta: corpus/ben_ssh_automatizado.pcap
+  descripcion: 14 conexiones SSH de un script de administración
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_login_dominio
+  ruta: corpus/ben_login_dominio.pcap
+  descripcion: 'inicio de sesión de dominio: 16 puertos de un controlador en ~2 s'
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_dns_normal
+  ruta: corpus/ben_dns_normal.pcap
+  descripcion: DNS normal, un ELB de AWS (ignorado) y 8.8.8.8
+  etiquetas:
+  - benigno
+  esperadas: ninguna
+- id: ben_dns_label_largo
+  ruta: corpus/ben_dns_label_largo.pcap
+  descripcion: subdominio legible de 57 caracteres con guiones
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_dns_hash_hex
+  ruta: corpus/ben_dns_hash_hex.pcap
+  descripcion: consulta de reputación con un hash MD5 como etiqueta
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_backup_interno
+  ruta: corpus/ben_backup_interno.pcap
+  descripcion: 10 MB subidos a un servidor de la LAN
+  etiquetas:
+  - benigno
+  esperadas: ninguna
+- id: ben_backup_nube
+  ruta: corpus/ben_backup_nube.pcap
+  descripcion: copia de seguridad de 10 MB a un destino público
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_ntp_mdns_ssdp
+  ruta: corpus/ben_ntp_mdns_ssdp.pcap
+  descripcion: NTP, mDNS y SSDP periódicos
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_monitoreo_periodico
+  ruta: corpus/ben_monitoreo_periodico.pcap
+  descripcion: agente de monitoreo que conecta cada 60 s
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_dns_proveedor
+  ruta: corpus/ben_dns_proveedor.pcap
+  descripcion: DNS al resolvedor del proveedor (público, no listado)
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_servicio_9001
+  ruta: corpus/ben_servicio_9001.pcap
+  descripcion: servicio interno legítimo en el puerto 9001
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_ssh_normal
+  ruta: corpus/ben_ssh_normal.pcap
+  descripcion: una sola sesión SSH interactiva
+  etiquetas:
+  - benigno
+  esperadas: ninguna

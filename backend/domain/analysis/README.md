@@ -3,6 +3,57 @@
 Texto completo movido desde el código. En los `.py` quedan solo comentarios cortos.
 
 
+## Topes ante pcaps hostiles
+
+Un pcap puede venir armado para agotar memoria o CPU. Cuando un tope se alcanza el resultado se marca como
+parcial y nunca falla. Los valores son generosos (no cortan capturas legítimas).
+
+| Constante | Valor | Qué acota y cómo se marca |
+|---|---|---|
+| `stream.MAX_BYTES` | 1 000 000 | Datos reconstruidos por sesión (ambos sentidos): `Stream.truncated` / `RawDirections.truncated` |
+| `stream.MAX_PACKETS` | 50 000 | Paquetes leídos por sesión: igual que arriba |
+| `stream.MAX_GAP` | 1 000 000 | Salto de secuencia que se toma como otra conexión (no se acumulan huecos enormes) |
+| `http_scan.MAX_SESSIONS` / `MAX_BYTES` / `MAX_EXCHANGES` | 200 / 50 000 000 / 500 | Total de la pasada: `capped` (también si alguna sesión se recortó por el stream) |
+| `http.MAX_BODY` | 50 000 000 | Cuerpo retenido por mensaje: `complete = False` |
+| `http.MAX_MESSAGES` | 500 | Mensajes por sentido: el último intercambio lleva `truncated = True` |
+| `http.MAX_HEAD` / `MAX_HEADERS` | 65 536 / 200 | Cabecera de un mensaje: si no cierra en `MAX_HEAD` ya no se toma como HTTP; sobrantes se ignoran |
+| `http.MAX_CHUNK_DIGITS` | 8 | Dígitos hex del tamaño de un chunk; un chunk con signo, `0x`, `_` o más dígitos corta el cuerpo (incompleto) |
+| `http.MAX_LENGTH_DIGITS` | 12 | Dígitos de `Content-Length` (los no ASCII o más largos se ignoran) |
+| `tls.MAX_RECORDS` / `MAX_TLS_BYTES` | 1 000 / 4 000 000 | Registros y bytes del flujo que se examinan (el handshake va al inicio) |
+| `tls.MAX_CERT_NAMES` | 20 | Nombres alternativos por certificado (y 5 certificados por cadena) |
+| `dns_log.MAX_ENTRIES` / `names.MAX_NAMES` | 20 000 / 100 000 | Filas y nombres: `dns_log.dropped` cuenta lo que no entró |
+
+Notas:
+- No hay descompresión (gzip/deflate) en el análisis: el cuerpo se guarda y se hashea tal cual viaja, así que
+  no existe bomba de descompresión. Si algún día se agrega, debe usar `zlib.decompressobj().decompress(data,
+  max_length)` con un tope en bytes y marcar el resultado como truncado.
+- Los punteros de compresión de DNS en bucle los corta `dpkt` (`UnpackError`); se captura en `dns_log` y `names`.
+- Los parsers de TLS y DER validan cada largo contra el buffer: un largo mentiroso corta, no desborda.
+
+### Fuzz
+
+- `tests/test_fuzz.py` (en la suite): muta y trunca entradas de http, tls, dns y stream con
+  `random.Random(semilla)` y semillas fijas (1, 2, 3); falla si algo lanza o una entrada tarda más de 2 s.
+  Corre en menos de 2 s. Incluye regresiones: chunk negativo (retrocedía), `Content-Length` no ASCII o
+  gigante, destino `//[x` (`urlsplit` lanzaba), cabeceras enormes y puntero DNS en bucle.
+- `tests/test_fuzz_file.py` + `tests/fuzz_file_support.py`: fuzz a nivel de ARCHIVO (en la suite, ~25 s, semillas
+  fijas). Arma pcap (LE, BE, nanosegundos), pcapng, `samples/demo.pcap` y uno de 9000 paquetes (cruza los puntos
+  del índice de offsets), y los pasa por `analyze()` completo (lector, agrupador, reglas, nombres) y por las
+  consultas posteriores (`session_packets`, `session_stream`, `packet_detail`). Muta: truncado en cada byte de las
+  cabeceras y al azar, cada byte de las cabeceras con 0x00/0xFF/0x7F/0x80, campos mentirosos (`incl_len`,
+  `linktype`, `snaplen`, longitud de bloque de pcapng) y mutaciones al azar. Solo se aceptan `PcapError` y
+  `UnsupportedLinktype` (la API los traduce a 422); cualquier otra excepción, o tardar más de 5 s, falla. Cada
+  entrada va a un archivo NUEVO: la caché del lector se indexa por (ruta, tamaño, mtime) y reescribir la misma
+  ruta con igual tamaño dentro del mismo tick del reloj la confundiría.
+- `tests/fuzz_atheris_file.py` (opcional): el mismo camino con atheris. `--dump-seeds <carpeta>` deja las semillas
+  como corpus inicial; luego `python -m backend.domain.analysis.tests.fuzz_atheris_file <carpeta> -max_total_time=300`.
+  atheris no está instalado en la `.venv` y no se corrió.
+- `tests/fuzz_atheris.py` (opcional, fuera de la suite: no empieza con `test_`): harness de cobertura guiada.
+  Requiere `pip install atheris` y se corre desde la raíz del repo con
+  `python -m backend.domain.analysis.tests.fuzz_atheris -max_total_time=60`. Hypothesis no está instalada,
+  por eso la suite usa fuzz con semilla propia, sin dependencias nuevas.
+
+
 ## analyzer.py
 
 Orquestador: lee un pcap, agrupa sesiones y evalúa reglas.
@@ -15,10 +66,10 @@ escritorio tendrían que duplicarla o levantar un servidor para usarla.
 ### Funciones y clases
 
 
-**`analyze`**: Tres pasadas en streaming sobre el archivo (sesiones, reglas y nombres de sitio). Varias pasadas en vez de una: cada consumidor queda simple e independiente y la memoria no crece con el archivo. Si el costo duele en capturas enormes, se unifica después (decisión anotada en docs/decisiones.md).
+**`analyze`**: Una sola pasada en streaming sobre el archivo: cada paquete se lee una vez, su capa IP se decodifica una vez (`parse_ip`) y alimenta sesiones (`SessionGrouper`), reglas (`RuleRunner`), nombres de sitio y línea de tiempo. La memoria no crece con el archivo. De paso deja listo el índice de posiciones de `get_packet`.
 
 
-**`session_packets`**: Paquetes de una sesión, paginados -> (lista de PacketSummary, hay_más). No guardamos los paquetes de cada sesión (la memoria crecería con el archivo): releemos el pcap y nos quedamos con los de esa clave.
+**`session_packets`**: Paquetes de una sesión, paginados -> (lista de PacketSummary, hay_más). No guardamos los paquetes de cada sesión: `session_scan.py` guarda solo un resumen compacto (índice, ts, largos: ~24 B por paquete) de las últimas 4 sesiones consultadas y reanuda la lectura donde quedó, así las páginas siguientes no releen el pcap. Con una sesión de más de 500.000 paquetes se vuelve a releer el archivo (sin guardar). Si el archivo cambia (tamaño o fecha), el escaneo se descarta.
 
 
 **`session_stream`**: Conversación de una sesión TCP, reconstruida releyendo el archivo (como `session_packets`). IndexError si la sesión no existe; ValueError si no es TCP (los otros protocolos no tienen "conversación").

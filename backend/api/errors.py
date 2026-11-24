@@ -8,7 +8,8 @@ from fastapi.responses import JSONResponse
 
 from backend.api.security import SECURITY_HEADERS
 from backend.domain.files import NotRegularFile
-from backend.domain.rules.builder import RuleExists
+from backend.domain.files import BadExtension, OutsideAllowedDirs
+from backend.domain.rules.builder import RuleExists, RuleSaveDenied, RuleSaveError
 from backend.domain.rules.engine import RuleError
 from backend.domain.rules.iocs import IocError
 from backend.domain.pcap.live import CaptureError, CaptureStateError, PermissionDenied
@@ -27,6 +28,10 @@ ERROR_STATUS = (
     (IocError, 422),
     (RuleError, 422),
     (RuleExists, 409),
+    (RuleSaveDenied, 403),
+    (RuleSaveError, 500),
+    (OutsideAllowedDirs, 403),
+    (BadExtension, 400),
     (PermissionDenied, 403),
     (CaptureStateError, 409),
     (CaptureError, 503),

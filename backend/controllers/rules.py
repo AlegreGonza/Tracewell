@@ -30,7 +30,7 @@ def preview_rule(ctx: Ctx, form: RuleForm) -> Dict[str, Any]:
 
 
 def save_rule(ctx: Ctx, form: RuleForm) -> Dict[str, Any]:
-    """Guarda la regla como YAML en rules/ y la suma a las reglas activas (valen desde la próxima captura)."""
+    """Guarda la regla como YAML en la carpeta de reglas del usuario y la suma a las reglas activas (valen desde la próxima captura)."""
     if ctx.rules_dir is None:
         raise HTTPException(503, "no hay carpeta de reglas configurada")
     data = builder.to_dict(form)

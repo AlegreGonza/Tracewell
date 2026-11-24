@@ -3,6 +3,12 @@
 Texto completo movido desde el código. En los `.py` quedan solo comentarios cortos.
 
 
+## Robustez ante archivos hostiles
+
+`iter_indexed` traduce a `PcapError` los fallos internos de dpkt ante campos imposibles (longitud de bloque
+pcapng menor a 8: dpkt leía un número negativo de bytes y escapaba un `ValueError` crudo, que la API devolvía como
+500). Lo encontró el fuzz de archivo (`analysis/tests/test_fuzz_file.py`).
+
 ## hexdump.py
 
 
@@ -167,7 +173,9 @@ de a un paquete y la memoria se mantiene constante.
 **`_truncated_detail`**: Motivo legible del truncado: dpkt a veces lanza NeedData SIN mensaje y el error terminaba en "captura truncada: " con el motivo vacío.
 
 
-**`get_packet`**: Devuelve el paquete número `index` (0 = el primero). Recorre el archivo hasta llegar: O(index). Es el precio de no guardar todos los paquetes en memoria; para el detalle de UN paquete alcanza. IndexError si no existe.
+**`get_packet`**: Devuelve el paquete número `index` (0 = el primero). Usa un índice disperso de posiciones en el archivo (una cada 4096 paquetes, ~8 B c/u): salta al punto de reanudación más cercano y lee a lo sumo 4096 paquetes. El índice se arma sobre la marcha (o durante `analyze`), se guarda para los últimos 4 archivos y se descarta si cambia el tamaño o la fecha del archivo. Un archivo truncado sigue sirviendo los paquetes anteriores al corte. IndexError si no existe.
+
+**`iter_indexed`**: Como `iter_packets` pero entrega `(índice, posición del siguiente paquete, Packet)` y puede arrancar en una posición guardada (los taps cuentan los bytes leídos). `iter_packets` es esta función sin los dos primeros datos.
 
 
 ### Notas del código

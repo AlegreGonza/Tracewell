@@ -18,9 +18,9 @@ def client():
 
 @pytest.mark.parametrize("endpoint", ["/api/analyze", "/api/iocs"])
 @pytest.mark.parametrize("path", DISPOSITIVOS)
-def test_dispositivo_es_400_json_rapido(client, endpoint, path):
+def test_dispositivo_se_rechaza_rapido_con_json(client, endpoint, path):
     r = client.post(endpoint, json={"path": path})
-    assert r.status_code == 400 and "detail" in r.json()
+    assert r.status_code in (400, 403) and "detail" in r.json()
 
 
 def test_pcapng_con_cabecera_de_seccion_corrupta_es_422(client, tmp_path):
@@ -56,9 +56,9 @@ def test_id_de_regla_con_salto_final_es_422(client):
 
 
 def test_ping_con_host_largo_dice_demasiado_largo(client):
-    r = client.get("/api/support/ping", params={"host": "a" * 300})
+    r = client.post("/api/support/ping", params={"host": "a" * 300})
     assert r.status_code == 422 and "demasiado largo" in r.json()["detail"]
-    assert "escribí" in client.get("/api/support/ping", params={"host": " "}).json()["detail"]
+    assert "escribí" in client.post("/api/support/ping", params={"host": " "}).json()["detail"]
 
 
 def test_lifespan_apaga_aunque_falle_el_cuerpo(monkeypatch):

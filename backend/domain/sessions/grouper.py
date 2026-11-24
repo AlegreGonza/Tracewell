@@ -110,16 +110,27 @@ def _l4_ports(ip, proto):
     return l4.sport, l4.dport
 
 
-def _endpoints_flags(data: bytes):
-    """((ip_src, sport, ip_dst, dport, proto), flags TCP) o None si no es IP (flags = 0 si no es TCP)."""
-    layer = ip_layer(data)
-    if layer is None:
-        return None
+def parse_ip(data: bytes):
+    """(capa IP, dañado): `ip_layer` sin lanzar; dañado=True si dpkt no pudo leer el paquete."""
+    try:
+        return ip_layer(data), False
+    except dpkt.UnpackError:  # incluye NeedData
+        return None, True
+
+
+def _layer_endpoints_flags(layer):
+    """((ip_src, sport, ip_dst, dport, proto), flags TCP) de una capa IP (flags = 0 si no es TCP)."""
     ip, family = layer
     proto = _protocol_number(ip)
     sport, dport = _l4_ports(ip, proto)
     ends = (socket.inet_ntop(family, ip.src), sport, socket.inet_ntop(family, ip.dst), dport, proto)
     return ends, (ip.data.flags if proto == _TCP else 0)
+
+
+def _endpoints_flags(data: bytes):
+    """Como `_layer_endpoints_flags` pero desde los bytes; None si no es IP."""
+    layer = ip_layer(data)
+    return None if layer is None else _layer_endpoints_flags(layer)
 
 
 def _key(src, sport, dst, dport, proto) -> Tuple:
@@ -179,18 +190,49 @@ def _record_packet(sess: Session, pkt: Packet, flags: int = 0) -> None:
     sess.last_ts = pkt.ts
 
 
-def _classify_flags(pkt: Packet, result: GroupingResult):
-    """(ends, key, flags TCP) del paquete; si no es una sesión cuenta el descarte y da None."""
-    try:
-        found = _endpoints_flags(pkt.data)
-    except dpkt.UnpackError:  # incluye NeedData
-        result.malformed += 1
+class SessionGrouper:
+    """Arma las sesiones paquete a paquete (así comparte la pasada con otros recolectores)."""
+
+    def __init__(self, linktype: int = ETHERNET, max_sessions: int = DEFAULT_MAX_SESSIONS):
+        _check_group_args(linktype, max_sessions)
+        self._max = max_sessions
+        self._sessions: Dict[Tuple, Session] = {}
+        self._result = GroupingResult()
+
+    def _classify(self, layer, malformed: bool):
+        """(ends, key, flags TCP) del paquete; si no es una sesión cuenta el descarte y da None."""
+        if not malformed and layer is not None:
+            try:
+                ends, flags = _layer_endpoints_flags(layer)
+            except dpkt.UnpackError:  # capa 4 cortada
+                malformed = True
+            else:
+                return ends, _key(*ends), flags
+        if malformed:
+            self._result.malformed += 1
+        else:
+            self._result.non_ip += 1
         return None
-    if found is None:
-        result.non_ip += 1
-        return None
-    ends, flags = found
-    return ends, _key(*ends), flags
+
+    def add(self, pkt: Packet, layer, malformed: bool = False) -> None:
+        """Suma un paquete ya decodificado con `parse_ip` (capa IP o dañado)."""
+        classified = self._classify(layer, malformed)
+        if classified is None:
+            return
+        ends, key, flags = classified
+        sess = self._sessions.get(key)
+        if sess is None and len(self._sessions) >= self._max:
+            self._result.truncated = True
+            self._result.untracked_packets += 1
+            return
+        if sess is None:
+            sess = self._sessions[key] = _new_session(ends, key, pkt.ts, pkt.data)
+        _record_packet(sess, pkt, flags)
+
+    def result(self) -> GroupingResult:
+        """Resultado con las sesiones en orden de aparición."""
+        self._result.sessions = list(self._sessions.values())
+        return self._result
 
 
 def group_packets(
@@ -199,21 +241,7 @@ def group_packets(
     max_sessions: int = DEFAULT_MAX_SESSIONS,
 ) -> GroupingResult:
     """Recorre los paquetes (en streaming) y arma las sesiones."""
-    _check_group_args(linktype, max_sessions)
-    sessions: Dict[Tuple, Session] = {}
-    result = GroupingResult()
+    grouper = SessionGrouper(linktype, max_sessions)
     for pkt in packets:
-        classified = _classify_flags(pkt, result)
-        if classified is None:
-            continue
-        ends, key, flags = classified
-        sess = sessions.get(key)
-        if sess is None and len(sessions) >= max_sessions:
-            result.truncated = True
-            result.untracked_packets += 1
-            continue
-        if sess is None:
-            sess = sessions[key] = _new_session(ends, key, pkt.ts, pkt.data)
-        _record_packet(sess, pkt, flags)
-    result.sessions = list(sessions.values())  # orden de aparición
-    return result
+        grouper.add(pkt, *parse_ip(pkt.data))
+    return grouper.result()

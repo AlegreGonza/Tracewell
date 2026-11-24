@@ -243,12 +243,23 @@ class BruteForceDetector(Detector):
         "min_attempts": (_int_range(3, 100_000), 10),
         "window_seconds": (_num_range(0.001), 60.0),
         "ports": (_port_list, [22, 3389]),
+        # Segunda ventana, larga, contra la fuerza bruta lenta (0 = apagada).
+        "long_window_seconds": (_num_range(0.0), 0.0),
+        "long_attempts": (_int_range(3, 100_000), 10),
     }
 
     def __init__(self, rule):
         super().__init__(rule)
         self._seen = _LRU()  # (origen, destino, puerto) -> instantes de los últimos
+        self._seen_long = _LRU()  # lo mismo, para la ventana larga
         self._alerted = _LRU()
+
+    def _fired(self, seen: _LRU, key, d: Decoded, attempts: int, window: float):
+        """(intentos, duración) si los últimos `attempts` caben en `window`; None si no."""
+        recent = _push_recent(seen, key, d.ts, attempts)
+        if len(recent) < attempts or recent[-1] - recent[0] > window:
+            return None  # faltan intentos, o los más recientes no caben en la ventana
+        return recent
 
     def feed(self, d):
         if not is_pure_syn(d) or d.dport not in self.p["ports"]:
@@ -256,17 +267,19 @@ class BruteForceDetector(Detector):
         key = (d.src, d.dst, d.dport)
         if key in self._alerted:
             return []
-        recent = _push_recent(self._seen, key, d.ts, self.p["min_attempts"])
-        if len(recent) < self.p["min_attempts"]:
+        threshold = self.p["min_attempts"]
+        recent = self._fired(self._seen, key, d, threshold, self.p["window_seconds"])
+        long_window = self.p.get("long_window_seconds", 0)
+        if recent is None and long_window:
+            threshold = self.p.get("long_attempts", 10)
+            recent = self._fired(self._seen_long, key, d, threshold, long_window)
+        if recent is None:
             return []
-        span = recent[-1] - recent[0]
-        if span > self.p["window_seconds"]:
-            return []  # los intentos más recientes no caben en la ventana
         self._alerted[key] = True
         return [self._alert(d, {
             "service": "SSH" if d.dport == 22 else "RDP" if d.dport == 3389 else f"puerto {d.dport}",
             "destination_port": d.dport, "attempts": len(recent),
-            "window_seconds": round(span, 3), "threshold": self.p["min_attempts"],
+            "window_seconds": round(recent[-1] - recent[0], 3), "threshold": threshold,
         }, ts=recent[0])]
 
 

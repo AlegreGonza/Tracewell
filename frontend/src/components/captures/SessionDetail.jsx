@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatBytes, formatEndpoint, formatTime } from "../../lib/format.js";
+import DownloadLink from "../common/DownloadLink.jsx";
 import HelpTip from "../common/HelpTip.jsx";
 import CopyFilterButton from "./CopyFilterButton.jsx";
 import ExplainView from "./ExplainView.jsx";
@@ -299,9 +300,9 @@ export default function SessionDetail({ session, onClose, onError, onNoteSaved }
       </div>
       <p className="detail-actions-row">
         {/* Solo los paquetes de esta sesión, como un .pcap aparte. */}
-        <a className="button" href={api.sessionPcapUrl(session.id)} download={`tracewell-sesion-${session.id}.pcap`}>
+        <DownloadLink href={api.sessionPcapUrl(session.id)} download={`tracewell-sesion-${session.id}.pcap`}>
           Descargar .pcap de esta sesión
-        </a>
+        </DownloadLink>
         <HelpTip topic="pcap" />
         {/* Mismo tráfico en Wireshark */}
         <CopyFilterButton load={() => api.explain(session.id).then((r) => r.wireshark_filter)} onError={onError} />

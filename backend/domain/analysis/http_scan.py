@@ -40,12 +40,14 @@ def _collect(analysis, wanted: Dict[Any, Any]):
 
 
 def scan_http(analysis) -> Dict[str, Any]:
-    """{'scanned', 'capped', 'items': [intercambio + session_id + extremos]} de las sesiones candidatas."""
+    """{'scanned', 'capped', 'items': [...]} de las sesiones candidatas."""
     candidates = candidate_sessions(analysis)
     packets, capped = _collect(analysis, {s.key: i for i, s in candidates})
     items: List[Dict[str, Any]] = []
+    cut = 0  # sesiones cuyo flujo se recortó por el tope de bytes o de paquetes
     for sid, s in candidates:
         raw = raw_directions(s, packets.get(s.key, []))
+        cut += raw.truncated
         for ex in http_exchanges(raw.origin, raw.destination):
             if len(items) >= MAX_EXCHANGES:
                 return {"scanned": len(candidates), "capped": True, "items": items}
@@ -53,4 +55,4 @@ def scan_http(analysis) -> Dict[str, Any]:
                 **ex, "session_id": sid, "src_ip": s.src_ip, "dst_ip": s.dst_ip,
                 "src": f"{s.src_ip}:{s.src_port}", "dst": f"{s.dst_ip}:{s.dst_port}",
             })
-    return {"scanned": len(candidates), "capped": capped, "items": items}
+    return {"scanned": len(candidates), "capped": capped or cut > 0, "items": items}

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
 from backend.domain.export.json_export import build_report, to_json
 from backend.domain.export.pcap_export import build_pcap
-from backend.domain.files import require_regular_file
+from backend.domain.files import ANALYZE_EXTENSIONS, require_allowed_file
 from backend.domain.rules.engine import SEVERITIES
 from backend.domain.sessions.query import compute_stats, filter_sessions
 
@@ -86,7 +86,8 @@ def health():
 
 @router.post("/analyze")
 def analyze_file(req: AnalyzeRequest, ctx: CtxDep):
-    return _analyze_path(ctx, require_regular_file(req.path, "archivo .pcap/.pcapng"))
+    path = require_allowed_file(req.path, ctx.allowed_dirs, "archivo .pcap/.pcapng", ANALYZE_EXTENSIONS)
+    return _analyze_path(ctx, path)
 
 
 @router.post("/demo")

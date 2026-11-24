@@ -187,7 +187,8 @@ def test_check_mitre_nombre_o_tactica_faltante(campo):
 
 def test_build_params_defaults():
     """Sin params salen los defaults del detector."""
-    assert _build_params(_data(), PortScanDetector, "x.yaml") == {"min_ports": 15, "window_seconds": 60.0}
+    out = _build_params(_data(), PortScanDetector, "x.yaml")
+    assert (out["min_ports"], out["window_seconds"], out["long_window_seconds"]) == (15, 60.0, 0.0)
 
 
 def test_build_params_params_none_usa_defaults():
@@ -198,7 +199,7 @@ def test_build_params_params_none_usa_defaults():
 def test_build_params_valor_valido_y_normalizado():
     """Un valor válido pisa el default y se normaliza (int -> float)."""
     out = _build_params(_data(params={"min_ports": 5, "window_seconds": 10}), PortScanDetector, "x.yaml")
-    assert out == {"min_ports": 5, "window_seconds": 10.0}
+    assert (out["min_ports"], out["window_seconds"]) == (5, 10.0)
     assert isinstance(out["window_seconds"], float)
 
 
@@ -391,7 +392,8 @@ def test_password_alert_nunca_incluye_la_contrasena():
     alerts = det._password_alert(_dec(dport=21), secreto + b"\r", "ana")
     assert len(alerts) == 1
     ev = alerts[0].evidence
-    assert ev == {"username": "ana", "password": "<oculta>", "password_length": len(secreto), "port": 21}
+    assert ev == {"username": "ana", "password": "<oculta>", "password_length": len(secreto), "port": 21,
+                  "protocol": "FTP"}
     assert secreto.decode() not in repr(alerts[0])
 
 

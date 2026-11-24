@@ -10,6 +10,7 @@ import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import "./tokens.css";
 import "./styles.css";
 import "./shell.css";
+import { initToken } from "./api/token.js";
 
 // Raíz: elige la paleta de color (se recuerda) y arma el tema de Mantine
 function Root() {
@@ -24,8 +25,11 @@ function Root() {
   );
 }
 
-createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>,
+// El token tiene que estar antes de la primera llamada a la API.
+initToken().finally(() =>
+  createRoot(document.getElementById("root")).render(
+    <StrictMode>
+      <Root />
+    </StrictMode>,
+  ),
 );

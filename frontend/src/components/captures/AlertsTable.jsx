@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatEndpoint, formatTime, severityLabel } from "../../lib/format.js";
+import DownloadLink from "../common/DownloadLink.jsx";
 import HelpTip from "../common/HelpTip.jsx";
 import CopyFilterButton from "./CopyFilterButton.jsx";
 
@@ -135,9 +136,9 @@ export default function AlertsTable({ refreshKey, onError, onViewSessions }) {
                         Ver las sesiones de {a.src_ip}
                       </button>
                       {/* Los paquetes de esa IP como un .pcap aparte */}
-                      <a className="button" href={api.filteredPcapUrl({ ip: a.src_ip })} download>
+                      <DownloadLink href={api.filteredPcapUrl({ ip: a.src_ip })} download>
                         Descargar .pcap de {a.src_ip}
-                      </a>
+                      </DownloadLink>
                     </p>
                   )}
                 </div>

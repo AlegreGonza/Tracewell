@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
+import DownloadLink from "../common/DownloadLink.jsx";
 
 const findPicker = () => window.pywebview?.api?.pick_file ?? null;
 
@@ -87,9 +88,9 @@ export default function Toolbar({
         {/* Descarga directa del servidor; los filtros activos viajan en la URL
             para exportar exactamente lo que el analista está viendo. */}
         {loaded ? (
-          <a className="button" href={api.exportUrl(filters)} download="tracewell-report.json">
+          <DownloadLink href={api.exportUrl(filters)} download="tracewell-report.json">
             Exportar JSON
-          </a>
+          </DownloadLink>
         ) : (
           <span className="button disabled" aria-disabled="true">
             Exportar JSON
@@ -97,9 +98,9 @@ export default function Toolbar({
         )}
         {/* Informe de triaje listo para un ticket */}
         {loaded ? (
-          <a className="button" href={api.reportUrl()} download="tracewell-informe.html">
+          <DownloadLink href={api.reportUrl()} download="tracewell-informe.html">
             Informe HTML
-          </a>
+          </DownloadLink>
         ) : (
           <span className="button disabled" aria-disabled="true">
             Informe HTML

@@ -13,6 +13,26 @@ CLAUDE.md
 CLAUDE.local.md
 .mcp.json
 
+# Secretos: tokens, claves de API y certificados. Nunca al repositorio.
+# (Sin comodín "*token*": taparía el código frontend/src/api/token.js y sus tests.)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.token
+.tracewell-token
+credentials*.json
+secrets.*
+
+# Capturas de red: pueden traer datos personales o ser malware. Solo se versiona la demo.
+*.pcap
+*.pcapng
+!samples/demo.pcap
+validacion/corpus/
+
 # Cachés de herramientas de revisión
 .mypy_cache/
 .ruff_cache/

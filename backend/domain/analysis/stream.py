@@ -60,7 +60,7 @@ def _looks_tls(data: bytes) -> bool:
 
 
 def _emit(stream: Stream, who: str, data: bytes) -> None:
-    """Agrega datos."""
+    """Agrega datos (bytearray: concatenar bytes sería cuadrático)."""
     if who == "origen":
         stream.origin_bytes += len(data)
     else:
@@ -69,7 +69,7 @@ def _emit(stream: Stream, who: str, data: bytes) -> None:
     if last is not None and last.get("from") == who:
         last["raw"] += data
     else:
-        stream.chunks.append({"from": who, "raw": bytes(data)})
+        stream.chunks.append({"from": who, "raw": bytearray(data)})
 
 
 def _place(stream: Stream, direction: _Direction, who: str, seq: int, flags: int, data: bytes) -> None:

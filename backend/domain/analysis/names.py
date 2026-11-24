@@ -148,20 +148,30 @@ def _first_host_name(body: bytes) -> Optional[str]:
 
 # ------------------------------------------------------------------ recorrido
 
+_L4_ERRORS = (dpkt.UnpackError, dpkt.NeedData, ValueError, IndexError, AttributeError)
+
+
 def _l4_full(data: bytes):
-    """."""
+    """TCP/UDP de un paquete: ver `_layer_l4`; None si no es IP o está dañado."""
     try:
-        layer = ip_layer(data)
-        if layer is None:
-            return None
-        ip, family = layer
+        return _layer_l4(ip_layer(data))
+    except _L4_ERRORS:
+        return None
+
+
+def _layer_l4(layer):
+    """(proto, sport, dport, src, dst, clave de sesión, payload) de una capa IP ya leída, o None."""
+    if layer is None:
+        return None
+    ip, family = layer
+    try:
         proto = _protocol_number(ip)
         if proto not in _PORT_PROTOS:
             return None
         sport, dport = _l4_ports(ip, proto)  # UnpackError si la capa 4 está cortada
         src, dst = socket.inet_ntop(family, ip.src), socket.inet_ntop(family, ip.dst)
         return proto, sport, dport, src, dst, _key(src, sport, dst, dport, proto), bytes(ip.data.data)
-    except (dpkt.UnpackError, dpkt.NeedData, ValueError, IndexError, AttributeError):
+    except _L4_ERRORS:
         return None
 
 
@@ -184,7 +194,13 @@ class NameCollector:
         self.book = NameBook()
 
     def add(self, pkt: Packet) -> None:
-        parsed = _l4_full(pkt.data)
+        self._add_parsed(pkt, _l4_full(pkt.data))
+
+    def add_layer(self, pkt: Packet, layer) -> None:
+        """Igual que `add`, con la capa IP ya decodificada (`ip_layer`; None si no hay)."""
+        self._add_parsed(pkt, _layer_l4(layer))
+
+    def _add_parsed(self, pkt: Packet, parsed) -> None:
         if parsed is None or not parsed[6]:
             return
         proto, sport, dport, src, dst, key, payload = parsed

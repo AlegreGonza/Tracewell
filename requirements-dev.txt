@@ -2,5 +2,5 @@
 -r requirements.txt
 pytest
 pytest-cov
-httpx2      # lo usa TestClient de FastAPI/Starlette (httpx quedó deprecado para eso)
-ruff        # linter: `ruff check backend main.py` (ver pyproject.toml)
+httpx2>=2.16.2,<3  # lo usa TestClient de FastAPI/Starlette (httpx quedó deprecado para eso)
+ruff>=0.17.6,<0.18  # linter: `ruff check backend main.py` (ver pyproject.toml)

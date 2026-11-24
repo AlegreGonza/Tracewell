@@ -276,6 +276,16 @@ describe("Soporte de red → Red (api.support*)", () => {
   it.each([
     ["supportConfig", [], "/api/support/config"],
     ["supportConfigRaw", [], "/api/support/config/raw"],
+    ["supportWifi", [], "/api/support/wifi"],
+    ["supportWifiHistory", [], "/api/support/wifi/history"],
+    ["monitorStatus", [], "/api/support/monitor"],
+  ])("%s es GET a la URL correcta", async (name, args, url) => {
+    await api[name](...args);
+    expect([last()[0], last()[1].method]).toEqual([url, "GET"]);
+  });
+
+  // Los sondeos que mandan tráfico a la red son POST: un GET ajeno sin Origin los dispararía.
+  it.each([
     ["supportInternet", [], "/api/support/internet"],
     ["supportLatency", [{ host: "8.8.8.8", port: 443, samples: 8 }], "/api/support/latency?host=8.8.8.8&port=443&samples=8"],
     ["supportPing", ["1.1.1.1", 4], "/api/support/ping?host=1.1.1.1&count=4"],
@@ -285,13 +295,10 @@ describe("Soporte de red → Red (api.support*)", () => {
     ["supportTime", ["pool.ntp.org"], "/api/support/time?server=pool.ntp.org"],
     ["supportDevices", [false], "/api/support/devices"],
     ["supportDevices", [true], "/api/support/devices?scan=true"],
-    ["supportWifi", [], "/api/support/wifi"],
-    ["supportWifiHistory", [], "/api/support/wifi/history"],
     ["supportDuplicateIp", [], "/api/support/duplicate-ip"],
-    ["monitorStatus", [], "/api/support/monitor"],
-  ])("%s es GET a la URL correcta", async (name, args, url) => {
+  ])("%s es POST a la URL correcta", async (name, args, url) => {
     await api[name](...args);
-    expect([last()[0], last()[1].method]).toEqual([url, "GET"]);
+    expect([last()[0], last()[1].method]).toEqual([url, "POST"]);
   });
 
   it("un host con caracteres raros va codificado en la query", async () => {
@@ -312,5 +319,22 @@ describe("Soporte de red → Red (api.support*)", () => {
     const ctl = new AbortController();
     await api.supportWifi(ctl.signal);
     expect(last()[1].signal).toBe(ctl.signal);
+  });
+});
+
+describe("ticketUrl (descargas con token)", () => {
+  beforeEach(() => fetchMock.mockResolvedValue(resp(200, { ticket: "a b", query: "ticket" })));
+
+  it("pide el ticket de la ruta SIN query y lo agrega a la URL", async () => {
+    const url = await api.ticketUrl("/api/export?ip=1.2.3.4");
+    const [path, opts] = fetchMock.mock.calls.at(-1);
+    expect(path).toBe("/api/download-ticket");
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ path: "/api/export" });
+    expect(url).toBe("/api/export?ip=1.2.3.4&ticket=a%20b");
+  });
+
+  it("sin query usa ? y no deja el token en la URL", async () => {
+    expect(await api.ticketUrl("/api/report")).toBe("/api/report?ticket=a%20b");
   });
 });

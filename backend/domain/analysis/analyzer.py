@@ -8,16 +8,26 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 from backend.domain.analysis.stream import Stream, follow_stream
 from backend.domain.analysis.timeline import Timeline, TimelineCollector
 from backend.domain.analysis.names import NameBook, NameCollector
+from backend.domain.analysis.session_scan import ScanCache
 from backend.domain.pcap.hexdump import hexdump
 from backend.domain.pcap.layers import dissect
-from backend.domain.pcap.reader import CaptureInfo, Packet, capture_info, get_packet, iter_packets
-from backend.domain.rules.engine import Alert, Rule, evaluate
+from backend.domain.pcap.reader import (
+    CaptureInfo,
+    Packet,
+    capture_info,
+    get_packet,
+    iter_indexed,
+    iter_packets,
+    packet_index,
+)
+from backend.domain.rules.engine import Alert, Rule, RuleRunner, decode_layer
 from backend.domain.sessions.grouper import (
     GroupingResult,
+    SessionGrouper,
     _PROTO_NAMES,
-    group_packets,
     packet_endpoints,
     packet_session_key,
+    parse_ip,
 )
 
 MAX_PAGE = 1000
@@ -34,6 +44,8 @@ class Analysis:
     timeline: Optional[Timeline] = None  # paquetes y bytes por intervalo
     # clave de sesión -> id (posición en result.sessions)
     _ids: Dict[Tuple, int] = field(init=False, repr=False, default_factory=dict)
+    # escaneos por sesión ya hechos: las páginas siguientes de `session_packets` no releen el pcap
+    _scans: ScanCache = field(init=False, repr=False, default_factory=ScanCache)
 
     def __post_init__(self):
         # Las sesiones armadas a mano pueden no tener clave: no entran al índice.
@@ -67,22 +79,24 @@ class PacketDetail:
 
 
 def analyze(path, rules: List[Rule]) -> Analysis:
-    """Tres pasadas en streaming sobre el archivo (sesiones, reglas y nombres de sitio)."""
+    """Una sola pasada en streaming: sesiones, reglas, nombres de sitio y línea de tiempo."""
     path = Path(path)
     info = capture_info(path)  # valida el archivo antes de gastar tiempo
-    result = group_packets(iter_packets(path), info.linktype)
-    alerts = evaluate(rules, iter_packets(path), info.linktype)
-    names, timeline = _enrich(path)
-    return Analysis(path=path, info=info, result=result, alerts=alerts, rules=list(rules), names=names, timeline=timeline)
-
-
-def _enrich(path: Path):
-    """Tercera pasada: nombres de sitio y línea de tiempo comparten el mismo recorrido del archivo."""
+    grouper = SessionGrouper(info.linktype)
+    runner = RuleRunner(rules, info.linktype)
     names, timeline = NameCollector(), TimelineCollector()
-    for pkt in iter_packets(path):
+    positions = packet_index(path)  # la misma pasada deja listo el índice de `get_packet`
+    for i, pos, pkt in iter_indexed(path):
+        positions.note(i + 1, pos)
+        layer, malformed = parse_ip(pkt.data)  # la capa IP se decodifica una sola vez
+        grouper.add(pkt, layer, malformed)
+        runner.feed(decode_layer(pkt, layer))
         timeline.add(pkt)
-        names.add(pkt)
-    return names.book, timeline.result()
+        names.add_layer(pkt, layer)
+    return Analysis(
+        path=path, info=info, result=grouper.result(), alerts=runner.alerts(), rules=list(rules),
+        names=names.book, timeline=timeline.result(),
+    )
 
 
 def _require_int(name: str, value) -> None:
@@ -106,8 +120,20 @@ def session_packets(analysis: Analysis, session_id: int, offset: int = 0, limit:
     """Paquetes de una sesión, paginados -> (lista de PacketSummary, hay_más)."""
     _check_page_args(analysis, session_id, offset, limit)
     key = analysis.result.sessions[session_id].key
+    scan = analysis._scans.get(analysis.path, key)
+    wanted = offset + limit + 1  # uno de más para saber si hay otra página
+    scan.fill(wanted)
+    if not scan.covers(wanted):  # sesión enorme: más allá del tope se relee el archivo
+        return _stream_page(analysis.path, key, offset, limit)
+    rows, more = scan.page(offset, limit)
+    return [PacketSummary(i, ts, caplen, origlen, origlen is not None and caplen < origlen)
+            for i, ts, caplen, origlen in rows], more
+
+
+def _stream_page(path, key, offset: int, limit: int):
+    """Página de una sesión releyendo el archivo desde el inicio (sin guardar nada)."""
     out, seen, more = [], 0, False
-    for index, pkt in enumerate(iter_packets(analysis.path)):
+    for index, pkt in enumerate(iter_packets(path)):
         if packet_session_key(pkt) != key:
             continue
         if seen >= offset + limit:

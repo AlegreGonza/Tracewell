@@ -25,7 +25,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 # Lo que va en el zip: archivos sueltos y carpetas (de las carpetas se omiten tests y basura).
 $Files = @(
-    "main.py", "pyproject.toml", "requirements.txt", "README.md",
+    "main.py", "pyproject.toml", "requirements.txt", "requirements.lock", "README.md",
     "instalar.ps1", "instalar.sh", "iniciar.ps1", "iniciar.sh",
     "samples\demo.pcap"
 )

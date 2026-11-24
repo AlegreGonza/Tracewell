@@ -142,7 +142,7 @@ def test_pick_file_sin_bind_falla_con_attributeerror(monkeypatch):
 def test_window_no_es_publico():
     # lo expuesto a JS (sin guion bajo) no incluye la ventana
     publicos = [n for n in dir(main.DesktopApi()) if not n.startswith("_")]
-    assert sorted(publicos) == ["pick_file"]
+    assert sorted(publicos) == ["get_token", "pick_file"]
     assert "window" not in publicos
 
 
@@ -320,7 +320,8 @@ def test_main_pasa_el_puerto(monkeypatch):
     monkeypatch.setattr(main, "start_in_thread", fake)
     monkeypatch.setattr(main, "_open_window", lambda *a, **k: {"ok": True})
     main.main(["--port", "4321"])
-    assert visto == {"port": 4321}
+    assert visto["port"] == 4321
+    assert isinstance(visto["api_token"], str) and len(visto["api_token"]) >= 32
 
 
 def test_main_serve_only(monkeypatch, capsys):
@@ -384,12 +385,14 @@ def test_main_modo_normal(monkeypatch):
     monkeypatch.setattr(main, "start_in_thread", lambda **kw: h)
     visto = {}
 
-    def fake(url, hidden=False, self_test=False):
-        visto.update(url=url, hidden=hidden, self_test=self_test)
+    def fake(url, hidden=False, self_test=False, token=None):
+        visto.update(url=url, hidden=hidden, self_test=self_test, token=token)
         return {"ok": False}
 
     monkeypatch.setattr(main, "_open_window", fake)
     assert main.main([]) == 0
+    token = visto.pop("token")
+    assert isinstance(token, str) and len(token) >= 32
     assert visto == {"url": h.url, "hidden": False, "self_test": False}
     assert h.stopped == 1
 
@@ -401,7 +404,7 @@ def test_main_self_test(monkeypatch, capsys, ok, code):
     monkeypatch.setattr(main, "start_in_thread", lambda **kw: h)
     visto = {}
 
-    def fake(url, hidden=False, self_test=False):
+    def fake(url, hidden=False, self_test=False, token=None):
         visto.update(hidden=hidden, self_test=self_test)
         return {"ok": ok, "title": "Tracewell"}
 
@@ -410,6 +413,37 @@ def test_main_self_test(monkeypatch, capsys, ok, code):
     assert visto == {"hidden": True, "self_test": True}
     assert '"ok": %s' % str(ok).lower() in capsys.readouterr().out
     assert h.stopped == 1
+
+
+def test_desktop_api_entrega_el_token():
+    assert main.DesktopApi("abc").get_token() == "abc"
+    assert main.DesktopApi().get_token() is None
+
+
+def test_new_token_es_aleatorio_y_se_puede_fijar(monkeypatch):
+    monkeypatch.delenv("TRACEWELL_API_TOKEN", raising=False)
+    a, b = main._new_token(), main._new_token()
+    assert a != b and len(a) >= 32
+    monkeypatch.setenv("TRACEWELL_API_TOKEN", "fijo-de-16-chars!")
+    assert main._new_token() == "fijo-de-16-chars!"
+
+
+@pytest.mark.parametrize("corto", ["", "a", "123456789012345"])
+def test_token_fijado_demasiado_corto_se_rechaza(monkeypatch, capsys, corto):
+    monkeypatch.setenv("TRACEWELL_API_TOKEN", corto)
+    with pytest.raises(ValueError, match="al menos 16"):
+        main._new_token()
+    # main() lo informa y sale con 1 sin levantar la API
+    monkeypatch.setattr(main, "start_in_thread", lambda **kw: pytest.fail("no debe arrancar"))
+    assert main.main(["--serve-only"]) == 1
+    assert "TRACEWELL_API_TOKEN" in capsys.readouterr().err
+
+
+def test_serve_only_imprime_la_url_con_el_token_en_el_fragmento(capsys):
+    h = FakeHandle()
+    h.thread.join = lambda: None
+    main._serve_forever(h, "tok123")
+    assert f"{h.url}/#token=tok123" in capsys.readouterr().out
 
 
 def test_serve_forever_keyboardinterrupt_no_propaga(capsys):

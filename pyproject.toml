@@ -1,19 +1,19 @@
 [project]
 name = "tracewell"
-version = "0.2.1"
+version = "0.3.0"
 requires-python = ">=3.11"
 dependencies = [
-    "dpkt",      # lectura de pcap/pcapng y decodificación de capas
-    "pyyaml",    # reglas
-    "fastapi",   # API
-    "uvicorn",   # servidor de la API
-    "scapy",     # SOLO captura en vivo (backend/domain/pcap/live.py, import perezoso)
-    "pywebview", # SOLO la ventana de escritorio (main.py, import perezoso)
-    "psutil",    # OPCIONAL: columna "Proceso" en la captura en vivo (backend/domain/pcap/processes.py)
+    "dpkt>=1.9.8,<2",      # lectura de pcap/pcapng y decodificación de capas
+    "pyyaml>=6.0.3,<7",    # reglas
+    "fastapi>=0.163.2,<1",   # API
+    "uvicorn>=0.54,<1",   # servidor de la API
+    "scapy>=2.8,<3",     # SOLO captura en vivo (backend/domain/pcap/live.py, import perezoso)
+    "pywebview>=6.2.1,<7", # SOLO la ventana de escritorio (main.py, import perezoso)
+    "psutil>=7.2.2,<8",    # OPCIONAL: columna "Proceso" en la captura en vivo (backend/domain/pcap/processes.py)
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "httpx2", "ruff"]  # httpx2: lo usa TestClient (Starlette); ruff: linter
+dev = ["pytest>=9.2,<10", "pytest-cov>=7.1,<8", "httpx2>=2.16.2,<3", "ruff>=0.17.6,<0.18"]  # httpx2: lo usa TestClient (Starlette); ruff: linter
 
 [tool.pytest.ini_options]
 # Los tests viven dentro de cada módulo; pythonpath "." permite `import backend...`.
@@ -30,3 +30,4 @@ select = ["F"]
 [tool.ruff.lint.per-file-ignores]
 # El fixture `mk` se importa de test_engine y cada test lo recibe por nombre (idioma de pytest)
 "backend/domain/rules/tests/test_dns_ignore_suffixes.py" = ["F811"]
+"backend/domain/rules/tests/test_lentos_y_contenido.py" = ["F811"]

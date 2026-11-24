@@ -47,13 +47,18 @@ if [ -n "$PY" ]; then
 
   if [ -x "$VENV_PY" ]; then
     step "3. Paquetes de Python"
-    REQ="requirements.txt"; [ "$DEV" -eq 1 ] && REQ="requirements-dev.txt"
+    REQ="requirements.lock"; [ "$DEV" -eq 1 ] && REQ="requirements-dev.lock"
+    HASHES="--require-hashes"
+    if [ ! -f "$REQ" ]; then  # sin lock (p. ej. zip mínimo): versiones con cotas, sin hashes
+      REQ="requirements.txt"; [ "$DEV" -eq 1 ] && REQ="requirements-dev.txt"; HASHES=""
+    fi
     if [ "$DEV" -eq 0 ] && "$VENV_PY" -c 'import dpkt, yaml, fastapi, uvicorn, scapy, psutil' 2>/dev/null; then
       ok "Dependencias ya instaladas"
     elif [ "$CHECK" -eq 1 ]; then bad "Faltan paquetes de Python"; MISSING+=("paquetes de Python ($REQ)")
     else
       echo "  Instalando $REQ desde PyPI..."
-      if "$VENV_PY" -m pip install --disable-pip-version-check -r "$REQ"; then ok "Paquetes instalados"
+      # shellcheck disable=SC2086
+      if "$VENV_PY" -m pip install --disable-pip-version-check $HASHES -r "$REQ"; then ok "Paquetes instalados"
       else bad "pip falló"; MISSING+=("paquetes de Python"); fi
     fi
   fi

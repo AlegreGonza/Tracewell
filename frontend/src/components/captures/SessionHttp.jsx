@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatBytes } from "../../lib/format.js";
+import DownloadLink from "../common/DownloadLink.jsx";
 import HelpTip from "../common/HelpTip.jsx";
 
 // Notas en lenguaje simple de un intercambio HTTP: lo que merece una mirada
@@ -30,7 +31,7 @@ export function FileCard({ file, href }) {
       </p>
       <p className="muted">Tipo real: {file.kind}{file.content_type ? ` (el servidor dijo: ${file.content_type})` : ""}</p>
       <p className="mono hash">SHA-256: {file.sha256}</p>
-      <a className="button" href={href} download onClick={confirmDownload}>Guardar como .bin</a>
+      <DownloadLink href={href} download onClick={confirmDownload}>Guardar como .bin</DownloadLink>
     </li>
   );
 }

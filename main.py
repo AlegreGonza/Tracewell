@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import secrets
 import sys
 import time
 from typing import Any, Dict, Optional, Sequence
 
 from backend.domain.pcap.live import cleanup_stale_temp_dirs
 from backend.domain.rules.engine import RuleError
+from backend.api.security import MIN_TOKEN_LENGTH
 from backend.api.server import ServerHandle, ServerStartError, start_in_thread
 
 logger = logging.getLogger("tracewell")
@@ -24,8 +27,13 @@ LOAD_TIMEOUT = 20  # segundos que esperamos a que la ventana cargue la interfaz
 class DesktopApi:
     """Métodos que la interfaz puede llamar desde JavaScript (`window.pywebview.api`)."""
 
-    def __init__(self) -> None:
+    def __init__(self, token: Optional[str] = None) -> None:
         self._window: Any = None  # con "_": pywebview no expone atributos privados a la web
+        self._token = token
+
+    def get_token(self) -> Optional[str]:
+        """Token de la API de este arranque: solo la ventana de Tracewell lo puede pedir."""
+        return self._token
 
     def _bind(self, window: Any) -> None:
         """Guarda la ventana (con "_" no se expone a JavaScript)."""
@@ -63,6 +71,16 @@ def _allow_downloads(webview: Any) -> None:
         webview.settings["ALLOW_DOWNLOADS"] = True
     except (AttributeError, KeyError, TypeError):  # una versión sin esa opción
         logger.debug("esta versión de pywebview no permite activar las descargas", exc_info=True)
+
+
+def _new_token() -> str:
+    """Token aleatorio por arranque; TRACEWELL_API_TOKEN lo fija (solo para el servidor de Vite)."""
+    fixed = os.environ.get("TRACEWELL_API_TOKEN")
+    if fixed is None:
+        return secrets.token_urlsafe(32)
+    if len(fixed) < MIN_TOKEN_LENGTH:
+        raise ValueError(f"TRACEWELL_API_TOKEN debe tener al menos {MIN_TOKEN_LENGTH} caracteres")
+    return fixed
 
 
 def _create_window(url: str, api: DesktopApi, hidden: bool) -> Any:
@@ -123,12 +141,14 @@ def _self_test(window: Any, result: Dict[str, Any]) -> None:
 
 # ------------------------------------------------------------------ ejecución
 
-def _open_window(url: str, hidden: bool = False, self_test: bool = False) -> Dict[str, Any]:
+def _open_window(
+    url: str, hidden: bool = False, self_test: bool = False, token: Optional[str] = None
+) -> Dict[str, Any]:
     """Abre la ventana y bloquea hasta que se cierre; devuelve el resultado de la autoprueba."""
     import webview
 
     result: Dict[str, Any] = {"ok": False}
-    window = _create_window(url, DesktopApi(), hidden)
+    window = _create_window(url, DesktopApi(token), hidden)
     if self_test:
         webview.start(_self_test, (window, result))
     else:
@@ -136,19 +156,21 @@ def _open_window(url: str, hidden: bool = False, self_test: bool = False) -> Dic
     return result
 
 
-def _serve_forever(handle: ServerHandle) -> None:
-    print(f"Tracewell en {handle.url}  (Ctrl+C para salir)")
+def _serve_forever(handle: ServerHandle, token: Optional[str] = None) -> None:
+    # El token va en el fragmento (#): no viaja al servidor ni en el Referer.
+    url = f"{handle.url}/#token={token}" if token else handle.url
+    print(f"Tracewell en {url}  (Ctrl+C para salir)")
     try:
         handle.thread.join()
     except KeyboardInterrupt:
         pass  # Ctrl+C es la forma normal de salir en --serve-only
 
 
-def _run(args: argparse.Namespace, handle: ServerHandle) -> int:
+def _run(args: argparse.Namespace, handle: ServerHandle, token: Optional[str] = None) -> int:
     if args.serve_only:
-        _serve_forever(handle)
+        _serve_forever(handle, token)
         return 0
-    result = _open_window(handle.url, hidden=args.self_test, self_test=args.self_test)
+    result = _open_window(handle.url, hidden=args.self_test, self_test=args.self_test, token=token)
     if args.self_test:
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result["ok"] else 1
@@ -159,12 +181,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     cleanup_stale_temp_dirs()  # restos de capturas de un cierre abrupto anterior
     try:
-        handle = start_in_thread(port=args.port)
+        token = _new_token()
+    except ValueError as exc:
+        print(f"No se pudo iniciar la API: {exc}", file=sys.stderr)
+        return 1
+    try:
+        handle = start_in_thread(port=args.port, api_token=token)
     except (ServerStartError, OSError, RuleError) as exc:  # RuleError: una regla YAML mal escrita
         print(f"No se pudo iniciar la API: {exc}", file=sys.stderr)
         return 1
     try:
-        return _run(args, handle)
+        return _run(args, handle, token)
     except ImportError as exc:
         print(f"Falta una dependencia de la ventana ({exc}). Instalá pywebview o usá --serve-only.", file=sys.stderr)
         return 1

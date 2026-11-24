@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import struct
+import threading
+from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator, NamedTuple, Optional, Union
+from typing import Iterator, List, NamedTuple, Optional, Tuple, Union
 
 import dpkt
 
@@ -57,6 +59,13 @@ class _TapFile:
         self._hdr_struct: Optional[struct.Struct] = None
         self.last_origlen: Optional[int] = None
         self.short_read: Optional[tuple[int, int]] = None  # (esperado, leído)
+        self.pos = 0  # bytes leídos desde el inicio: dónde empieza lo que sigue
+
+    def jump(self, pos: int) -> None:
+        """Salta a la cabecera de un paquete (una posición guardada antes)."""
+        self._fh.seek(pos)
+        self.pos = pos
+        self._state = "header"
 
     def _on_global(self, data: bytes) -> None:
         """Cabecera global: de su magic sale el endianness de las de paquete."""
@@ -77,6 +86,7 @@ class _TapFile:
 
     def read(self, n=-1):
         data = self._fh.read(n)
+        self.pos += len(data)
         if self._state == "global":
             self._on_global(data)
             self._state = "header"
@@ -102,6 +112,13 @@ class _BlockTap:
         self.short_read: Optional[tuple[int, int]] = None  # (esperado, leído)
         self._armed = False
         self._expect_header = True
+        self.pos = 0  # bytes leídos desde el inicio: dónde empieza lo que sigue
+
+    def jump(self, pos: int) -> None:
+        """Salta al inicio de un bloque (una posición guardada antes)."""
+        self._fh.seek(pos)
+        self.pos = pos
+        self._expect_header = True
 
     def arm(self) -> None:
         """Empieza a vigilar: las lecturas del constructor de dpkt no siguen el patrón por bloque."""
@@ -110,6 +127,7 @@ class _BlockTap:
 
     def read(self, n=-1):
         data = self._fh.read(n)
+        self.pos += len(data)
         if self._armed:
             self._check(n, data)
         return data
@@ -173,21 +191,36 @@ def _raise_if_truncated(tap: Optional[Union[_TapFile, _BlockTap]]) -> None:
         raise PcapError(f"último paquete truncado: esperado {esperado} bytes, leído {leido}")
 
 
-def iter_packets(path) -> Iterator[Packet]:
-    """Devuelve un Packet por cada paquete del archivo, de a uno."""
+def iter_indexed(path, start_index: int = 0, start_pos: Optional[int] = None) -> Iterator[Tuple[int, int, Packet]]:
+    """(índice, posición del siguiente paquete, Packet); puede arrancar en una posición guardada."""
     with _open(path) as (_, reader, tap):
+        if start_pos is not None:
+            tap.jump(start_pos)
+        index = start_index
         try:
             for ts, buf in reader:
                 # Lo escuchamos ANTES de entregarlo
                 _raise_if_truncated(tap)
                 origlen = tap.last_origlen if tap is not None else None
                 # float(): con magic de nanosegundos dpkt entrega Decimal, y mezclar Decimal
-                yield Packet(float(ts), buf, origlen)
+                yield index, tap.pos, Packet(float(ts), buf, origlen)
+                index += 1
             # dpkt termina en silencio si el archivo se corta en un bloque que no es paquete.
             _raise_if_truncated(tap)
         except dpkt.NeedData as exc:
             # La cabecera de un paquete quedó cortada: el archivo se truncó.
             raise PcapError(f"captura truncada: {_truncated_detail(exc)}") from exc
+        except PcapError:
+            raise
+        except (ValueError, dpkt.UnpackError, struct.error) as exc:
+            # Cabecera de bloque o de paquete con campos imposibles (longitud negativa, etc.)
+            raise PcapError(f"captura dañada: {exc}") from exc
+
+
+def iter_packets(path) -> Iterator[Packet]:
+    """Devuelve un Packet por cada paquete del archivo, de a uno."""
+    for _, _, pkt in iter_indexed(path):
+        yield pkt
 
 
 def _truncated_detail(exc: Exception) -> str:
@@ -195,13 +228,63 @@ def _truncated_detail(exc: Exception) -> str:
     return str(exc).strip() or "el archivo termina antes de lo esperado"
 
 
+# ------------------------------------------------------- índice de posiciones
+
+INDEX_STEP = 4096  # un punto de reanudación cada tantos paquetes
+MAX_INDEXES = 4  # archivos con índice en memoria a la vez
+
+
+class _PacketIndex:
+    """Posición en el archivo de los paquetes 0, STEP, 2·STEP...: saltar sin releer desde el inicio."""
+
+    def __init__(self, first_pos: int):
+        self.positions: List[int] = [first_pos]
+        self._lock = threading.Lock()
+
+    def note(self, next_index: int, pos: int) -> None:
+        """Guarda la posición del paquete `next_index` si es un punto de reanudación nuevo."""
+        if next_index % INDEX_STEP:
+            return
+        with self._lock:
+            if next_index // INDEX_STEP == len(self.positions):
+                self.positions.append(pos)
+
+
+_INDEXES: "OrderedDict[Tuple[str, int, int], _PacketIndex]" = OrderedDict()
+_INDEXES_LOCK = threading.Lock()
+
+
+def file_signature(path) -> Tuple[str, int, int]:
+    """(ruta, tamaño, mtime en ns): cambia si el archivo cambia, así se descarta lo cacheado."""
+    p = require_regular_file(path)
+    st = p.stat()
+    return str(p.resolve()), st.st_size, st.st_mtime_ns
+
+
+def packet_index(path) -> _PacketIndex:
+    """Índice de posiciones del archivo (cache LRU chica; un archivo cambiado no lo reutiliza)."""
+    sig = file_signature(path)
+    with _INDEXES_LOCK:
+        index = _INDEXES.get(sig)
+        if index is None:
+            with _open(path) as (_, _, tap):
+                index = _INDEXES[sig] = _PacketIndex(tap.pos)
+            while len(_INDEXES) > MAX_INDEXES:
+                _INDEXES.popitem(last=False)
+        _INDEXES.move_to_end(sig)
+        return index
+
+
 def get_packet(path, index: int) -> Packet:
     """Devuelve el paquete número `index` (0 = el primero)."""
     if isinstance(index, bool) or not isinstance(index, int) or index < 0:
         raise IndexError(f"índice de paquete inválido: {index!r}")
-    for i, pkt in enumerate(iter_packets(path)):
+    positions = packet_index(path)
+    start = min(index // INDEX_STEP, len(positions.positions) - 1)
+    for i, pos, pkt in iter_indexed(path, start * INDEX_STEP, positions.positions[start]):
         if i == index:
             return pkt
+        positions.note(i + 1, pos)  # el índice crece a medida que se recorre
     raise IndexError(f"el paquete {index} no existe en la captura")
 
 

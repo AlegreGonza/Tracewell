@@ -55,7 +55,7 @@ def test_pocos_intentos_no_alertan(tmp_path):
 
 
 def test_intentos_lentos_fuera_de_la_ventana_no_alertan(tmp_path):
-    assert alerts_of(tmp_path, attempts(12, step=30.0), brute_rules()) == []
+    assert alerts_of(tmp_path, attempts(12, step=60.0), brute_rules()) == []
 
 
 def test_otro_puerto_no_cuenta(tmp_path):

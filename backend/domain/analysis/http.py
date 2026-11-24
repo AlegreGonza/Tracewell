@@ -6,15 +6,21 @@ import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import unquote, urlsplit
+from urllib.parse import SplitResult, unquote, urlsplit
 
 MAX_MESSAGES = 500  # mensajes que se leen por sentido
-MAX_BODY = 50_000_000
+MAX_BODY = 50_000_000  # bytes de cuerpo que se retienen por mensaje
+MAX_HEAD = 65_536  # bytes máximos de la cabecera de un mensaje (línea + cabeceras)
+MAX_HEADERS = 200  # cabeceras que se leen por mensaje
+MAX_CHUNK_DIGITS = 8  # dígitos hexadecimales del tamaño de un chunk (≤ 4 GiB)
+MAX_LENGTH_DIGITS = 12  # dígitos de Content-Length que se aceptan
 _METHODS = (b"GET", b"POST", b"PUT", b"DELETE", b"HEAD", b"OPTIONS", b"PATCH", b"CONNECT", b"TRACE")
 _REQUEST_LINE = re.compile(r"^([A-Z]+) (\S+) HTTP/1\.[01]$")
 _STATUS_LINE = re.compile(r"^HTTP/1\.[01] (\d{3})(?: (.*))?$")
 _SENSITIVE = ("pass", "pwd", "secret", "token", "senha", "contrasena", "clave", "apikey", "api_key")
 _UPLOAD_TYPES = ("multipart/", "application/octet-stream")
+_HEX = re.compile(rb"^[0-9A-Fa-f]+$")
+_EMPTY_URL = SplitResult("", "", "", "", "")
 
 # Tipo real de un archivo según sus primeros bytes
 _MAGIC: Tuple[Tuple[bytes, str, bool], ...] = (
@@ -51,6 +57,14 @@ def file_kind(body: bytes) -> Tuple[str, bool]:
     return "Datos binarios", False
 
 
+def _split(target: str) -> SplitResult:
+    """`urlsplit` que no lanza con destinos raros (por ejemplo `//[x`)."""
+    try:
+        return urlsplit(target)
+    except ValueError:
+        return _EMPTY_URL
+
+
 def _safe_name(raw: str) -> str:
     """Nombre de archivo apto para mostrar: sin rutas ni caracteres raros."""
     base = re.split(r"[\\/]", unquote(raw))[-1]
@@ -67,6 +81,14 @@ class _Msg:
     complete: bool  # el cuerpo llegó entero (no faltan bytes en la captura)
 
 
+def _chunk_size(line: bytes) -> Optional[int]:
+    """Tamaño de un chunk (hex puro, sin signo ni `0x`); None si es inválido o absurdo."""
+    text = line.split(b";")[0].strip() or b"0"
+    if len(text) > MAX_CHUNK_DIGITS or not _HEX.match(text):
+        return None
+    return int(text, 16)
+
+
 def _read_chunked(data: bytes, pos: int) -> Tuple[bytes, int, bool]:
     """Cuerpo `Transfer-Encoding: chunked` desde `pos`. (cuerpo, siguiente posición, completo)."""
     out = bytearray()
@@ -74,9 +96,8 @@ def _read_chunked(data: bytes, pos: int) -> Tuple[bytes, int, bool]:
         eol = data.find(b"\r\n", pos)
         if eol < 0:
             return bytes(out), len(data), False
-        try:
-            size = int(data[pos:eol].split(b";")[0].strip() or b"0", 16)
-        except ValueError:
+        size = _chunk_size(data[pos:eol])
+        if size is None:
             return bytes(out), len(data), False
         pos = eol + 2
         if size == 0:
@@ -96,7 +117,7 @@ def _read_body(data: bytes, pos: int, headers: Dict[str, str], no_body: bool, un
     if "chunked" in headers.get("transfer-encoding", "").lower():
         return _read_chunked(data, pos)
     length = headers.get("content-length", "")
-    if length.isdigit():
+    if length.isascii() and length.isdigit() and len(length) <= MAX_LENGTH_DIGITS:
         n = min(int(length), MAX_BODY)
         body = data[pos:pos + n]
         return body, pos + len(body), len(body) == int(length)
@@ -106,12 +127,12 @@ def _read_body(data: bytes, pos: int, headers: Dict[str, str], no_body: bool, un
 
 
 def _parse_head(data: bytes, pos: int) -> Optional[Tuple[str, Dict[str, str], int]]:
-    end = data.find(b"\r\n\r\n", pos)
+    end = data.find(b"\r\n\r\n", pos, pos + MAX_HEAD)
     if end < 0:
         return None
     lines = data[pos:end].decode("latin-1").split("\r\n")
     headers: Dict[str, str] = {}
-    for ln in lines[1:]:
+    for ln in lines[1:MAX_HEADERS + 1]:
         key, _, value = ln.partition(":")
         if key.strip():
             headers.setdefault(key.strip().lower(), value.strip())
@@ -143,7 +164,7 @@ def _messages(data: bytes, responses: bool, request_methods: List[str]) -> List[
 
 def _sensitive_fields(method: str, target: str, headers: Dict[str, str], body: bytes) -> List[str]:
     """NOMBRES de campos con pinta de contraseña (en la URL o en un formulario)."""
-    pairs = urlsplit(target).query
+    pairs = _split(target).query
     if method in ("POST", "PUT") and headers.get("content-type", "").lower().startswith("application/x-www-form-urlencoded"):
         pairs += "&" + body[:4096].decode("latin-1")
     names = {p.split("=", 1)[0].strip().lower() for p in pairs.split("&") if p}
@@ -174,7 +195,7 @@ def _file_info(body: bytes, complete: bool, name_hint: str, content_type: str, d
 
 def _name_hint(response_headers: Dict[str, str], target: str) -> str:
     match = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', response_headers.get("content-disposition", ""))
-    return match.group(1) if match else (urlsplit(target).path.rsplit("/", 1)[-1] or "index")
+    return match.group(1) if match else (_split(target).path.rsplit("/", 1)[-1] or "index")
 
 
 def _exchange(index: int, req: Optional[_Msg], resp: Optional[_Msg]) -> Dict[str, Any]:
@@ -190,7 +211,7 @@ def _exchange(index: int, req: Optional[_Msg], resp: Optional[_Msg]) -> Dict[str
         "request_bytes": len(req.body) if req else 0, "request_type": (req.headers.get("content-type") if req else None),
         "status": None, "reason": None, "response_type": None, "response_bytes": 0,
         "location": None, "server": None, "encoding": None, "complete": bool(req and req.complete) and (resp is None or resp.complete),
-        "file": None,
+        "file": None, "truncated": False,
     }
     if resp is not None:
         m = _STATUS_LINE.match(resp.line)
@@ -207,7 +228,7 @@ def _file_of(ex: Dict[str, Any], req: Optional[_Msg], resp: Optional[_Msg]) -> O
         return _file_info(resp.body, resp.complete, _name_hint(resp.headers, ex["target"]), ex["response_type"] or "", "descarga")
     ctype = (ex["request_type"] or "").lower()
     if req is not None and req.body and ex["method"] in ("POST", "PUT") and ctype.startswith(_UPLOAD_TYPES):
-        return _file_info(req.body, req.complete, urlsplit(ex["target"]).path.rsplit("/", 1)[-1] or "subida", ctype, "subida")
+        return _file_info(req.body, req.complete, _split(ex["target"]).path.rsplit("/", 1)[-1] or "subida", ctype, "subida")
     return None
 
 
@@ -248,7 +269,10 @@ def http_exchanges(origin: bytes, destination: bytes) -> List[Dict[str, Any]]:
     """Intercambios (petición + respuesta) de una sesión TCP, en orden. Vacío si no es HTTP/1.x en claro."""
     if not looks_like_http(origin, destination):
         return []
-    return [_exchange(i, req, resp) for i, (req, resp) in enumerate(_pairs(origin, destination))]
+    out = [_exchange(i, req, resp) for i, (req, resp) in enumerate(_pairs(origin, destination))]
+    if len(out) >= MAX_MESSAGES:  # se llegó al tope de mensajes: puede haber más
+        out[-1]["truncated"] = True
+    return out
 
 
 def http_body(origin: bytes, destination: bytes, index: int) -> Optional[Tuple[bytes, str]]:

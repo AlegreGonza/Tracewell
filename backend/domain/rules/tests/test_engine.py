@@ -117,13 +117,16 @@ def test_load_real_rules():
     }
     ps, ftp, dns = rules["port_scan"], rules["ftp_cleartext"], rules["dns_suspicious"]
     assert (ps.severity, ps.mitre_technique, ps.mitre_tactic) == ("high", "T1046", "Discovery")
-    assert ps.params == {"min_ports": 15, "window_seconds": 60.0}
+    assert ps.params == {
+        "min_ports": 15, "window_seconds": 60.0, "long_window_seconds": 900.0, "long_threshold": 20,
+    }
     assert (ftp.severity, ftp.mitre_technique) == ("medium", "T1040")
     assert ftp.params == {"ports": [21]}
     assert (dns.severity, dns.mitre_technique) == ("medium", "T1071.004")
     assert dns.params == {
         "max_label_length": 40, "min_entropy": 3.5, "entropy_min_label": 20,
-        "ignore_suffixes": ["elb.amazonaws.com"],
+        "ignore_suffixes": ["elb.amazonaws.com"], "min_total_length": 50,
+        "min_unique_subdomains": 0, "volume_window_seconds": 60.0,
     }
     assert all(isinstance(r, Rule) and r.source.endswith(".yaml") for r in rules.values())
 
@@ -149,10 +152,13 @@ def test_defaults_when_params_missing(tmp_path):
     write_rule(tmp_path, base("ftp_cleartext", id="f"), "b.yaml")
     write_rule(tmp_path, base("dns_suspicious", id="d"), "c.yaml")
     r = {x.id: x for x in load_rules(tmp_path)}
-    assert r["port_scan"].params == {"min_ports": 15, "window_seconds": 60.0}
+    assert r["port_scan"].params == {
+        "min_ports": 15, "window_seconds": 60.0, "long_window_seconds": 0.0, "long_threshold": 20,
+    }
     assert r["f"].params == {"ports": [21]}
     assert r["d"].params == {
         "max_label_length": 40, "min_entropy": 3.5, "entropy_min_label": 20, "ignore_suffixes": [],
+        "min_total_length": 50, "min_unique_subdomains": 0, "volume_window_seconds": 60.0,
     }
 
 
@@ -294,7 +300,8 @@ def test_error_message_has_filename(tmp_path):
 
 def test_valid_params_accepted(tmp_path):
     f = write_rule(tmp_path, base(params={"min_ports": 2, "window_seconds": 0.5}))
-    assert load_rules(f)[0].params == {"min_ports": 2, "window_seconds": 0.5}
+    params = load_rules(f)[0].params
+    assert (params["min_ports"], params["window_seconds"]) == (2, 0.5)
 
 
 # ---------------------------------------------------------------- port_scan
@@ -422,11 +429,16 @@ def test_ftp_nothing(mk, payload):
     assert evaluate([mk("ftp_cleartext")], [ftp(1, payload)]) == []
 
 
-def test_ftp_other_port_needs_config(mk):
+def test_ftp_other_port_detected_by_content(mk):
     pkts = [ftp(1, b"USER bob\r\n", dport=2121), ftp(2, b"PASS pw\r\n", dport=2121)]
-    assert evaluate([mk("ftp_cleartext")], pkts) == []
-    a = evaluate([mk("ftp_cleartext", ports=[2121])], pkts)
+    a = evaluate([mk("ftp_cleartext")], pkts)
     assert len(a) == 1 and a[0].evidence["port"] == 2121 and a[0].evidence["username"] == "bob"
+
+
+def test_ftp_pass_without_user_only_on_trusted_ports(mk):
+    pkts = [ftp(1, b"PASS pw\r\n", dport=2121)]
+    assert evaluate([mk("ftp_cleartext")], pkts) == []
+    assert len(evaluate([mk("ftp_cleartext", ports=[2121])], pkts)) == 1
 
 
 def test_ftp_same_user_not_duplicated(mk):

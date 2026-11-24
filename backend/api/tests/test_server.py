@@ -9,9 +9,11 @@ from fastapi import FastAPI
 
 from backend.api import server as srv
 from backend.api.app import ROOT
+from backend.api.security import TOKEN_HEADER
 from backend.api.server import ServerHandle, ServerStartError, bind_local_socket, start_in_thread
 from backend.domain.rules.engine import RuleError
 
+AUTH = {TOKEN_HEADER: "tok-de-prueba"}
 KW = dict(rules_dir=ROOT / "rules", samples_dir=ROOT / "samples")
 
 
@@ -25,7 +27,7 @@ def servers(tmp_path):
     handles = []
 
     def make(**kw):
-        opts = dict(KW, frontend_dir=tmp_path / "no_existe")
+        opts = dict(KW, frontend_dir=tmp_path / "no_existe", api_token=AUTH[TOKEN_HEADER])
         opts.update(kw)
         h = start_in_thread(**opts)
         handles.append(h)
@@ -112,7 +114,7 @@ def test_start_in_thread_puerto_ocupado_propaga_oserror():
 def test_health_a_traves_del_servidor_real(servers):
     # el servidor real responde /api/health con 200 y status ok
     h = servers()
-    r = httpx.get(h.url + "/api/health", timeout=5)
+    r = httpx.get(h.url + "/api/health", headers=AUTH, timeout=5)
     assert r.status_code == 200 and r.json()["status"] == "ok"
 
 
@@ -134,7 +136,7 @@ def test_escucha_solo_en_loopback(servers):
 def test_demo_funciona_por_servidor_real(servers):
     # POST /api/demo corre un análisis completo a través del servidor real
     h = servers()
-    r = httpx.post(h.url + "/api/demo", timeout=30)
+    r = httpx.post(h.url + "/api/demo", headers=AUTH, timeout=30)
     assert r.status_code == 200
     assert isinstance(r.json(), dict) and r.json()
 
@@ -157,8 +159,8 @@ def test_dos_servidores_a_la_vez(servers):
     # dos servidores simultáneos usan puertos distintos y ambos responden
     a, b = servers(), servers()
     assert a.port != b.port
-    assert httpx.get(a.url + "/api/health", timeout=5).status_code == 200
-    assert httpx.get(b.url + "/api/health", timeout=5).status_code == 200
+    assert httpx.get(a.url + "/api/health", headers=AUTH, timeout=5).status_code == 200
+    assert httpx.get(b.url + "/api/health", headers=AUTH, timeout=5).status_code == 200
 
 
 def test_app_inyectado_tambien_sirve(servers):

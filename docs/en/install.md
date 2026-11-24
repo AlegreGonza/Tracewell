@@ -1,0 +1,123 @@
+# Installation and running
+
+> Part of the Tracewell detailed documentation ([index](README.md), [project README](../../README.md)).
+
+## Quick start
+
+### One-command install (recommended)
+
+Windows 10/11 (PowerShell, from the project folder):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1
+```
+
+```powershell
+.\iniciar.ps1
+```
+
+`instalar.ps1` detects what is missing and installs it **after asking you** (Python 3.12, Node.js only if `frontend\dist` is missing, and the WebView2 runtime, all through `winget`), creates `.venv`, installs `requirements.lock` (exact versions with hashes) and runs the window self-test. It can be run again safely: anything already in place is skipped. Useful switches: `-Check` (report only, installs nothing), `-Yes` (no questions), `-Dev` (also install test dependencies), `-SkipTest`. It does **not** install Npcap (live capture only; its license does not allow silent installs) and does not change any system setting, including the PowerShell execution policy.
+
+Linux / macOS:
+
+```bash
+./instalar.sh
+```
+
+```bash
+./iniciar.sh --serve-only
+```
+
+Full details, requirements and troubleshooting: [`docs/despliegue.md`](../despliegue.md) (in Spanish). The manual steps below do the same thing by hand.
+
+### Download only the app (no tests)
+
+If you just want to **use** Tracewell, you do not need the tests or the interface source code. Download the `tracewell-<version>.zip` attached to a release (it contains only what is needed to run the app, about 170 KB, with the interface already built), unzip it and run the installer as shown above. You do **not** need Node.js or the development dependencies. Verify the download with the `.sha256` file published next to it.
+
+Maintainers build that zip from the full repository with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\crear_zip.ps1
+```
+
+It writes `release\tracewell-<version>.zip` (and its checksum) and does not modify the project. The full repository is only needed to develop or to run the tests (`-Dev`).
+
+### Requirements
+
+| Requirement | Notes |
+|---|---|
+| Python **3.11+** | Developed and tested on 3.12. |
+| Node.js | Only needed to **build the web interface**. Tested with Node 24. |
+| Npcap (Windows) or libpcap (Linux) | Only needed for **live capture**. Not needed to analyze files. |
+| WebView2 runtime (Windows) | Used by the **desktop window**. It ships with Windows 11 and up-to-date Windows 10. On Linux, pywebview needs GTK/WebKit or Qt (the window was tested on Linux). Not needed with `--serve-only`. |
+
+### 1. Create a virtual environment and install the Python dependencies
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+```
+
+```powershell
+.\.venv\Scripts\python -m pip install --require-hashes -r requirements.lock
+```
+
+Linux / macOS:
+
+```bash
+python3 -m venv .venv
+```
+
+```bash
+.venv/bin/python -m pip install --require-hashes -r requirements.lock
+```
+
+`requirements.lock` pins exact versions with sha256 hashes; `requirements.txt` and `pyproject.toml` carry compatible version ranges (see [`docs/desarrollo.md`](../desarrollo.md) to regenerate the lock). Development-only packages (tests) are installed separately:
+
+```bash
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+```
+
+*(On Windows use `.\.venv\Scripts\python` instead of `.venv/bin/python`.)*
+
+### 2. Build the web interface
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+This produces `frontend/dist/`, which the API serves as static files. If you skip this step the API still works, but there is no interface at `/`.
+
+### 3. Run Tracewell
+
+From the project root, one command opens Tracewell in its own desktop window:
+
+```powershell
+.\.venv\Scripts\python main.py
+```
+
+Click **Demo mode** to see the three rules fire. Closing the window shuts everything down: the API stops, a running live capture is stopped, and temporary files are deleted.
+
+Other ways to start it:
+
+| Command | What it does |
+|---|---|
+| `python main.py` | Opens the desktop window (default). |
+| `python main.py --serve-only` | No window: starts the API and the interface and prints a `http://127.0.0.1:<port>/#token=...` address to open in your browser (the token changes on every start; open the full address). Stop it with `Ctrl+C`. |
+| `python main.py --port 8000` | Uses a fixed local port instead of letting the system pick a free one. |
+| `python main.py --self-test` | Opens the window **hidden**, checks that the interface loads, that the native file picker is available and that demo mode works, prints a JSON result and exits (code `0` = everything OK). |
+
+In the desktop window the **Browse…** button opens the system file dialog; in a browser you type the path instead.
+
+> **The API only listens on `127.0.0.1`.** It can read files from your machine (see [Security and privacy](security.md#security-and-privacy)); never expose it to your network.
+
+The interactive API documentation (`/docs`, generated by FastAPI) is switched off while the API has a token, because it would publish the full map of the API. It is only available when you run the API without a token (see below).
+
+You can also run the API on its own, without `main.py`. **This mode has no token**: any program on the machine can call it, so prefer `main.py` unless you are developing:
+
+```powershell
+.\.venv\Scripts\python -m uvicorn backend.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```

@@ -34,7 +34,9 @@ sesiones a puertos distintos).
 **`packet_endpoints`**: (ip_src, sport, ip_dst, dport, proto) de un paquete, o None si no es IP o está dañado. Versión que nunca lanza, para consultas sueltas.
 
 
-**`group_packets`**: Recorre los paquetes (en streaming) y arma las sesiones. En memoria guardamos un resumen por sesión, no los paquetes: el costo crece con la cantidad de sesiones (~640 B cada una), no con el tamaño del archivo. Pero un escaneo o un DDoS puede generar millones de sesiones, así que hay un TOPE: al alcanzarlo, las sesiones nuevas se descartan (las existentes siguen actualizándose) y el resultado queda marcado `truncated`.
+**`SessionGrouper`**: Arma las sesiones paquete a paquete a partir de la capa IP ya leída (`parse_ip`), para que `analyze` decodifique cada paquete una sola vez y comparta la pasada con las reglas.
+
+**`group_packets`**: Recorre los paquetes (en streaming) y arma las sesiones (usa `SessionGrouper`). En memoria guardamos un resumen por sesión, no los paquetes: el costo crece con la cantidad de sesiones (~640 B cada una), no con el tamaño del archivo. Pero un escaneo o un DDoS puede generar millones de sesiones, así que hay un TOPE: al alcanzarlo, las sesiones nuevas se descartan (las existentes siguen actualizándose) y el resultado queda marcado `truncated`.
 
 
 ### Notas del código
