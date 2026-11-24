@@ -85,8 +85,8 @@ python3 -m venv .venv
 
 ```bash
 cd frontend
-npm install
-npm run build
+corepack pnpm install --frozen-lockfile
+corepack pnpm run build
 ```
 
 This produces `frontend/dist/`, which the API serves as static files. If you skip this step the API still works, but there is no interface at `/`.

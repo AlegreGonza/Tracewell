@@ -9,6 +9,10 @@ Texto completo movido desde el código. En los `.py` quedan solo comentarios cor
 pcapng menor a 8: dpkt leía un número negativo de bytes y escapaba un `ValueError` crudo, que la API devolvía como
 500). Lo encontró el fuzz de archivo (`analysis/tests/test_fuzz_file.py`).
 
+## Permisos de captura (`ScapySource`)
+
+Si falta permiso, el error (`PermissionDenied`, `403`) ofrece alternativas a correr todo como administrador o root. En Linux: `sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))` (aplica a ese intérprete y a todo lo que corra con él). En Windows: reinstalar Npcap y desmarcar "Restrict Npcap driver's access to Administrators only". El texto vive en `PERMISSION_HELP` (`live.py`).
+
 ## hexdump.py
 
 

@@ -15,6 +15,7 @@ from backend.domain.pcap.live import (
     CaptureStateError,
     InterfaceInfo,
     LiveCapture,
+    PERMISSION_HELP,
     PermissionDenied,
     ScapySource,
     list_interfaces,
@@ -566,7 +567,11 @@ def test_scapy_permission_error_directo_mensaje_exacto(monkeypatch):
     _fake_scapy(monkeypatch, _sniffer_cls(start_raises=PermissionError("no")))
     with pytest.raises(PermissionDenied) as ei:
         ScapySource("eth0").start(lambda *a: None)
-    assert str(ei.value) == "permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux)"
+    msg = str(ei.value)
+    assert msg == PERMISSION_HELP
+    assert msg.startswith("permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux)")
+    assert "sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))" in msg
+    assert "Restrict Npcap driver's access to Administrators only" in msg
     assert isinstance(ei.value, CaptureError)
 
 

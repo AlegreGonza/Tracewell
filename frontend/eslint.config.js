@@ -1,32 +1,64 @@
-import js from "@eslint/js";
-import globals from "globals";
-import reactHooks from "eslint-plugin-react-hooks";
-import { defineConfig, globalIgnores } from "eslint/config";
+import globals from 'globals'
+import js from '@eslint/js'
+import pluginQuery from '@tanstack/eslint-plugin-query'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import { defineConfig } from 'eslint/config'
+import tseslint from 'typescript-eslint'
 
-// Configuración mínima: reglas recomendadas, variables sin uso y reglas de hooks.
-export default defineConfig([
-  globalIgnores(["dist"]),
-  js.configs.recommended,
+export default defineConfig(
+  { ignores: ['dist', 'src/components/ui'] },
   {
-    files: ["**/*.{js,jsx}"],
-    plugins: { "react-hooks": reactHooks },
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommended,
+      ...pluginQuery.configs['flat/recommended'],
+    ],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
-      globals: { ...globals.browser },
-      parserOptions: { ecmaFeatures: { jsx: true } },
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
     },
     rules: {
-      "no-unused-vars": ["error", { varsIgnorePattern: "^_", argsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true }],
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
+      'no-console': 'error',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'all',
+          argsIgnorePattern: '^_',
+          caughtErrors: 'all',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+      // Enforce type-only imports for TypeScript types
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+          fixStyle: 'inline-type-imports',
+          disallowTypeAnnotations: false,
+        },
+      ],
+      // Prevent duplicate imports from the same module
+      'no-duplicate-imports': 'error',
     },
   },
   {
-    // Los tests corren en vitest con globals: true
-    files: ["**/*.test.{js,jsx}", "src/test/**"],
-    languageOptions: { globals: { ...globals.vitest, ...globals.node } },
-    // Los mocks de componentes usan hooks dentro de funciones auxiliares
-    rules: { "react-hooks/rules-of-hooks": "off", "react-hooks/exhaustive-deps": "off" },
-  },
-]);
+    // Rutas de TanStack Router y ayudas de prueba exportan algo más que componentes
+    files: ['src/routes/**', 'src/test/**', 'src/**/*.test.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  }
+)

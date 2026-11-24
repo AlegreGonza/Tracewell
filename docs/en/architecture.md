@@ -67,23 +67,19 @@ tracewell/
 │       ├── export/               # JSON export, HTML report, pcap export
 │       ├── system/               # read-only view of this machine (processes, ports, services)
 │       └── support/              # read-only network checks (internet, latency, devices, Wi-Fi, outage monitor)
-├── frontend/                     # View layer: React 19 + Vite + Mantine (builds to frontend/dist)
+├── frontend/                     # View layer: React 19 + Vite + shadcn/ui + TanStack Router (builds to frontend/dist)
 │   └── src/
-│       ├── App.jsx               # shell: header, sidebar (Captures / Network support) and the screens
-│       ├── tokens.css            # design tokens: 3 palettes (emerald, violet, terracotta), light and dark
-│       ├── theme.js              # Mantine theme built from the chosen palette
-│       ├── views/                # full screens: CapturesView (one section at a time), SupportView
-│       ├── components/           # captures/ (analysis widgets), support/ (system and network), common/
-│       ├── controllers/          # hooks: useLoad, useAction, usePalette
-│       ├── api/                  # HTTP client (client.js)
-│       └── lib/                  # formatters and help texts
+│       ├── routes/               # TanStack Router file routes (/capturas/*, /soporte/sistema/*)
+│       ├── features/             # one folder per screen: panorama, alertas, trafico, remoto, cronologia, sesiones, equipos, reglas, indicadores, soporte-sistema, soporte-red, exportar
+│       ├── components/           # shared UI (ui/ is shadcn), layout, help tips
+│       └── lib/                  # API client + zod schemas (lib/api), formatters, help texts
 ├── rules/                        # YAML detection rules
 ├── samples/                      # demo.pcap and generate_demo.py (synthetic traffic)
 ├── docs/                         # decisiones.md, guia_didactica.md, checklist_hardware.md, ... (Spanish)
 └── pyproject.toml, requirements*.txt, crear_zip.ps1
 ```
 
-Each package under `backend/` has its own `tests/` folder; frontend tests sit next to the component they test.
+Each package under `backend/` has its own `tests/` folder; frontend tests sit next to the code they test and the end-to-end flows live in `frontend/e2e/`.
 
 ## Key concepts (glossary)
 

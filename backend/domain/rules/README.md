@@ -205,3 +205,120 @@ Criterio de carga (`engine.load_all_rules(incluidas, usuario)`):
    desactivar una incluida. Un archivo de usuario roto también se ignora con aviso, para no impedir el arranque.
 4. Guardar (`builder.save`) crea la carpeta si falta, rechaza ids ya activos (`409`) y traduce los errores de
    disco: `RuleSaveDenied` (`403`, sin permiso) y `RuleSaveError` (`500`, otro fallo), con mensaje en español.
+
+## MITRE ATT&CK en las alertas (forma exacta del campo)
+
+Cada regla declara su técnica en el YAML y TODA alerta la hereda. El motor valida al cargar que la
+técnica sea `T####` o `T####.###` y que la táctica sea EXACTAMENTE una de estas (en este orden, como
+`engine.MITRE_TACTICS`); una táctica distinta (`C2`, `discovery`, `Defense Evasion`...) falla al cargar
+(una regla de usuario así se ignora con aviso en el log):
+
+`Reconnaissance`, `Initial Access`, `Credential Access`, `Discovery`, `Lateral Movement`, `Collection`,
+`Command and Control`, `Exfiltration`, `Impact`.
+
+```yaml
+mitre:
+  technique: T1071.004                       # ID de ATT&CK
+  name: "Application Layer Protocol: DNS"    # nombre de la técnica (subtécnica: «Padre: Hija»)
+  tactic: Command and Control                # nombre canónico de la táctica
+```
+
+En el JSON de las alertas (`GET /api/alerts`, `GET /api/export`, `alerts` del reporte y de `/api/capture`)
+son tres campos de texto PLANOS, siempre presentes y no vacíos, junto a `rule_id`, `name`, `severity`,
+`description`, `src_ip`, `dst_ip`, `first_ts` y `evidence`:
+
+```json
+{ "mitre_tactic": "Discovery", "mitre_technique": "T1046", "mitre_name": "Network Service Discovery" }
+```
+
+- `mitre_tactic`: nombre canónico de la lista de arriba (para el ID `TA####` ver `export/siem.py`).
+- `mitre_technique`: ID, con subtécnica si corresponde (`T1568.002`).
+- `mitre_name`: nombre de la técnica tal como figura en ATT&CK.
+- El constructor de reglas del panel usa por defecto `T1595 Active Scanning` / `Reconnaissance` y rechaza
+  una táctica fuera de la lista.
+
+Reglas incluidas (`rules/`):
+
+| Regla | Técnica | Táctica |
+|---|---|---|
+| `port_scan` | T1046 Network Service Discovery | Discovery |
+| `brute_force_remote` | T1110 Brute Force | Credential Access |
+| `ftp_cleartext` | T1040 Network Sniffing | Credential Access |
+| `syn_flood` | T1498 Network Denial of Service | Impact |
+| `large_upload` | T1048 Exfiltration Over Alternative Protocol | Exfiltration |
+| `beaconing` | T1071 Application Layer Protocol | Command and Control |
+| `suspicious_ports` | T1571 Non-Standard Port | Command and Control |
+| `dns_suspicious` | T1071.004 Application Layer Protocol: DNS | Command and Control |
+| `dns_unusual_resolver` | T1071.004 Application Layer Protocol: DNS | Command and Control |
+| `dga_nxdomain` | T1568.002 Dynamic Resolution: Domain Generation Algorithms | Command and Control |
+| `malicious_ja4` | T1573 Encrypted Channel | Command and Control |
+| `tls_certificate` | T1573 Encrypted Channel | Command and Control |
+| `user_agent_scanner` | T1595.002 Active Scanning: Vulnerability Scanning | Reconnaissance |
+| `user_agent_script` | T1071.001 Application Layer Protocol: Web Protocols | Command and Control |
+| `smb_rpc_lateral` | T1021 Remote Services | Lateral Movement |
+| `icmp_tunnel` | T1095 Non-Application Layer Protocol | Command and Control |
+
+## Excepciones contra falsos positivos (`allow_hosts`, `allow_services`)
+
+Además de `ignore_suffixes` (solo `dns_suspicious`), TODA regla acepta dos parámetros opcionales en `params`
+(si no se declaran, no constan en `Rule.params`):
+
+- `allow_hosts`: lista de IP o redes CIDR (`10.0.0.5`, `192.168.1.0/24`, `2001:db8::/32`). Un paquete cuyo
+  origen O destino cae en la lista no se evalúa para esa regla. Sirve para servidores de archivos, controladores
+  de dominio, escáneres autorizados o monitoreo.
+- `allow_services`: lista de puertos (`445`) o nombres (`ssh`, `smb`, `rdp`, `dns`, `http`, `https`, `ftp`,
+  `telnet`, `ntp`, `rpc`, `ldap`, `kerberos`, `winrm`); se normalizan a puertos. Un paquete TCP/UDP con ese
+  puerto de origen o de destino no se evalúa. No aplica a ICMP.
+
+`RuleRunner.feed` consulta `Detector.allow` (`engine.Allowlist`) antes de entregar el paquete al detector, así
+que la excepción vale igual para las reglas incluidas, las de usuario y las creadas con el constructor.
+Valores mal formados (IP inválida, puerto fuera de 0-65535, nombre desconocido) fallan al cargar la regla.
+Una excepción silencia la regla por completo para ese host o servicio: use la más angosta posible.
+
+## threat_detectors.py: detecciones nuevas
+
+Detectores puros (sin FastAPI ni disco salvo el CSV de JA4). Se registran desde `extra_detectors.py`. `Decoded`
+ahora también cubre ICMP/ICMPv6: `proto` 1 o 58, `sport` y `dport` en 0, `flags` = tipo ICMP y `payload` = carga
+útil del eco (sin identificador ni secuencia). Los detectores que no son de ICMP lo ignoran.
+
+| Detector (regla) | Qué mira | Parámetros (defecto) | Evidencia |
+|---|---|---|---|
+| `dga_nxdomain` | Respuestas DNS NXDOMAIN (UDP, puerto de origen 53) por cliente | `min_nxdomain` 20, `window_seconds` 60, `min_random_ratio` 0.5, `min_label_length` 8, `min_entropy` 2.5, `max_vowel_ratio` 0.3, `ignore_suffixes` [arpa, local] | `nxdomain_count`, `random_looking`, `random_ratio`, `sample_domains`, `resolver` |
+| `ja4_blocklist` (`malicious_ja4`) | ClientHello TLS (hasta 12 segmentos TCP) y su huella JA4 | `fingerprints` [], `fingerprints_file` | `ja4`, `label`, `reference`, `sni`, `destination_port` |
+| `tls_certificate` | Certificado del servidor en TLS <= 1.2 (en claro) | `flag_self_signed` true, `flag_expired` true, `external_only` true | `reasons`, `subject`, `issuer`, `not_before`, `not_after`, `self_signed`, `sha256`, `server_port` |
+| `user_agent` (`user_agent_scanner`, `user_agent_script`) | Peticiones HTTP/1.x en claro (cualquier puerto TCP) | `patterns` [], `flag_empty` false, `flag_missing` false, `min_length` 0, `ports` [] | `user_agent`, `reasons`, `method`, `host`, `path`, `destination_port` |
+| `smb_rpc_lateral` | SYN a 445/135 de un equipo interno hacia muchos internos | `ports` [445, 135], `min_hosts` 8, `window_seconds` 300, `internal_only` true | `distinct_hosts`, `sample_hosts`, `ports`, `window_seconds`, `threshold` |
+| `icmp_tunnel` | Ecos ICMP (tipos 8/0; ICMPv6 128/129) por par origen -> destino | `min_payload_bytes` 256, `min_large_packets` 10, `min_packets` 600, `min_bytes` 2000000, `window_seconds` 60 (0 apaga `min_packets` y `min_bytes`) | `reasons`, `echo_packets`, `payload_bytes`, `large_packets`, `max_payload_bytes`, `window_seconds` |
+
+Notas y control de falsos positivos:
+- **DGA**: no basta el volumen de NXDOMAIN (un sufijo de búsqueda mal puesto los genera con nombres legibles).
+  Un nombre «parece aleatorio» si su dominio registrable tiene >= `min_label_length` caracteres, entropía
+  >= `min_entropy` y pocas vocales (`max_vowel_ratio`), o mezcla letras con dígitos o guiones. Con
+  `min_random_ratio: 0` alerta solo por volumen. La alerta se lee cliente -> resolvedor. Una por cliente.
+- **JA4**: la lista se entrega VACÍA. Una huella identifica una biblioteca TLS que comparten programas
+  legítimos y maliciosos; no se inventan huellas. Una coincidencia es un indicio, no una prueba. Si el ClientHello
+  llega partido (hello grande, p. ej. con grupos poscuánticos) se unen hasta 12 segmentos o 64 KiB del mismo flujo.
+- **Certificados**: el vencimiento se compara con la hora de la CAPTURA, no con la de hoy. En TLS 1.3 el
+  certificado va cifrado y no se evalúa. Por defecto solo servidores públicos (`external_only`): los equipos
+  internos usan certificados propios a menudo. Una alerta por servidor y certificado; se lee cliente -> servidor.
+  El certificado se busca en los primeros 12 segmentos o 64 KiB del flujo del servidor, sin reordenar segmentos.
+- **User-Agent**: `flag_empty` marca la cabecera presente pero vacía; `flag_missing` marca la petición completa
+  sin la cabecera (apagado en la regla incluida: muchos clientes simples la omiten, y el pcap de demostración
+  trae una así). La ruta se guarda sin la query y el agente se trunca a 200 caracteres y se sanea. Una alerta por
+  origen, destino y agente. `user_agent_scanner` (alta) lista herramientas de escaneo; `user_agent_script`
+  (baja) lista bibliotecas de scripts y agentes vacíos o de menos de `min_length` caracteres.
+- **SMB/RPC**: cuenta destinos DISTINTOS por origen en la ventana. Servidores de archivos, controladores de dominio
+  y consolas de gestión hablan con muchos equipos por diseño: agréguelos a `allow_hosts`. Con `internal_only` solo
+  cuentan origen y destino en redes privadas.
+- **ICMP**: ventanas fijas (memoria constante por par). Un ping normal lleva 32-64 bytes; una prueba de MTU o
+  `ping -s` grande a propósito es el falso positivo típico (por eso `min_large_packets` 10). Una alerta por par.
+- Todas guardan estado acotado (`_LRU`, topes por flujo) y toleran basura sin lanzar excepciones.
+
+### Archivo de huellas JA4 (`rules/data/ja4_malicious.csv`)
+
+Texto UTF-8, una huella por línea: `ja4,etiqueta,referencia`. Las líneas vacías y las que empiezan con `#` se
+ignoran. Solo la huella es obligatoria (10 caracteres alfanuméricos, `_`, 12 hex, `_`, 12 hex; se pasa a
+minúsculas); etiqueta (80 caracteres) y referencia (200) aparecen en la evidencia. Una línea inválida se omite
+con un aviso en el log `tracewell`. Tope: 1 MB y 50 000 huellas. La ruta de `fingerprints_file` es relativa a la
+carpeta del YAML, sin `..` ni rutas absolutas; si el archivo falta o no se puede leer, la regla avisa y queda
+sin huellas (no tumba el análisis). Agregue solo huellas que pueda justificar con una fuente fiable y cítela.

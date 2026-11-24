@@ -77,6 +77,29 @@ Dos decisiones de seguridad y robustez:
 
 ## Carpetas permitidas y reglas de usuario (parámetros de `create_app`)
 
-- `allowed_dirs`: carpetas desde las que `/api/analyze` y `/api/iocs` abren archivos (variable `TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos, Escritorio, `<temp>/tracewell`; `samples/` y la carpeta de captura en vivo se suman siempre). La ruta se resuelve con `Path.resolve()`; fuera de la lista responde `403` y `/api/analyze` solo admite `.pcap`, `.pcapng`, `.cap` (`400`). Lógica en `backend/domain/files.py`. El selector de archivos de la ventana (`main.py`) abre en la primera carpeta permitida que existe, y el `403` explica cómo agregar otra con `TRACEWELL_ALLOWED_DIRS`.
+- Carpeta temporal: ya no hay `<temp>/tracewell` fija en la lista (en Linux multiusuario otro usuario podía crearla antes). Nada escribía allí: las capturas en vivo usan `tempfile.mkdtemp` (`tracewell_*`, permisos 0700) y el análisis de su resultado no pasa por la lista. Para abrir otra carpeta, `TRACEWELL_ALLOWED_DIRS`.
+- Rutas del frontend (SPA): `SPAStaticFiles` (`app.py`) sirve `index.html` ante cualquier GET/HEAD que no sea archivo existente, no empiece con `/api` y no tenga extensión (`/capturas/alertas` al recargar). Los archivos faltantes (`/assets/x.js`) y `/api/...` inexistentes siguen en `404`; el recorrido de rutas (`..`) lo bloquea `StaticFiles`; las cabeceras de seguridad y la CSP se aplican igual (middleware externo).
+- Versión: `VERSION` (`controllers/state.py`) sale de `pyproject.toml` (raíz) y, si no está, de la metadata del paquete instalado.
+- `allowed_dirs`: carpetas desde las que `/api/analyze` y `/api/iocs` abren archivos (variable `TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos y Escritorio; `samples/` y la carpeta de captura en vivo se suman siempre). La ruta se resuelve con `Path.resolve()`; fuera de la lista responde `403` y `/api/analyze` solo admite `.pcap`, `.pcapng`, `.cap` (`400`). Lógica en `backend/domain/files.py`. El selector de archivos de la ventana (`main.py`) abre en la primera carpeta permitida que existe, y el `403` explica cómo agregar otra con `TRACEWELL_ALLOWED_DIRS`.
 - `user_rules_dir`: carpeta escribible donde `POST /api/rules` guarda las reglas nuevas (variable `TRACEWELL_USER_RULES_DIR`; ver `backend/domain/rules/README.md`). Errores de escritura: `403` sin permiso, `500` otro fallo de disco.
 - `api_token`: opcional; si falta se genera uno aleatorio y queda en `app.state.api_token`.
+
+## Exportar alertas a un SIEM (`GET /api/export/siem`)
+
+Descarga las alertas del análisis actual como texto, una línea por alerta (formatos en
+`backend/domain/export/README.md`, sección `siem.py`). Exige el token (cabecera `X-Tracewell-Token`) o un ticket
+de descarga de `POST /api/download-ticket` con `{"path": "/api/export/siem"}`, que se pasa como `?ticket=` (un
+solo uso, 30 s) para los enlaces `<a download>`.
+
+| Parámetro | Valores | Defecto |
+|---|---|---|
+| `format` | `ecs` (NDJSON), `cef`, `syslog` (RFC 5424 con CEF) | `ecs` |
+| `min_severity` | `low`, `medium`, `high`, `critical`: solo esa severidad o mayor | todas |
+
+Respuestas: `200` con `Content-Disposition: attachment` (`tracewell-alerts.ndjson`, `.cef` o `.log`; el cuerpo
+queda vacío si no hay alertas); `409` si no hay captura cargada; `422` si `format` o `min_severity` no son válidos;
+`401` sin token. No lleva rutas, nombres de archivo ni secretos (la contraseña de FTP va como `<oculta>`).
+
+```
+curl -H "X-Tracewell-Token: $TOKEN" "http://127.0.0.1:PUERTO/api/export/siem?format=cef&min_severity=high"
+```

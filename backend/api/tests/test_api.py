@@ -2,6 +2,7 @@
 import json
 import shutil
 import socket
+import tomllib
 from urllib.parse import quote
 
 import dpkt
@@ -12,6 +13,11 @@ from backend.api.app import ROOT, create_app
 from backend.domain.rules.engine import RuleError
 
 DEMO = ROOT / "samples" / "demo.pcap"
+
+
+def _pyproject_version():
+    with open(ROOT / "pyproject.toml", "rb") as f:
+        return tomllib.load(f)["project"]["version"]
 
 
 def _udp_eth(src="10.0.0.1", dst="10.0.0.2", sport=1111, dport=2222):
@@ -54,7 +60,7 @@ def loaded(client):
 def test_health(client):
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "version": "0.3.0"}
+    assert r.json() == {"status": "ok", "version": _pyproject_version()}
 
 
 # ------------------------------------------------- sin análisis cargado
@@ -77,7 +83,7 @@ def test_demo_resumen(client):
     assert j["stats"]["sessions"] == 32
     assert j["stats"]["non_ip"] == 1
     assert j["alerts"] == 3
-    assert len(j["rules"]) == 9
+    assert len(j["rules"]) == 16
     assert {"ftp_cleartext", "port_scan", "dns_suspicious"} <= {x["id"] for x in j["rules"]}
     assert client.get("/api/capture").json() == j
 
@@ -425,6 +431,49 @@ def test_frontend_dir_existente(tmp_path):
     assert r.status_code == 200 and "hola tracewell" in r.text
     assert c.get("/api/health").json()["status"] == "ok"
     assert c.get("/api/capture").status_code == 409  # /api no queda tapado
+
+
+def _spa_client(tmp_path):
+    (tmp_path / "index.html").write_text("<html>spa-index</html>", encoding="utf-8")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
+    secreto = tmp_path.parent / "secreto_spa.txt"
+    secreto.write_text("no-debe-salir", encoding="utf-8")
+    return TestClient(create_app(frontend_dir=tmp_path, sampler_factory=None))
+
+
+@pytest.mark.parametrize("ruta", ["/capturas/alertas", "/capturas/alertas/", "/soporte", "/a/b/c/d"])
+def test_spa_recarga_en_ruta_profunda_sirve_index(tmp_path, ruta):
+    r = _spa_client(tmp_path).get(ruta)
+    assert r.status_code == 200 and "spa-index" in r.text
+    assert "content-security-policy" in r.headers  # conserva las cabeceras de seguridad
+
+
+def test_spa_archivo_estatico_existente_no_se_pisa(tmp_path):
+    r = _spa_client(tmp_path).get("/assets/app.js")
+    assert r.status_code == 200 and "console.log" in r.text
+
+
+def test_spa_archivo_inexistente_sigue_404(tmp_path):
+    assert _spa_client(tmp_path).get("/assets/falta.js").status_code == 404
+
+
+@pytest.mark.parametrize("ruta", ["/api/xxx", "/api/capture/otra", "/api"])
+def test_spa_api_inexistente_sigue_404(tmp_path, ruta):
+    r = _spa_client(tmp_path).get(ruta)
+    assert r.status_code in (404, 405) and "spa-index" not in r.text
+
+
+@pytest.mark.parametrize("ruta", ["/../secreto_spa.txt", "/%2e%2e/secreto_spa.txt",
+                                  "/assets/..%2f..%2fsecreto_spa.txt", "/..%5csecreto_spa.txt"])
+def test_spa_traversal_bloqueado(tmp_path, ruta):
+    r = _spa_client(tmp_path).get(ruta)
+    assert "no-debe-salir" not in r.text
+
+
+def test_spa_post_en_ruta_de_pantalla_no_sirve_index(tmp_path):
+    r = _spa_client(tmp_path).post("/capturas/alertas")
+    assert r.status_code in (404, 405) and "spa-index" not in r.text
 
 
 def test_frontend_dir_inexistente(tmp_path):

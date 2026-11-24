@@ -178,10 +178,10 @@ function Step-Frontend {
     }
     Push-Location "frontend"
     try {
-        & npm install
-        if ($LASTEXITCODE -ne 0) { throw "npm install falló." }
-        & npm run build
-        if ($LASTEXITCODE -ne 0) { throw "npm run build falló." }
+        & corepack pnpm install --frozen-lockfile
+        if ($LASTEXITCODE -ne 0) { throw "pnpm install falló." }
+        & corepack pnpm run build
+        if ($LASTEXITCODE -ne 0) { throw "pnpm run build falló." }
     } finally { Pop-Location }
     Write-Ok "Interfaz compilada"
 }

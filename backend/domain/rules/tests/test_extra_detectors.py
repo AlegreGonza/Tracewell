@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[4]
 PUB = "45.33.32.156"  # IP publica (is_global)
 PUB2 = "185.199.108.153"
 
-MITRE = {"technique": "T1071", "name": "n", "tactic": "t"}
+MITRE = {"technique": "T1071", "name": "n", "tactic": "Command and Control"}
 
 
 def make_rules(tmp_path, detector, params=None, rid=None, fname=None):
@@ -584,7 +584,7 @@ def test_defaults_de_los_detectores(tmp_path):
 
 def test_reglas_reales_cargan_y_mapean_a_detectores_conocidos():
     rules = load_rules(ROOT / "rules")
-    assert len(rules) == 9
+    assert len(rules) == 16
     # "threshold" es la regla que arma el analista desde la interfaz
     assert {r.detector for r in rules} == set(X._engine.DETECTORS) - {"threshold"}
 
@@ -610,7 +610,8 @@ def _names(first):
 
 
 EXPECTED = sorted(["port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
-                   "dns_unusual_resolver", "large_upload", "brute_force", "threshold"])
+                   "dns_unusual_resolver", "large_upload", "brute_force", "threshold", "dga_nxdomain",
+                   "ja4_blocklist", "tls_certificate", "user_agent", "smb_rpc_lateral", "icmp_tunnel"])
 
 
 @pytest.mark.parametrize("first", ["backend.domain.rules.engine", "backend.domain.rules.extra_detectors"])

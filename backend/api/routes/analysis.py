@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from backend.domain.analysis.analyzer import MAX_PAGE, Analysis, packet_detail, packets_of_sessions, session_packets, session_stream
 from backend.domain.export.json_export import build_report, to_json
 from backend.domain.export.pcap_export import build_pcap
+from backend.domain.export.siem import media_info, render
 from backend.domain.files import ANALYZE_EXTENSIONS, require_allowed_file
 from backend.domain.rules.engine import SEVERITIES
 from backend.domain.sessions.query import compute_stats, filter_sessions
@@ -214,3 +215,26 @@ def export(
     if processes and ctx.state.processes is not None:
         _add_processes(ctx, a, report)
     return _json_attachment(to_json(report))
+
+
+@router.get("/export/siem")
+def export_siem(
+    ctx: CtxDep,
+    fmt: Annotated[
+        Literal["ecs", "cef", "syslog"],
+        Query(alias="format", description="ecs (NDJSON de Elastic Common Schema), cef o syslog (RFC 5424 con CEF)"),
+    ] = "ecs",
+    min_severity: Annotated[
+        Optional[str], Query(description="solo alertas de esta severidad o mayor (low, medium, high, critical)")
+    ] = None,
+):
+    """Las alertas del análisis para un SIEM; descarga un archivo de texto con una línea por alerta."""
+    a = current(ctx)
+    if min_severity is not None and min_severity not in SEVERITIES:
+        raise HTTPException(422, f"min_severity debe ser una de {list(SEVERITIES)}")
+    media, filename = media_info(fmt)
+    return Response(
+        content=render(a.alerts, fmt, VERSION, min_severity),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -1,0 +1,102 @@
+# Integracion continua de Tracewell. Ver docs/pruebas.md y docs/desarrollo.md.
+#
+# El job "frontend" usa pnpm (`frontend/pnpm-lock.yaml`, versión en `packageManager`).
+#
+# Seguridad: permisos minimos, cada action fijada por SHA completo de commit (la version va en el
+# comentario) y sin secretos. Para actualizar una action: resolver el nuevo SHA con
+# `git ls-remote --tags https://github.com/<org>/<repo>` y cambiar SHA y comentario juntos.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Instalar dependencias (con hashes)
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: ruff
+        run: python -m ruff check backend main.py
+      - name: bandit
+        run: python -m bandit -r backend main.py -ll -c pyproject.toml -q
+      - name: pip-audit
+        run: python -m pip_audit --require-hashes -r requirements.lock
+      - name: pytest
+        run: python -m pytest -q -p no:cacheprovider
+
+  frontend:
+    name: frontend (pnpm, node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22"]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Sin `version`, la action lee `packageManager` de frontend/package.json (recomendado).
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm test
+      - run: pnpm run build
+      - run: pnpm audit --audit-level=high
+
+  sbom:
+    name: SBOM CycloneDX
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Generar SBOM desde requirements.lock
+        run: python -m cyclonedx_py requirements requirements.lock --pyproject pyproject.toml --sv 1.6 --of JSON -o sbom.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90

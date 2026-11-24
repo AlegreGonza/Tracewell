@@ -4,6 +4,8 @@
 
 # Tracewell
 
+[![CI](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml/badge.svg)](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml)
+
 **Network traffic analysis for SOC triage.** Open a `.pcap` / `.pcapng` file (or capture live), and Tracewell groups the packets into sessions, runs YAML-defined detection rules and shows alerts with severity, MITRE ATT&CK technique and evidence in a React interface. Built as an MVP for a junior SOC analyst, with a teaching focus: every screen explains its Wireshark equivalent.
 
 Spanish version: [`README.es.md`](README.es.md). The UI is in Spanish, and so are most `docs/` files; the English detail lives in [`docs/en/`](docs/en/README.md).
@@ -71,11 +73,11 @@ More: [`docs/en/architecture.md`](docs/en/architecture.md), [`docs/en/rules.md`]
 
 - The API is for your own machine: bound to `127.0.0.1`, a random per-start token on every `/api` route, `Host` / `Origin` checks, strict CSP and security headers.
 - Traffic content is treated as hostile (rendered as text, never HTML); resources are bounded; no secrets in alerts or reports.
-- Dependencies are pinned with hashes. Details: [`docs/en/security.md`](docs/en/security.md).
+- Dependencies are pinned with hashes and the CI publishes a CycloneDX SBOM. Vulnerability reports: [`SECURITY.md`](SECURITY.md). Details: [`docs/en/security.md`](docs/en/security.md).
 
 ## Tests and quality
 
-About 4,060 Python tests (`python -m pytest -q`) and 1,310 frontend tests (`cd frontend && npx vitest run`); linters: `ruff` and ESLint. There is no CI by design. See [`docs/en/testing.md`](docs/en/testing.md) and [`docs/informe_calidad.md`](docs/informe_calidad.md).
+Python tests: `python -m pytest -q`; frontend tests: `cd frontend && npx vitest run`. The counts change with every commit, so they are not written here: see the latest run of the [CI workflow](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml) or measure them yourself. Checks: `ruff`, `bandit`, `pip-audit`, ESLint; `./verificar.sh` (or `.\verificar.ps1`) runs them all in order, `--linux` repeats the backend in Docker. See [`docs/pruebas.md`](docs/pruebas.md) (Spanish), [`docs/en/testing.md`](docs/en/testing.md) and [`docs/informe_calidad.md`](docs/informe_calidad.md).
 
 ## Documentation
 
@@ -85,3 +87,7 @@ About 4,060 Python tests (`python -m pytest -q`) and 1,310 frontend tests (`cd f
 ## License
 
 See [`LICENSE`](LICENSE).
+
+## Credits
+
+The interface (`frontend/`) starts from the MIT-licensed [shadcn-admin](https://github.com/satnaing/shadcn-admin) template by satnaing (shadcn/ui, Tailwind, TanStack Router). Its license is kept in [`frontend/LICENSE-shadcn-admin`](frontend/LICENSE-shadcn-admin).

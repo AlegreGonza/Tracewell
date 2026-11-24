@@ -1,0 +1,12 @@
+# Huellas JA4 maliciosas para la regla `malicious_ja4` (rules/malicious_ja4.yaml).
+#
+# Formato: una huella por línea, `ja4,etiqueta,referencia`. Las líneas vacías y las que
+# empiezan con `#` se ignoran. Solo la huella es obligatoria; etiqueta y referencia se
+# muestran en la evidencia de la alerta. La huella es la JA4 completa del ClientHello,
+# en minúsculas: 10 caracteres, `_`, 12 hex, `_`, 12 hex (por ejemplo `t13d1516h2_...`).
+# Una huella con formato inválido se ignora y se avisa en el registro.
+#
+# Esta lista se entrega VACÍA a propósito: una huella identifica una biblioteca TLS y la
+# misma la usan programas legítimos. Agregue solo huellas que pueda justificar con una
+# fuente fiable (inteligencia de amenazas propia, la base pública de JA4 de FoxIO...) e
+# indique la referencia en la tercera columna.

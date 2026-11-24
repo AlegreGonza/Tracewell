@@ -4,3 +4,6 @@ pytest
 pytest-cov
 httpx2>=2.16.2,<3  # lo usa TestClient de FastAPI/Starlette (httpx quedó deprecado para eso)
 ruff>=0.17.6,<0.18  # linter: `ruff check backend main.py` (ver pyproject.toml)
+bandit>=1.8,<2  # seguridad estática: `bandit -r backend main.py -ll -c pyproject.toml` (ver verificar.ps1)
+pip-audit>=2.9,<3  # vulnerabilidades conocidas en las dependencias fijadas (requirements.lock)
+cyclonedx-bom>=7,<8  # SBOM CycloneDX (`cyclonedx-py requirements`), lo usa el CI

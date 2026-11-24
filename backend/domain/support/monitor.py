@@ -1,6 +1,7 @@
 """Monitoreo continuo."""
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import deque
@@ -10,6 +11,8 @@ from typing import Any, Deque, Dict, List, Optional
 from .checks import DNS_PROBES, INTERNET_PROBES, ping, resolve, tcp_connect
 from .netinfo import default_gateway
 from .wifi import wifi_status
+
+logger = logging.getLogger("tracewell")
 
 MIN_INTERVAL, MAX_INTERVAL = 1.0, 30.0
 FAILS_TO_OPEN = 2  # fallos seguidos para abrir un corte
@@ -33,7 +36,8 @@ def _read_wifi() -> Optional[Dict[str, Any]]:
     """Señal y red Wi-Fi; None si no hay o falla (es un dato extra: se sigue sin él)."""
     try:
         w = wifi_status()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - dato extra: sin Wi-Fi se sigue sin él
+        logger.debug("no se pudo leer el Wi-Fi", exc_info=True)
         return None
     return {"signal": w.get("signal"), "ssid": w.get("ssid")} if w.get("available") else None
 

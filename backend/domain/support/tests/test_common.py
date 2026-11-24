@@ -1,5 +1,6 @@
 """common: validación de host/puerto y ejecución de comandos sin shell (subprocess falso)."""
 import subprocess
+import sys
 
 import pytest
 
@@ -59,6 +60,7 @@ def test_run_oserror(monkeypatch):
     assert not r.ok and r.err == "sin permiso" and not r.missing
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="el códec 'oem' solo existe en Windows")
 def test_decode(monkeypatch):
     assert C._decode("Señal".encode("utf-8")) == "Señal"
     monkeypatch.setattr(C, "IS_WINDOWS", True)

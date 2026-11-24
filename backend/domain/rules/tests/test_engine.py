@@ -71,7 +71,7 @@ RULE_TMPL = {
     "dns_suspicious": {
         "id": "dns_suspicious", "name": "DNS", "description": "d", "severity": "low",
         "detector": "dns_suspicious",
-        "mitre": {"technique": "T1071.004", "name": "DNS", "tactic": "C2"},
+        "mitre": {"technique": "T1071.004", "name": "DNS", "tactic": "Command and Control"},
     },
 }
 
@@ -113,7 +113,8 @@ def test_load_real_rules():
     rules = {r.id: r for r in load_rules(REAL_RULES)}
     assert set(rules) == {
         "port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
-        "dns_unusual_resolver", "large_upload", "brute_force_remote",
+        "dns_unusual_resolver", "large_upload", "brute_force_remote", "dga_nxdomain", "malicious_ja4",
+        "tls_certificate", "user_agent_scanner", "user_agent_script", "smb_rpc_lateral", "icmp_tunnel",
     }
     ps, ftp, dns = rules["port_scan"], rules["ftp_cleartext"], rules["dns_suspicious"]
     assert (ps.severity, ps.mitre_technique, ps.mitre_tactic) == ("high", "T1046", "Discovery")
@@ -216,14 +217,14 @@ def test_unknown_detector(tmp_path):
 
 @pytest.mark.parametrize("tech", ["T12", "1046", "T1046.1", "t1046", "T1046.0001", "", 1046, None])
 def test_bad_technique(tmp_path, tech):
-    d = base(mitre={"technique": tech, "name": "n", "tactic": "t"})
+    d = base(mitre={"technique": tech, "name": "n", "tactic": "Command and Control"})
     with pytest.raises(RuleError, match="technique"):
         load_rules(write_rule(tmp_path, d))
 
 
 @pytest.mark.parametrize("tech", ["T1046", "T1071.004"])
 def test_good_technique(tmp_path, tech):
-    d = base(mitre={"technique": tech, "name": "n", "tactic": "t"})
+    d = base(mitre={"technique": tech, "name": "n", "tactic": "Command and Control"})
     assert load_rules(write_rule(tmp_path, d))[0].mitre_technique == tech
 
 
@@ -234,7 +235,7 @@ def test_mitre_without_tactic(tmp_path):
 
 def test_mitre_without_name(tmp_path):
     with pytest.raises(RuleError, match="mitre.name"):
-        load_rules(write_rule(tmp_path, base(mitre={"technique": "T1046", "tactic": "t"})))
+        load_rules(write_rule(tmp_path, base(mitre={"technique": "T1046", "tactic": "Command and Control"})))
 
 
 def test_mitre_not_a_map(tmp_path):

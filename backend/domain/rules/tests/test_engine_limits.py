@@ -162,7 +162,7 @@ def test_min_ports_limites(tmp_path, v, ok):
     f = tmp_path / "r.yaml"
     f.write_text(yaml.safe_dump({
         "id": "ps", "name": "n", "severity": "high", "detector": "port_scan",
-        "mitre": {"technique": "T1046", "name": "x", "tactic": "y"},
+        "mitre": {"technique": "T1046", "name": "x", "tactic": "Discovery"},
         "params": {"min_ports": v}}), encoding="utf-8")
     if ok:
         assert load_rules(f)[0].params["min_ports"] == v

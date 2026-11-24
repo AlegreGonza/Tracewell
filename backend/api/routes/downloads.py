@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api")
 
 # Solo las rutas que son descargas; el ticket no sirve para ninguna otra.
 DOWNLOAD_PATHS = re.compile(
-    r"^/api/(export|report|pcap|sessions/\d+/pcap|sessions/\d+/http/\d+/body)$"
+    r"^/api/(export|export/siem|report|pcap|sessions/\d+/pcap|sessions/\d+/http/\d+/body)$"
 )
 
 

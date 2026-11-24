@@ -143,6 +143,7 @@ def _self_test(window: Any, result: Dict[str, Any]) -> None:
             result[k] for k in ("brand", "native_picker", "demo_loaded")
         )
     except Exception as exc:  # borde de hilo: informamos el fallo en vez de perderlo
+        logger.warning("falló la autoprueba de la ventana", exc_info=True)
         result["error"] = str(exc)
     finally:
         window.destroy()  # siempre: si la sonda falla, la ventana oculta no puede

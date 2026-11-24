@@ -9,6 +9,9 @@ from typing import Callable, Optional, Sequence
 
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
+from starlette.responses import Response
+from starlette.types import Scope
 
 from backend.domain.analysis.analyzer import analyze
 from backend.domain.pcap.live import CaptureError, PacketSource, ScapySource
@@ -71,10 +74,32 @@ def _make_lifespan(state: _State):
     return lifespan
 
 
+def _is_spa_route(path: str) -> bool:
+    """True si la ruta pide una pantalla del frontend: fuera de /api y sin extensión de archivo."""
+    parts = path.replace("\\", "/").strip("/").split("/")  # en Windows llega con "\\"
+    return parts[0] != "api" and "." not in parts[-1]
+
+
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles que devuelve index.html para las rutas del lado del cliente (recarga)."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        """Sirve el archivo; si no existe y es una ruta de pantalla, sirve index.html."""
+        try:
+            response = await super().get_response(path, scope)
+        except HTTPException as exc:
+            if exc.status_code != 404 or not _is_spa_route(path):
+                raise
+            return await super().get_response("index.html", scope)
+        if response.status_code == 404 and _is_spa_route(path):
+            return await super().get_response("index.html", scope)
+        return response
+
+
 def _mount_frontend(app: FastAPI, frontend_dir) -> None:
-    """Sirve el frontend compilado."""
+    """Sirve el frontend compilado (con fallback a index.html para rutas de la SPA)."""
     if Path(frontend_dir).is_dir():
-        app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+        app.mount("/", SPAStaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 
 def create_app(

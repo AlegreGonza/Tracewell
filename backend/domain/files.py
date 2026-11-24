@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
@@ -44,8 +43,8 @@ def _user_folders() -> list[Path]:
 
 
 def default_allowed_dirs() -> list[Path]:
-    """Carpetas por defecto: las del usuario y la temporal de la app."""
-    return _user_folders() + [Path(tempfile.gettempdir()) / "tracewell"]
+    """Carpetas por defecto: Descargas, Documentos y Escritorio (sin carpeta temporal fija)."""
+    return _user_folders()
 
 
 def resolve_allowed_dirs(

@@ -80,7 +80,7 @@ function New-ZipFromFolder($stage, $zipPath, $topFolder) {
 # ----------------------------------------------------------------------- main
 if (-not (Test-Path "frontend\dist\index.html")) {
     Write-Host "Falta frontend\dist (la interfaz compilada). Compilala primero:" -ForegroundColor Yellow
-    Write-Host "  cd frontend; npm install; npm run build"
+    Write-Host "  cd frontend; corepack pnpm install; corepack pnpm run build"
     exit 1
 }
 $version = Get-Version
