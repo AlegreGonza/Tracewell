@@ -1,4 +1,5 @@
 """Punto de entrada de escritorio (main.py) con fakes: sin ventanas ni pywebview reales."""
+import os
 import subprocess
 import sys
 import types
@@ -130,6 +131,28 @@ def test_pick_file_argumentos(monkeypatch):
     assert args == ("OPEN_SENTINEL",)
     assert kw["allow_multiple"] is False
     assert any("*.pcap" in t and "*.pcapng" in t for t in kw["file_types"])
+
+
+def test_pick_file_abre_en_carpeta_permitida(monkeypatch, tmp_path):
+    # el selector arranca en la primera carpeta permitida que existe
+    fake_webview(monkeypatch)
+    inexistente = tmp_path / "no_existe"
+    monkeypatch.setenv("TRACEWELL_ALLOWED_DIRS", f"{inexistente}{os.pathsep}{tmp_path}")
+    w = FakeWindow(dialog=("x",))
+    api = main.DesktopApi()
+    api._bind(w)
+    api.pick_file()
+    assert w.calls[0][1]["directory"] == str(tmp_path.resolve())
+
+
+def test_pick_file_sin_carpetas_existentes_no_fija_directorio(monkeypatch, tmp_path):
+    fake_webview(monkeypatch)
+    monkeypatch.setenv("TRACEWELL_ALLOWED_DIRS", str(tmp_path / "no_existe"))
+    w = FakeWindow(dialog=("x",))
+    api = main.DesktopApi()
+    api._bind(w)
+    api.pick_file()
+    assert w.calls[0][1]["directory"] == ""
 
 
 def test_pick_file_sin_bind_falla_con_attributeerror(monkeypatch):

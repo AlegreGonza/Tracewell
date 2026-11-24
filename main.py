@@ -10,6 +10,7 @@ import sys
 import time
 from typing import Any, Dict, Optional, Sequence
 
+from backend.domain.files import resolve_allowed_dirs
 from backend.domain.pcap.live import cleanup_stale_temp_dirs
 from backend.domain.rules.engine import RuleError
 from backend.api.security import MIN_TOKEN_LENGTH
@@ -40,13 +41,21 @@ class DesktopApi:
         self._window = window
 
     def pick_file(self) -> Optional[str]:
-        """Abre el diálogo nativo y devuelve la ruta elegida, o None si se cancela."""
+        """Abre el diálogo nativo (en una carpeta permitida) y devuelve la ruta, o None si se cancela."""
         import webview
 
         chosen = self._window.create_file_dialog(
-            webview.FileDialog.OPEN, allow_multiple=False, file_types=FILE_TYPES
+            webview.FileDialog.OPEN, directory=_start_dir(), allow_multiple=False, file_types=FILE_TYPES
         )
         return chosen[0] if chosen else None
+
+
+def _start_dir() -> str:
+    """Primera carpeta permitida que existe (donde abre el selector); '' si ninguna."""
+    for folder in resolve_allowed_dirs():
+        if folder.is_dir():
+            return str(folder)
+    return ""
 
 
 def _port(text: str) -> int:

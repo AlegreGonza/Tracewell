@@ -50,11 +50,27 @@ class CaptureInfo:
     snaplen: Optional[int]  # máx. bytes guardados por paquete
 
 
+def _file_size(fh) -> int:
+    """Tamaño total del archivo (sin mover la posición actual)."""
+    pos = fh.tell()
+    size = fh.seek(0, 2)
+    fh.seek(pos)
+    return size
+
+
+def _bounded_read(fh, size: int, pos: int, n: int) -> bytes:
+    """Lee `n` bytes como mucho lo que queda desde `pos`: un largo falso no reserva memoria."""
+    if n < 0:
+        return fh.read(n)
+    return fh.read(min(n, max(size - pos, 0)))
+
+
 class _TapFile:
     """Envuelve el archivo y "espía" las lecturas que hace dpkt."""
 
     def __init__(self, fh):
         self._fh = fh
+        self._size = _file_size(fh)
         self._state = "global"  # global -> (header -> payload)*
         self._hdr_struct: Optional[struct.Struct] = None
         self.last_origlen: Optional[int] = None
@@ -85,7 +101,7 @@ class _TapFile:
             self.short_read = (n, len(data))
 
     def read(self, n=-1):
-        data = self._fh.read(n)
+        data = _bounded_read(self._fh, self._size, self.pos, n)
         self.pos += len(data)
         if self._state == "global":
             self._on_global(data)
@@ -109,6 +125,7 @@ class _BlockTap:
 
     def __init__(self, fh):
         self._fh = fh
+        self._size = _file_size(fh)
         self.short_read: Optional[tuple[int, int]] = None  # (esperado, leído)
         self._armed = False
         self._expect_header = True
@@ -126,7 +143,7 @@ class _BlockTap:
         self._expect_header = True
 
     def read(self, n=-1):
-        data = self._fh.read(n)
+        data = _bounded_read(self._fh, self._size, self.pos, n)
         self.pos += len(data)
         if self._armed:
             self._check(n, data)

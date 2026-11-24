@@ -69,7 +69,10 @@ def require_allowed_file(
     """Como `require_regular_file`, pero exige que la ruta resuelta esté en una carpeta permitida."""
     real = Path(path).expanduser().resolve()  # resuelve `..` y enlaces simbólicos
     if not any(real.is_relative_to(d) for d in allowed):
-        raise OutsideAllowedDirs("la ruta está fuera de las carpetas permitidas (Descargas, Documentos, Escritorio, samples)")
+        raise OutsideAllowedDirs(
+            "la ruta está fuera de las carpetas permitidas (Descargas, Documentos, Escritorio, samples). "
+            f"Para usar otra carpeta o disco, definí {ENV_ALLOWED_DIRS} antes de iniciar Tracewell"
+        )
     if extensions and real.suffix.lower() not in extensions:
         raise BadExtension(f"extensión no admitida: se esperan {', '.join(extensions)}")
     return require_regular_file(real, kind)

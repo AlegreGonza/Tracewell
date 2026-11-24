@@ -77,6 +77,6 @@ Dos decisiones de seguridad y robustez:
 
 ## Carpetas permitidas y reglas de usuario (parámetros de `create_app`)
 
-- `allowed_dirs`: carpetas desde las que `/api/analyze` y `/api/iocs` abren archivos (variable `TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos, Escritorio, `<temp>/tracewell`; `samples/` y la carpeta de captura en vivo se suman siempre). La ruta se resuelve con `Path.resolve()`; fuera de la lista responde `403` y `/api/analyze` solo admite `.pcap`, `.pcapng`, `.cap` (`400`). Lógica en `backend/domain/files.py`.
+- `allowed_dirs`: carpetas desde las que `/api/analyze` y `/api/iocs` abren archivos (variable `TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos, Escritorio, `<temp>/tracewell`; `samples/` y la carpeta de captura en vivo se suman siempre). La ruta se resuelve con `Path.resolve()`; fuera de la lista responde `403` y `/api/analyze` solo admite `.pcap`, `.pcapng`, `.cap` (`400`). Lógica en `backend/domain/files.py`. El selector de archivos de la ventana (`main.py`) abre en la primera carpeta permitida que existe, y el `403` explica cómo agregar otra con `TRACEWELL_ALLOWED_DIRS`.
 - `user_rules_dir`: carpeta escribible donde `POST /api/rules` guarda las reglas nuevas (variable `TRACEWELL_USER_RULES_DIR`; ver `backend/domain/rules/README.md`). Errores de escritura: `403` sin permiso, `500` otro fallo de disco.
 - `api_token`: opcional; si falta se genera uno aleatorio y queda en `app.state.api_token`.

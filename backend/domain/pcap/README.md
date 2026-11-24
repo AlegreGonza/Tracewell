@@ -187,4 +187,5 @@ de a un paquete y la memoria se mantiene constante.
 - `iter_packets`: float(): con magic de nanosegundos dpkt entrega Decimal, y mezclar Decimal con float rompe las restas (duración de sesión).
 - `CaptureInfo`: 1 = Ethernet. Dice cómo interpretar los bytes de cada paquete.
 - `CaptureInfo`: máx. bytes guardados por paquete (pcapng no lo expone en dpkt)
+- `_bounded_read`: cada lectura se limita a lo que queda del archivo; un largo de paquete falso (~4 GB) no reserva memoria y se informa como paquete truncado.
 

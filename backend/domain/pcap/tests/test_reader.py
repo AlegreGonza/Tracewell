@@ -279,6 +279,6 @@ def test_caracterizacion_patron_de_lecturas_de_dpkt(tmp_path):
     for _, b in PACKETS:
         esperado += [16, len(b)]
     assert calls[1:1 + len(esperado)] == esperado
-    assert calls[1 + len(esperado):] == [16]  # ultimo read: EOF
+    assert calls[1 + len(esperado):] == [0]  # ultimo read: EOF (se pide solo lo que queda)
     assert seen == [(len(b), len(b)) for _, b in PACKETS]
     assert tap.short_read is None

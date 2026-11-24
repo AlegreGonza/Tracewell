@@ -37,6 +37,7 @@ def test_archivo_fuera_es_403_en_espanol(client, zonas):
     shutil.copy(DEMO, zonas[1] / "b.pcap")
     r = analizar(client, zonas[1] / "b.pcap")
     assert r.status_code == 403 and "fuera de las carpetas permitidas" in r.json()["detail"]
+    assert "TRACEWELL_ALLOWED_DIRS" in r.json()["detail"]  # dice cómo agregar otra carpeta
 
 
 def test_ruta_inexistente_fuera_tambien_es_403(client, zonas):
