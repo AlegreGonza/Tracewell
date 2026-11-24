@@ -100,10 +100,15 @@ def _is_virtual(info: InterfaceInfo) -> bool:
     return any(h in text for h in _VIRTUAL_HINTS) or name == "lo" or name.startswith(_VIRTUAL_PREFIXES)
 
 
+GROUP_SETCAP = (
+    "`sudo groupadd -f packetcapture && sudo usermod -aG packetcapture $USER && "
+    "D=$(readlink -f $(which dumpcap)) && sudo chgrp packetcapture $D && sudo chmod 750 $D && "
+    "sudo setcap cap_net_raw,cap_net_admin+ep $D` y volvé a iniciar sesión"
+)
 PERMISSION_HELP = (
     "permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux). "
-    "Sin correr todo como root, en Linux: instalá Wireshark (dumpcap) y dale el permiso solo a él con "
-    "`sudo setcap cap_net_raw,cap_net_admin+ep $(readlink -f $(which dumpcap))`; Tracewell lo usa solo. "
+    "Sin correr todo como root, en Linux: instalá Wireshark (dumpcap) y dale el permiso solo a él y solo a un "
+    f"grupo (setcap a secas deja capturar a todos; el orden importa): {GROUP_SETCAP}. Tracewell lo usa solo. "
     "En Windows conviene abrirlo como administrador (el modo de Npcap para no administradores "
     "deja capturar a cualquier usuario del equipo)"
 )

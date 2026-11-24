@@ -5,7 +5,7 @@ import struct
 import pytest
 
 from backend.domain.pcap import dumpcap
-from backend.domain.pcap.dumpcap import DUMPCAP_HELP, DumpcapSource, make_source, parse_global_header
+from backend.domain.pcap.dumpcap import DUMPCAP_HELP, DumpcapSource, check_filter, find_dumpcap, make_source, parse_global_header
 from backend.domain.pcap.live import CaptureError, PermissionDenied, ScapySource
 
 
@@ -114,16 +114,80 @@ def test_interfaz_invalida_no_llega_a_la_linea_de_comandos(name):
         DumpcapSource(name)
 
 
-def test_make_source_elige_segun_plataforma_y_variable(monkeypatch):
-    monkeypatch.setattr(dumpcap.sys, "platform", "linux")
-    monkeypatch.setattr(dumpcap.shutil, "which", lambda n: "/usr/bin/dumpcap")
-    monkeypatch.delenv(dumpcap.ENV_BACKEND, raising=False)
+def test_make_source_elige_segun_find_dumpcap(monkeypatch):
+    monkeypatch.setattr(dumpcap, "find_dumpcap", lambda: "/usr/bin/dumpcap")
     assert isinstance(make_source("eth0"), DumpcapSource)
-    monkeypatch.setenv(dumpcap.ENV_BACKEND, "scapy")
+    monkeypatch.setattr(dumpcap, "find_dumpcap", lambda: None)
     assert isinstance(make_source("eth0"), ScapySource)
+
+
+def test_la_guia_limita_el_permiso_a_un_grupo():
+    assert "chgrp packetcapture" in DUMPCAP_HELP and "chmod 750" in DUMPCAP_HELP
+    assert DUMPCAP_HELP.index("chmod 750") < DUMPCAP_HELP.index("sudo setcap")  # setcap al final
+
+
+@pytest.mark.parametrize("bad", ["", "  ", "tcp\nand udp", "tcp\x00", "a" * 2000, 5])
+def test_filtro_bpf_invalido_se_rechaza(bad):
+    with pytest.raises(CaptureError):
+        check_filter(bad)
+    with pytest.raises(CaptureError):
+        DumpcapSource("eth0", bad)
+
+
+def test_filtro_bpf_valido_pasa_recortado():
+    assert check_filter(" tcp port 80 ") == "tcp port 80" and check_filter(None) is None
+
+
+def test_dumpcap_exige_ruta_absoluta():
+    with pytest.raises(CaptureError):
+        DumpcapSource("eth0", dumpcap="dumpcap")
+
+
+def _fake_fs(monkeypatch, tmp_path, *, uid=0, mode=0o755):
+    exe = tmp_path / "dumpcap"
+    exe.write_text("x")
+    exe.chmod(mode)
+    monkeypatch.setattr(dumpcap, "_SYSTEM_DIRS", (str(tmp_path),))
+    monkeypatch.setattr(dumpcap.sys, "platform", "linux")
+    monkeypatch.delenv(dumpcap.ENV_BACKEND, raising=False)
+    real = dumpcap.os.stat
+    target = str(exe.resolve())
+    monkeypatch.setattr(dumpcap.os, "stat", lambda p, **kw: _with_uid(real(p, **kw), uid) if str(p) == target else real(p, **kw))
+    return exe
+
+
+def _with_uid(st, uid):
+    return type("St", (), {"st_mode": st.st_mode, "st_uid": uid})()
+
+
+@pytest.mark.skipif(dumpcap.sys.platform == "win32", reason="modos POSIX")
+def test_busca_solo_en_carpetas_del_sistema_y_exige_dueno_root(monkeypatch, tmp_path):
+    exe = _fake_fs(monkeypatch, tmp_path)
+    assert find_dumpcap() == str(exe.resolve())
+    monkeypatch.setattr(dumpcap.os, "access", lambda p, m: True)
+    exe.chmod(0o775)  # escribible por el grupo
+    assert find_dumpcap() is None
+
+
+@pytest.mark.skipif(dumpcap.sys.platform == "win32", reason="modos POSIX")
+def test_no_se_confia_en_un_dumpcap_de_otro_usuario(monkeypatch, tmp_path):
+    _fake_fs(monkeypatch, tmp_path, uid=1000)
+    assert find_dumpcap() is None
+
+
+def test_no_busca_en_el_path(monkeypatch):
+    monkeypatch.setattr(dumpcap.sys, "platform", "linux")
+    monkeypatch.setattr(dumpcap, "_SYSTEM_DIRS", ())
+    monkeypatch.setenv("PATH", "/tmp/evil")
+    assert find_dumpcap() is None
+
+
+@pytest.mark.skipif(dumpcap.sys.platform == "win32", reason="modos POSIX")
+def test_find_dumpcap_respeta_plataforma_y_variable(monkeypatch, tmp_path):
+    exe = _fake_fs(monkeypatch, tmp_path)
+    assert find_dumpcap() == str(exe.resolve())
+    monkeypatch.setenv(dumpcap.ENV_BACKEND, "scapy")
+    assert find_dumpcap() is None
     monkeypatch.delenv(dumpcap.ENV_BACKEND)
     monkeypatch.setattr(dumpcap.sys, "platform", "win32")
-    assert isinstance(make_source("eth0"), ScapySource)
-    monkeypatch.setattr(dumpcap.sys, "platform", "linux")
-    monkeypatch.setattr(dumpcap.shutil, "which", lambda n: None)
-    assert isinstance(make_source("eth0"), ScapySource)
+    assert find_dumpcap() is None

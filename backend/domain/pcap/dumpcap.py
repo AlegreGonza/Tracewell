@@ -4,16 +4,17 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
 import signal
+import stat
 import struct
 import subprocess  # nosec B404 - lista fija de argumentos, sin shell
 import sys
 import threading
 import time
+import unicodedata
 from typing import BinaryIO, Callable, Optional, Tuple
 
-from .live import ETHERNET, PacketSource, CaptureError, PermissionDenied, ScapySource
+from .live import ETHERNET, GROUP_SETCAP, CaptureError, PacketSource, PermissionDenied, ScapySource
 
 logger = logging.getLogger("tracewell")
 
@@ -26,19 +27,48 @@ _MAGICS = {0xA1B2C3D4: 1e6, 0xA1B23C4D: 1e9}  # microsegundos / nanosegundos
 # dumpcap acepta como "interfaz" un número, "-" (stdin), una ruta o rpcap://, TCP@host:puerto: solo nombres simples
 _IFACE_OK = re.compile(r"[A-Za-z0-9_.:][A-Za-z0-9_.:-]{0,31}")
 
+# Solo se busca dumpcap en carpetas del sistema, nunca en el PATH (una carpeta del usuario podría plantarlo)
+_SYSTEM_DIRS = ("/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin", "/bin", "/sbin")
+MAX_FILTER = 1024
+
 DUMPCAP_HELP = (
-    "dumpcap no tiene permiso de captura. En Linux, solo a él: `sudo setcap cap_net_raw,cap_net_admin+ep "
-    "$(readlink -f $(which dumpcap))` (o `sudo dpkg-reconfigure wireshark-common` y tu usuario en el grupo "
-    "wireshark). Con setcap pueden capturar todos los usuarios; para limitarlo: `sudo groupadd packetcapture; "
-    "sudo chgrp packetcapture <dumpcap>; sudo chmod 750 <dumpcap>` antes del setcap. Tracewell sigue sin privilegios"
+    "dumpcap no tiene permiso de captura. En Linux, solo a él y solo para un grupo (con setcap a secas "
+    f"capturan todos los usuarios; el orden importa, setcap va al final): {GROUP_SETCAP}. En Debian/Ubuntu "
+    "también sirve `sudo dpkg-reconfigure wireshark-common` y el grupo wireshark. Tracewell sigue sin privilegios"
 )
 
 
+def _trusted(path: str) -> bool:
+    """Archivo regular, ejecutable, de root y que ni el grupo ni otros pueden modificar."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    return (stat.S_ISREG(st.st_mode) and st.st_uid == 0 and not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            and os.access(path, os.X_OK))
+
+
 def find_dumpcap() -> Optional[str]:
-    """Ruta de dumpcap si se puede usar (solo Linux y sin TRACEWELL_CAPTURE=scapy)."""
+    """Ruta real de dumpcap si es confiable (solo Linux, carpetas del sistema, sin TRACEWELL_CAPTURE=scapy)."""
     if not sys.platform.startswith("linux") or os.environ.get(ENV_BACKEND) == "scapy":
         return None
-    return shutil.which("dumpcap")
+    for folder in _SYSTEM_DIRS:
+        path = os.path.realpath(os.path.join(folder, "dumpcap"))
+        if os.path.isfile(path):
+            if _trusted(path):
+                return path
+            logger.warning("dumpcap en %s no es confiable (debe ser de root y no escribible por otros): se usa Scapy", path)
+    return None
+
+
+def check_filter(bpf_filter: Optional[str]) -> Optional[str]:
+    """Filtro BPF sin caracteres de control ni exceso de largo; la sintaxis la valida dumpcap al arrancar."""
+    if bpf_filter is None:
+        return None
+    if (not isinstance(bpf_filter, str) or not bpf_filter.strip() or len(bpf_filter) > MAX_FILTER
+            or any(unicodedata.category(c).startswith("C") for c in bpf_filter)):
+        raise CaptureError(f"el filtro de captura no es válido (texto de hasta {MAX_FILTER} caracteres, sin control)")
+    return bpf_filter.strip()
 
 
 def make_source(interface: str) -> PacketSource:
@@ -74,10 +104,12 @@ def parse_global_header(head: bytes) -> Tuple[str, float]:
 class DumpcapSource:
     """Fuente de paquetes: lee el pcap que dumpcap escribe por su salida estándar."""
 
-    def __init__(self, interface: str, bpf_filter: Optional[str] = None, dumpcap: str = "dumpcap"):
+    def __init__(self, interface: str, bpf_filter: Optional[str] = None, dumpcap: str = "/usr/bin/dumpcap"):
         if not isinstance(interface, str) or not _IFACE_OK.fullmatch(interface) or interface.isdigit():
             raise CaptureError("hay que indicar una interfaz válida (solo el nombre, por ejemplo eth0)")
-        self.interface, self.bpf_filter, self._exe = interface, bpf_filter, dumpcap
+        if not os.path.isabs(dumpcap):
+            raise CaptureError("dumpcap debe indicarse con ruta absoluta")
+        self.interface, self.bpf_filter, self._exe = interface, check_filter(bpf_filter), dumpcap
         self._proc: Optional[subprocess.Popen] = None
         self._thread: Optional[threading.Thread] = None
         self._failure: Optional[CaptureError] = None
