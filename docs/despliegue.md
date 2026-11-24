@@ -24,7 +24,7 @@ Windows 10 (1809 o posterior) y Windows 11 traen `winget`. Si no lo tenés, el s
 Con el zip, descomprimí, entrá a la carpeta `tracewell-<versión>` y seguí con la instalación de abajo. Junto al zip se publica un archivo `.sha256` para verificar que la descarga no se corrompió:
 
 ```powershell
-(Get-FileHash .\tracewell-0.4.0.zip -Algorithm SHA256).Hash
+(Get-FileHash .\tracewell-0.5.0.zip -Algorithm SHA256).Hash
 ```
 
 El resultado tiene que coincidir con el contenido del `.sha256` (en minúsculas allá). En Linux/macOS los scripts `.sh` salen del zip sin permiso de ejecución: usá `bash instalar.sh` y `bash iniciar.sh`.
