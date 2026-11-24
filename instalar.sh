@@ -68,7 +68,7 @@ step "4. Interfaz web (frontend/dist)"
 if [ -f frontend/dist/index.html ]; then ok "La interfaz ya está compilada"
 elif [ "$CHECK" -eq 1 ]; then bad "Falta frontend/dist"; MISSING+=("interfaz compilada (frontend/dist)")
 elif command -v npm >/dev/null 2>&1; then
-  (cd frontend && npm install && npm run build) && ok "Interfaz compilada" || { bad "Falló la compilación"; MISSING+=("compilar la interfaz"); }
+  (cd frontend && corepack pnpm install --frozen-lockfile && corepack pnpm run build) && ok "Interfaz compilada" || { bad "Falló la compilación"; MISSING+=("compilar la interfaz"); }
 else
   bad "Falta frontend/dist y no hay Node.js para compilarla."
   MISSING+=("Node.js (https://nodejs.org) para compilar la interfaz")

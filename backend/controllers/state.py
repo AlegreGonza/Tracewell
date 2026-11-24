@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import shutil
 import threading
+import tomllib
+from importlib import metadata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Annotated, Callable, Dict, Optional
@@ -17,7 +19,23 @@ from backend.domain.rules.engine import Rule
 from backend.domain.sessions.query import compute_stats
 
 
-VERSION = "0.3.0"
+ROOT = Path(__file__).resolve().parents[2]  # raíz del proyecto (donde está pyproject.toml)
+
+
+def _read_version() -> str:
+    """Versión del proyecto: pyproject.toml de la raíz; si no está, la del paquete instalado."""
+    try:
+        with open(ROOT / "pyproject.toml", "rb") as f:
+            return str(tomllib.load(f)["project"]["version"])
+    except (OSError, tomllib.TOMLDecodeError, KeyError):
+        pass  # sin pyproject.toml (paquete instalado): se usa la metadata
+    try:
+        return metadata.version("tracewell")
+    except metadata.PackageNotFoundError:
+        return "0.0.0+unknown"
+
+
+VERSION = _read_version()
 
 
 class _State:

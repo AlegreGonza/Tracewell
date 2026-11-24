@@ -1,0 +1,28 @@
+id: user_agent_script
+name: User-Agent de script o ausente
+description: >
+  Una petición HTTP llevó un User-Agent de una biblioteca o utilidad de scripts
+  (python-requests, curl, wget...), vacío o anormalmente corto. El malware suele
+  usar bibliotecas HTTP sin cambiar el User-Agent por defecto.
+severity: low
+detector: user_agent
+mitre:
+  technique: T1071.001
+  name: "Application Layer Protocol: Web Protocols"
+  tactic: Command and Control
+params:
+  patterns: [python-requests, python-urllib, curl/, wget/, go-http-client, libwww-perl, powershell]
+  flag_empty: true       # cabecera User-Agent presente pero vacía
+  flag_missing: false    # petición sin la cabecera (muchos clientes simples la omiten)
+  min_length: 6          # User-Agent no vacío pero más corto que esto (0 = apagado)
+  # Excepciones: allow_hosts: [10.0.5.20, 192.168.1.0/24]   allow_services: [8080]
+
+false_positives:
+  - Scripts de administración, monitoreo, respaldos o integraciones que usan curl o requests a propósito.
+  - Herramientas de desarrollo y pipelines de despliegue.
+  - Clientes de actualización o servicios que no envían User-Agent.
+investigation_steps:
+  - Identificar el equipo y el proceso (captura en vivo) que hace la petición.
+  - Revisar el destino y la ruta, ¿es una API conocida o un dominio desconocido?
+  - Ver si repite a intervalos regulares (beaconing) hacia el mismo destino.
+wireshark_filter: http.request && !http.user_agent

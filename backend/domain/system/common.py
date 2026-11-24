@@ -35,7 +35,7 @@ def safe(fn: Callable[[], Any], default: Any = None) -> Any:
 # Carpetas desde donde un programa legítimo casi nunca debería correr de forma permanente.
 _TEMP_MARKERS = (
     "\\appdata\\local\\temp\\", "\\windows\\temp\\", "\\downloads\\", "\\users\\public\\",
-    "/tmp/", "/var/tmp/", "/dev/shm/",
+    "/tmp/", "/var/tmp/", "/dev/shm/",  # nosec B108
 )
 # Procesos propios de Windows y la carpeta donde viven de verdad
 _WINDOWS_PROCESSES = {

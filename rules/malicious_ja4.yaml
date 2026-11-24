@@ -1,0 +1,28 @@
+id: malicious_ja4
+name: Huella TLS (JA4) de malware conocido
+description: >
+  Un cliente inició una conexión TLS cuya huella JA4 coincide con una de la
+  lista local de huellas asociadas a malware o herramientas ofensivas. La
+  huella identifica al programa que habla TLS aunque cambie de servidor o de dominio.
+severity: high
+detector: ja4_blocklist
+mitre:
+  technique: T1573
+  name: Encrypted Channel
+  tactic: Command and Control
+params:
+  # CSV editable (formato en rules/data/ja4_malicious.csv), relativo a esta carpeta.
+  fingerprints_file: data/ja4_malicious.csv
+  # También se pueden listar huellas aquí mismo.
+  fingerprints: []
+  # Excepciones: allow_hosts: [192.168.1.10]   allow_services: [https]
+
+false_positives:
+  - Una huella compartida por varios programas (muchos usan la misma biblioteca TLS); la coincidencia es un indicio, no una prueba.
+  - Una herramienta ofensiva usada a propósito por el equipo de seguridad (pruebas de intrusión, red team).
+investigation_steps:
+  - Mirar la etiqueta y la referencia de la evidencia, de dónde sale esa huella y con qué confianza.
+  - Identificar el proceso del equipo origen (captura en vivo) y comparar con el programa esperado.
+  - Revisar el SNI y el destino, ¿es un servicio conocido o una IP o dominio sin historia?
+  - Buscar al mismo origen en otras alertas antes de contener.
+wireshark_filter: tls.handshake.type == 1

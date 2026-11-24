@@ -1,0 +1,30 @@
+id: icmp_tunnel
+name: Posible túnel ICMP
+description: >
+  Un par de equipos intercambió ecos ICMP (ping) con cargas útiles grandes o en
+  un volumen muy alto. Un ping normal lleva 32 a 64 bytes; los túneles ICMP
+  (ptunnel, icmpsh) esconden datos o comandos en ese campo.
+severity: medium
+detector: icmp_tunnel
+mitre:
+  technique: T1095
+  name: Non-Application Layer Protocol
+  tactic: Command and Control
+params:
+  min_payload_bytes: 256   # carga útil que se considera grande
+  min_large_packets: 10    # ecos grandes en la ventana para disparar
+  min_packets: 600         # ecos en la ventana (0 = apagado)
+  min_bytes: 2000000       # bytes de carga en la ventana (0 = apagado)
+  window_seconds: 60
+  # Excepciones: allow_hosts: [10.0.0.1, 192.168.1.0/24]
+
+false_positives:
+  - Una prueba de MTU o de rendimiento con `ping -s` o `ping -f` a propósito.
+  - Un monitoreo de red que usa ecos grandes para medir pérdida o latencia.
+  - Herramientas de diagnóstico de proveedores (SLA) con paquetes de tamaño fijo.
+investigation_steps:
+  - Mirar el tamaño máximo y la cantidad de ecos en la evidencia y comparar con el ping normal.
+  - Abrir el filtro en Wireshark y revisar el contenido de la carga, ¿texto, comandos o datos binarios?
+  - Verificar si el destino es externo y si el origen ejecuta algún proceso de túnel.
+  - Buscar al mismo origen en otras alertas antes de contener.
+wireshark_filter: icmp.type == 8 || icmp.type == 0

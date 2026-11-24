@@ -4,6 +4,8 @@
 
 # Tracewell
 
+[![CI](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml/badge.svg)](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml)
+
 **Análisis de tráfico de red para triaje SOC.** Abrí un `.pcap` / `.pcapng` (o capturá en vivo) y Tracewell agrupa los paquetes en sesiones, aplica reglas YAML y muestra alertas con severidad, técnica MITRE ATT&CK y evidencia en una interfaz React. Es un MVP pensado para un analista SOC junior, con foco didáctico: cada pantalla explica su equivalente en Wireshark.
 
 English version: [`README.md`](README.md). La interfaz y casi toda la documentación de `docs/` están en español; el detalle completo en inglés está en [`docs/en/`](docs/en/README.md).
@@ -75,7 +77,7 @@ Más: [`docs/en/architecture.md`](docs/en/architecture.md), [`docs/en/rules.md`]
 
 ## Pruebas y calidad
 
-Unos 4.060 tests de Python (`python -m pytest -q`) y 1.310 de frontend (`cd frontend && npx vitest run`); linters: `ruff` y ESLint. No hay CI a propósito. Ver [`docs/guia_uso_y_pruebas.md`](docs/guia_uso_y_pruebas.md) y [`docs/informe_calidad.md`](docs/informe_calidad.md).
+Tests de Python: `python -m pytest -q`; de frontend: `cd frontend && corepack pnpm test` (end-to-end: `corepack pnpm test:e2e`). Las cantidades cambian en cada commit y por eso no se escriben acá: mirá la última corrida del [workflow de CI](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml) o medilas vos. Controles: `ruff`, `bandit`, `pip-audit`, ESLint; `.\verificar.ps1` (o `./verificar.sh`) los corre todos en orden y `-Linux`/`--linux` repite el backend en Docker. Ver [`docs/pruebas.md`](docs/pruebas.md), [`docs/guia_uso_y_pruebas.md`](docs/guia_uso_y_pruebas.md) y [`docs/informe_calidad.md`](docs/informe_calidad.md).
 
 ## Documentación
 
@@ -85,3 +87,7 @@ Unos 4.060 tests de Python (`python -m pytest -q`) y 1.310 de frontend (`cd fron
 ## Licencia
 
 Ver [`LICENSE`](LICENSE).
+
+## Créditos
+
+La interfaz (`frontend/`) parte de la plantilla [shadcn-admin](https://github.com/satnaing/shadcn-admin) de satnaing (licencia MIT: shadcn/ui, Tailwind, TanStack Router). Su licencia se conserva en [`frontend/LICENSE-shadcn-admin`](frontend/LICENSE-shadcn-admin).

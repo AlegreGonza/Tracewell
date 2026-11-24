@@ -152,3 +152,18 @@ def test_set_analysis_guarda_y_resetea_processes(rules, an):
     assert ctx.state.processes is table and out["processes"] is True
     out = set_analysis(ctx, an)
     assert ctx.state.processes is None and out["processes"] is False
+
+
+def test_version_sale_de_pyproject_y_cae_a_la_metadata(tmp_path, monkeypatch):
+    import tomllib
+    from backend.controllers import state
+
+    with open(state.ROOT / "pyproject.toml", "rb") as f:
+        assert state.VERSION == tomllib.load(f)["project"]["version"]
+    monkeypatch.setattr(state, "ROOT", tmp_path)  # sin pyproject.toml
+    monkeypatch.setattr(state.metadata, "version", lambda _n: "9.9.9")
+    assert state._read_version() == "9.9.9"
+    (tmp_path / "pyproject.toml").write_text("[project]\nversion = '1.2.3'\n", encoding="utf-8")
+    assert state._read_version() == "1.2.3"
+    (tmp_path / "pyproject.toml").write_text("roto = [", encoding="utf-8")
+    assert state._read_version() == "9.9.9"

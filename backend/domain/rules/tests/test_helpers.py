@@ -156,15 +156,15 @@ def test_resolve_detector_desconocido_lista_disponibles():
 
 def test_check_mitre_valido_con_y_sin_subtecnica():
     """T1234 y T1234.001 pasan."""
-    ok = {"technique": "T1046", "name": "n", "tactic": "t"}
+    ok = {"technique": "T1046", "name": "n", "tactic": "Discovery"}
     assert _check_mitre(ok, "x.yaml") is None
     assert _check_mitre({**ok, "technique": "T1046.001"}, "x.yaml") is None
 
 
 @pytest.mark.parametrize("mitre", [None, "T1046", {}, {"technique": 1046},
-                                   {"technique": "T104", "name": "n", "tactic": "t"},
-                                   {"technique": "t1046", "name": "n", "tactic": "t"},
-                                   {"technique": "T1046.01", "name": "n", "tactic": "t"}])
+                                   {"technique": "T104", "name": "n", "tactic": "Discovery"},
+                                   {"technique": "t1046", "name": "n", "tactic": "Discovery"},
+                                   {"technique": "T1046.01", "name": "n", "tactic": "Discovery"}])
 def test_check_mitre_tecnica_invalida(mitre):
     """No-mapa o técnica con mal formato falla."""
     with pytest.raises(RuleError, match="mitre.technique"):
@@ -174,7 +174,7 @@ def test_check_mitre_tecnica_invalida(mitre):
 @pytest.mark.parametrize("campo", ["name", "tactic"])
 def test_check_mitre_nombre_o_tactica_faltante(campo):
     """name/tactic ausente o vacío falla con su nombre."""
-    m = {"technique": "T1046", "name": "n", "tactic": "t"}
+    m = {"technique": "T1046", "name": "n", "tactic": "Discovery"}
     m[campo] = "  "
     with pytest.raises(RuleError, match=f"mitre.{campo}"):
         _check_mitre(m, "x.yaml")

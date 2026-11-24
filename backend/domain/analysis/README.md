@@ -415,3 +415,12 @@ hostil no puede cerrar la cadena y agregar condiciones al filtro.
 
 **`alert_filter`**: Filtro de una alerta, derivado de su evidencia. Sin evidencia útil devuelve los dos extremos; con ella lo afina: nombre DNS (`dns.qry.name`), puertos de un escaneo, puerto de destino o la víctima de una inundación. Es una pista para llegar a los paquetes: el analista puede ampliarlo o recortarlo en Wireshark.
 
+## tls.py y las reglas de amenazas
+
+`domain/rules/threat_detectors.py` reutiliza los parsers de `tls.py` en una sola pasada por paquete, sin
+reconstruir flujos: `parse_client_hello` + `ja4` (regla `malicious_ja4`), `parse_server_hello` (descarta TLS 1.3, donde
+el certificado va cifrado) y `parse_certificates` + `parse_certificate` (regla `tls_certificate`: `self_signed` y
+`not_after` frente a la hora de la captura). Los topes de este módulo (`MAX_RECORDS`, `MAX_TLS_BYTES`) siguen
+valiendo; el detector suma los suyos (12 segmentos y 64 KiB por flujo). Los mismos parsers siguen alimentando
+la vista de sesión TLS (`analyze_tls`), así que un cambio de formato aquí afecta a ambos. Detalles de umbrales,
+evidencia y falsos positivos en `backend/domain/rules/README.md`.

@@ -1,6 +1,7 @@
 """Motor de reglas: carga reglas YAML y las evalúa sobre el tráfico."""
 from __future__ import annotations
 
+import ipaddress
 import logging
 import math
 import re
@@ -21,6 +22,11 @@ logger = logging.getLogger("tracewell")
 
 SEVERITIES = ("low", "medium", "high", "critical")
 _TECHNIQUE_RE = re.compile(r"^T\d{4}(\.\d{3})?$")
+# Tácticas MITRE ATT&CK admitidas: nombres canónicos, en orden de la cadena de ataque.
+MITRE_TACTICS = (
+    "Reconnaissance", "Initial Access", "Credential Access", "Discovery", "Lateral Movement",
+    "Collection", "Command and Control", "Exfiltration", "Impact",
+)
 
 TCP_SYN, TCP_ACK = 0x02, 0x10
 
@@ -47,6 +53,7 @@ class Rule:
     false_positives: Tuple[str, ...] = ()
     investigation_steps: Tuple[str, ...] = ()
     wireshark_filter: str = ""
+    directory: str = ""  # carpeta del YAML: ahí se resuelven los archivos de datos de la regla
 
 
 @dataclass
@@ -116,6 +123,75 @@ def _suffix_list(v):
     return out
 
 
+# Nombres de servicio admitidos en `allow_services` (además de números de puerto).
+_SERVICE_PORTS = {
+    "ftp": 21, "ssh": 22, "telnet": 23, "dns": 53, "http": 80, "kerberos": 88, "ntp": 123,
+    "rpc": 135, "ldap": 389, "https": 443, "smb": 445, "rdp": 3389, "winrm": 5985,
+}
+
+
+def _host_list(v):
+    """Lista (puede ser vacía) de IP o redes CIDR; se normalizan."""
+    if not isinstance(v, list):
+        raise ValueError(f"debe ser una lista de IP o redes CIDR, recibí {v!r}")
+    out = []
+    for item in v:
+        try:
+            out.append(str(ipaddress.ip_network(str(item).strip(), strict=False)))
+        except ValueError:
+            raise ValueError(f"no es una IP ni una red CIDR: {item!r}") from None
+    return out
+
+
+def _service_list(v):
+    """Lista (puede ser vacía) de puertos o nombres de servicio (ssh, smb...); sale como puertos."""
+    if not isinstance(v, list):
+        raise ValueError(f"debe ser una lista de puertos o servicios, recibí {v!r}")
+    ports = set()
+    for item in v:
+        if isinstance(item, str) and item.strip().lower() in _SERVICE_PORTS:
+            ports.add(_SERVICE_PORTS[item.strip().lower()])
+            continue
+        _check_port(item)
+        ports.add(item)
+    return sorted(ports)
+
+
+# Parámetros opcionales que acepta CUALQUIER regla: excepciones contra falsos positivos.
+COMMON_PARAMS: Dict[str, Tuple[Callable[[Any], Any], Any]] = {
+    "allow_hosts": (_host_list, []),
+    "allow_services": (_service_list, []),
+}
+
+
+class Allowlist:
+    """Hosts (IP/CIDR) y puertos que una regla nunca debe evaluar ni alertar."""
+
+    def __init__(self, params: Dict[str, Any]):
+        self.nets = tuple(ipaddress.ip_network(h) for h in params.get("allow_hosts", ()))
+        self.ports = frozenset(params.get("allow_services", ()))
+        self._memo: Dict[str, bool] = {}
+
+    def _host_allowed(self, ip: str) -> bool:
+        """True si la IP cae en alguna red permitida (con memoria acotada)."""
+        hit = self._memo.get(ip)
+        if hit is None:
+            try:
+                addr = ipaddress.ip_address(ip)
+                hit = any(addr in net for net in self.nets)
+            except ValueError:
+                hit = False
+            if len(self._memo) < MAX_TRACKED:
+                self._memo[ip] = hit
+        return hit
+
+    def allows(self, d: "Decoded") -> bool:
+        """True si el paquete involucra un host o un servicio permitido (en cualquier sentido)."""
+        if self.ports and d.proto in (6, 17) and (d.dport in self.ports or d.sport in self.ports):
+            return True
+        return bool(self.nets) and (self._host_allowed(d.src) or self._host_allowed(d.dst))
+
+
 # ------------------------------------------------------------- decodificado
 
 @dataclass(frozen=True)
@@ -125,11 +201,11 @@ class Decoded:
     ts: float
     src: str
     dst: str
-    proto: int  # 6 = TCP, 17 = UDP
-    sport: int
-    dport: int
-    flags: int  # flags TCP; 0 en UDP
-    payload: bytes
+    proto: int  # 6 = TCP, 17 = UDP, 1 = ICMP, 58 = ICMPv6
+    sport: int  # 0 en ICMP
+    dport: int  # 0 en ICMP
+    flags: int  # flags TCP; tipo en ICMP; 0 en UDP
+    payload: bytes  # en un eco ICMP, solo la carga útil (sin identificador ni secuencia)
 
 
 def _l4_info(l4):
@@ -141,19 +217,40 @@ def _l4_info(l4):
     return None
 
 
+def _icmp_info(l4):
+    """(proto, tipo) de un mensaje ICMP/ICMPv6, o None si es otra cosa."""
+    if isinstance(l4, dpkt.icmp.ICMP):
+        return 1, l4.type
+    if isinstance(l4, dpkt.icmp6.ICMP6):
+        return 58, l4.type
+    return None
+
+
+def _l4_fields(l4):
+    """(proto, flags, sport, dport, payload) de TCP/UDP/ICMP, o None si es otra cosa."""
+    info = _l4_info(l4)
+    if info is not None:
+        return info[0], info[1], l4.sport, l4.dport, bytes(l4.data)
+    info = _icmp_info(l4)
+    if info is None:
+        return None
+    inner = getattr(l4.data, "data", l4.data)  # eco: la carga útil va dentro del eco
+    return info[0], info[1], 0, 0, bytes(inner)
+
+
 def decode_layer(pkt: Packet, layer) -> Optional[Decoded]:
-    """TCP/UDP de una capa IP ya leída (`ip_layer`), o None si no aplica o está dañado."""
+    """TCP/UDP/ICMP de una capa IP ya leída (`ip_layer`), o None si no aplica o está dañado."""
     if layer is None:
         return None
     ip, family = layer
-    info = _l4_info(ip.data)
-    if info is None:
-        return None
-    l4 = ip.data
     try:
+        fields = _l4_fields(ip.data)
+        if fields is None:
+            return None
+        proto, flags, sport, dport, payload = fields
         return Decoded(
             pkt.ts, socket.inet_ntop(family, ip.src), socket.inet_ntop(family, ip.dst),
-            info[0], l4.sport, l4.dport, info[1], bytes(l4.data),
+            proto, sport, dport, flags, payload,
         )
     except (dpkt.UnpackError, ValueError, IndexError, struct.error):
         return None
@@ -200,6 +297,7 @@ class Detector:
     def __init__(self, rule: Rule):
         self.rule = rule
         self.p = rule.params
+        self.allow = Allowlist(rule.params)  # `RuleRunner` omite lo que permite
 
     def feed(self, d: Decoded) -> List[Alert]:  # pragma: no cover - interfaz
         raise NotImplementedError
@@ -589,6 +687,8 @@ def _check_mitre(mitre: Any, source: str) -> None:
     for k in ("name", "tactic"):
         if not _is_text(mitre.get(k)):
             _fail(source, f"mitre.{k} debe ser texto no vacío")
+    if mitre["tactic"] not in MITRE_TACTICS:
+        _fail(source, f"mitre.tactic debe ser una de {list(MITRE_TACTICS)}, recibí {mitre['tactic']!r}")
 
 
 def _build_params(data: dict, detector_cls: Type[Detector], source: str) -> Dict[str, Any]:
@@ -596,11 +696,14 @@ def _build_params(data: dict, detector_cls: Type[Detector], source: str) -> Dict
     raw = data.get("params") or {}
     if not isinstance(raw, dict):
         _fail(source, "'params' debe ser un mapa")
-    bad = raw.keys() - detector_cls.PARAMS.keys()
+    known = {**COMMON_PARAMS, **detector_cls.PARAMS}
+    bad = raw.keys() - known.keys()
     if bad:
         _fail(source, f"params desconocidos para {data['detector']}: {sorted(bad)}")
     params = {}
-    for name, (check, default) in detector_cls.PARAMS.items():
+    for name, (check, default) in known.items():
+        if name in COMMON_PARAMS and name not in raw:
+            continue  # las excepciones solo constan si la regla las declara
         try:
             params[name] = check(raw[name]) if name in raw else default
         except ValueError as exc:
@@ -630,7 +733,7 @@ def _optional_fields(data: dict, source: str) -> Dict[str, Any]:
     }
 
 
-def _parse_rule(data: Any, source: str) -> Rule:
+def _parse_rule(data: Any, source: str, directory: str = "") -> Rule:
     _check_keys(data, source)
     _check_text_fields(data, source)
     _check_severity(data, source)
@@ -642,7 +745,7 @@ def _parse_rule(data: Any, source: str) -> Rule:
         id=data["id"], name=data["name"], description=str(data.get("description", "")).strip(),
         severity=data["severity"], detector=data["detector"],
         mitre_technique=mitre["technique"], mitre_name=mitre["name"], mitre_tactic=mitre["tactic"],
-        params=params, source=source, **_optional_fields(data, source),
+        params=params, source=source, directory=directory, **_optional_fields(data, source),
     )
 
 
@@ -668,7 +771,7 @@ def load_rules(path) -> List[Rule]:
     rules: List[Rule] = []
     seen: Dict[str, str] = {}
     for f in _rule_files(Path(path)):
-        rule = _parse_rule(_read_yaml(f), f.name)
+        rule = _parse_rule(_read_yaml(f), f.name, str(f.parent))
         if rule.id in seen:
             raise RuleError(f"{f.name}: id duplicado {rule.id!r} (ya definido en {seen[rule.id]})")
         seen[rule.id] = f.name
@@ -684,7 +787,7 @@ def load_all_rules(bundled_dir, user_dir=None) -> List[Rule]:
     seen = {r.id: "las incluidas" for r in rules}
     for f in _rule_files(Path(user_dir)):
         try:
-            rule = _parse_rule(_read_yaml(f), f.name)
+            rule = _parse_rule(_read_yaml(f), f.name, str(f.parent))
         except RuleError as exc:  # un archivo del usuario roto no impide arrancar
             logger.warning("regla de usuario ignorada: %s", exc)
             continue
@@ -712,7 +815,8 @@ class RuleRunner:
         if d is None:
             return
         for det in self._detectors:
-            self._alerts.extend(det.feed(d))
+            if not det.allow.allows(d):
+                self._alerts.extend(det.feed(d))
 
     def alerts(self) -> List[Alert]:
         """Las alertas ordenadas por tiempo."""

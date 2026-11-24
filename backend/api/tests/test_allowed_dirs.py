@@ -96,7 +96,8 @@ def test_varias_carpetas_en_la_variable_de_entorno(monkeypatch, zonas):
     assert set(resolve_allowed_dirs()) == {z.resolve() for z in zonas}
 
 
-def test_por_defecto_son_descargas_documentos_escritorio_y_temporal(monkeypatch):
+def test_por_defecto_son_descargas_documentos_escritorio_sin_temporal_fija(monkeypatch):
     monkeypatch.delenv(ENV_ALLOWED_DIRS)
     nombres = {p.name for p in default_allowed_dirs()}
-    assert {"Downloads", "Documents", "Desktop", "tracewell"} <= nombres
+    assert {"Downloads", "Documents", "Desktop"} <= nombres
+    assert "tracewell" not in nombres  # <temp>/tracewell era predecible: otro usuario la crea antes

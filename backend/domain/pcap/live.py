@@ -100,6 +100,15 @@ def _is_virtual(info: InterfaceInfo) -> bool:
     return any(h in text for h in _VIRTUAL_HINTS) or name == "lo" or name.startswith(_VIRTUAL_PREFIXES)
 
 
+PERMISSION_HELP = (
+    "permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux). "
+    "Alternativas sin correr todo como root: en Linux, "
+    "`sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))` "
+    "(vale para ese intérprete y todo lo que corra con él); en Windows, reinstalá Npcap "
+    "y desmarcá \"Restrict Npcap driver's access to Administrators only\""
+)
+
+
 class ScapySource:
     """Fuente real basada en Scapy."""
 
@@ -147,9 +156,7 @@ class ScapySource:
     def _start_error(self, exc: Exception) -> CaptureError:
         """Traduce el error de arranque a uno propio, con un mensaje accionable."""
         if isinstance(exc, PermissionError):
-            return PermissionDenied(
-                "permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux)"
-            )
+            return PermissionDenied(PERMISSION_HELP)
         return CaptureError(f"no se pudo iniciar la captura en {self.interface!r}: {exc}")
 
     def stop(self):
@@ -287,7 +294,8 @@ class LiveCapture:
             raise CaptureStateError("la captura no fue iniciada")
         self._done.set()  # razón "manual" si nadie la fijó antes
         self._finished.wait()
-        assert self._summary is not None
+        if self._summary is None:
+            raise CaptureStateError("la captura terminó sin resumen")
         return self._summary
 
     @property
@@ -333,6 +341,7 @@ class LiveCapture:
         try:
             self._writer.writepkt(data, ts=ts)
         except Exception as exc:  # borde del hilo del sniffer
+            logger.warning("falló al escribir un paquete; se corta la captura", exc_info=True)
             self.error = exc
             self._reason = "error"
             self._done.set()
@@ -394,7 +403,8 @@ class LiveCapture:
         def run():
             try:
                 self._source.stop()
-            except Exception as exc:
+            except Exception as exc:  # borde de hilo: se guarda en self.error
+                logger.warning("falló al detener la fuente de captura", exc_info=True)
                 # Un fallo al detener la fuente no debe dejar un traceback suelto en el hilo ni impedir
                 self.error = self.error or exc
 

@@ -99,8 +99,10 @@ def test_ticket_vence_y_los_pendientes_tienen_tope():
 
 
 def test_con_token_no_se_publica_el_mapa_de_la_api(client):
-    for ruta in ("/docs", "/redoc", "/openapi.json"):
-        assert client.get(ruta).status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+    for ruta in ("/docs", "/redoc"):  # el respaldo de la SPA devuelve la interfaz, no Swagger
+        texto = client.get(ruta).text.lower()
+        assert "swagger" not in texto and "redoc.standalone" not in texto and "openapi" not in texto
 
 
 def test_sin_token_explicito_se_genera_uno_y_se_exige():
@@ -109,7 +111,7 @@ def test_sin_token_explicito_se_genera_uno_y_se_exige():
     assert create_app(sampler_factory=None).state.api_token != app.state.api_token
     c = TestClient(app, headers={TOKEN_HEADER: ""})  # sin token válido
     for method, path in [("get", "/api/health"), ("get", "/api/capture"), ("post", "/api/demo"),
-                         ("post", "/api/analyze"), ("get", "/openapi.json"), ("get", "/docs")]:
+                         ("post", "/api/analyze"), ("get", "/openapi.json")]:
         assert getattr(c, method)(path).status_code in (401, 403, 404)
     assert c.get("/api/health").status_code == 401
     assert c.post("/api/analyze", json={"path": "x.pcap"}).status_code == 401

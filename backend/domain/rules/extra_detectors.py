@@ -215,7 +215,7 @@ class LargeUploadDetector(Detector):
 
     def feed(self, d):
         size = len(d.payload)
-        if not size:
+        if not size or d.proto not in (6, 17):
             return []
         key = (d.src, d.dst)
         total = self._sent.get(key, 0) + size
@@ -337,6 +337,8 @@ class ThresholdDetector(Detector):
 
     def _matches(self, d: Decoded) -> bool:
         p = self.p
+        if d.proto not in (6, 17):  # ICMP es de otros detectores
+            return False
         wanted = _PROTOCOLS[p["protocol"]]
         if wanted is not None and d.proto != wanted:
             return False
@@ -376,6 +378,11 @@ DETECTORS: Dict[str, Type[Detector]] = {
     "brute_force": BruteForceDetector,
     "threshold": ThresholdDetector,
 }
+
+# Detectores de amenazas: van al final porque reusan los helpers de este módulo
+from backend.domain.rules import threat_detectors as _threat  # noqa: E402
+
+DETECTORS.update(getattr(_threat, "DETECTORS", {}))
 
 # Si este módulo se importó ANTES que engine, engine ya terminó de cargarse
 _engine.DETECTORS.update(DETECTORS)

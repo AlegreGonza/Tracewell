@@ -1,0 +1,32 @@
+id: dga_nxdomain
+name: Ráfaga de NXDOMAIN con nombres aleatorios
+description: >
+  Un equipo recibió muchas respuestas «el dominio no existe» (NXDOMAIN) en poco
+  tiempo y la mayoría eran de nombres que parecen generados al azar, patrón
+  típico de malware con algoritmo de generación de dominios (DGA) buscando su C2.
+severity: high
+detector: dga_nxdomain
+mitre:
+  technique: T1568.002
+  name: "Dynamic Resolution: Domain Generation Algorithms"
+  tactic: Command and Control
+params:
+  min_nxdomain: 20        # NXDOMAIN distintos para disparar
+  window_seconds: 60      # ventana de tiempo
+  min_random_ratio: 0.5   # proporción mínima de nombres de aspecto aleatorio (0 = solo volumen)
+  min_label_length: 8     # el dominio registrable debe tener al menos estos caracteres
+  min_entropy: 2.5        # entropía mínima (bits por carácter) del dominio registrable
+  max_vowel_ratio: 0.3    # proporción máxima de vocales; con dígitos o guiones no se exige
+  ignore_suffixes: [arpa, local]
+  # Excepciones: allow_hosts: [192.168.1.10, 10.0.5.0/24]   allow_services: [dns]
+
+false_positives:
+  - Un cliente con el sufijo de búsqueda mal configurado que consulta nombres internos inexistentes (suelen ser legibles, no aleatorios).
+  - Un antivirus o un cliente de correo que consulta listas de reputación (DNSBL) con nombres generados.
+  - Un programa en pruebas o un escáner de dominios que consulta nombres inexistentes a propósito.
+investigation_steps:
+  - Ver los dominios de ejemplo de la evidencia, ¿parecen palabras o cadenas al azar?
+  - Revisar qué equipo origina las consultas y si algún nombre sí resolvió.
+  - Buscar al mismo origen en otras alertas (beaconing, conexiones a puertos raros) antes de contener.
+  - Comparar los dominios con la lista de IOC cargada y con inteligencia de amenazas propia.
+wireshark_filter: dns.flags.rcode == 3

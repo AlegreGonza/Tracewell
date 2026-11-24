@@ -24,7 +24,7 @@ Windows 10 (1809 o posterior) y Windows 11 traen `winget`. Si no lo tenés, el s
 Con el zip, descomprimí, entrá a la carpeta `tracewell-<versión>` y seguí con la instalación de abajo. Junto al zip se publica un archivo `.sha256` para verificar que la descarga no se corrompió:
 
 ```powershell
-(Get-FileHash .\tracewell-0.3.0.zip -Algorithm SHA256).Hash
+(Get-FileHash .\tracewell-0.4.0.zip -Algorithm SHA256).Hash
 ```
 
 El resultado tiene que coincidir con el contenido del `.sha256` (en minúsculas allá). En Linux/macOS los scripts `.sh` salen del zip sin permiso de ejecución: usá `bash instalar.sh` y `bash iniciar.sh`.
@@ -93,7 +93,7 @@ Se puede ejecutar varias veces: lo que ya está listo se omite (la segunda corri
 ./iniciar.sh --serve-only
 ```
 
-Opciones: `--check` (solo informa) y `--dev` (también las dependencias de tests). El script **no usa `sudo` ni instala paquetes del sistema**: si falta algo (por ejemplo `python3-venv` en Debian/Ubuntu), te lo indica. En Linux/macOS la ventana de escritorio depende de GTK/WebKit o Qt y **no está probada**; usá `--serve-only` y el navegador. En macOS nada se probó.
+Opciones: `--check` (solo informa) y `--dev` (también las dependencias de tests). El script **no usa `sudo` ni instala paquetes del sistema**: si falta algo (por ejemplo `python3-venv` en Debian/Ubuntu), te lo indica. En Linux/macOS la ventana de escritorio depende de GTK/WebKit o Qt. **En Linux la ventana se probó** (commit `eb52c5f`) y la suite de tests del backend corre en Linux (Docker `python:3.12-slim`, ver `docs/pruebas.md`); **en macOS no se probó nada**. Si la ventana no abre, usá `--serve-only` y el navegador.
 
 ## Captura en vivo (opcional)
 

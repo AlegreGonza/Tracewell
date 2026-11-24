@@ -1,0 +1,30 @@
+id: smb_rpc_lateral
+name: SMB/RPC hacia muchos equipos internos
+description: >
+  Un equipo interno abrió conexiones al puerto de SMB (445) o de RPC (135) de
+  muchos equipos internos distintos en poco tiempo, patrón típico de movimiento
+  lateral (PsExec, WMI, propagación de gusanos o ransomware).
+severity: high
+detector: smb_rpc_lateral
+mitre:
+  technique: T1021
+  name: Remote Services
+  tactic: Lateral Movement
+params:
+  ports: [445, 135]
+  min_hosts: 8             # equipos internos distintos para disparar
+  window_seconds: 300      # ventana de tiempo
+  internal_only: true      # solo origen y destino en redes privadas
+  # Servidores de archivos, controladores de dominio o gestión de TI: agréguelos aquí.
+  # allow_hosts: [10.0.0.5, 10.0.0.6]
+
+false_positives:
+  - Un controlador de dominio, un servidor de archivos o de impresión, o una consola de gestión que habla con muchos equipos por diseño.
+  - Software de inventario, de parches (WSUS, SCCM) o de respaldo que recorre la red.
+  - Un administrador que ejecuta una herramienta de gestión remota autorizada.
+investigation_steps:
+  - Confirmar si el origen es un servidor o una herramienta de gestión conocida.
+  - Ver qué destinos respondieron (SYN+ACK) y si hubo transferencia de datos después.
+  - Revisar en el origen los procesos nuevos y los inicios de sesión de red (eventos 4624 y 4672, tipo 3).
+  - Aislar el equipo si no es esperado y buscar al mismo origen en otras alertas.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0 && tcp.dstport in {445 135}

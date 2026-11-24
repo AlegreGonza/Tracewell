@@ -1,0 +1,25 @@
+id: user_agent_scanner
+name: User-Agent de herramienta de escaneo
+description: >
+  Una petición HTTP llevó un User-Agent de una herramienta de reconocimiento o
+  de explotación conocida (nmap, sqlmap, nikto...), que no se disfraza de navegador.
+severity: high
+detector: user_agent
+mitre:
+  technique: T1595.002
+  name: "Active Scanning: Vulnerability Scanning"
+  tactic: Reconnaissance
+params:
+  patterns: [nmap, sqlmap, nikto, masscan, zgrab, gobuster, dirbuster, wpscan, nuclei, hydra]
+  flag_empty: false
+  min_length: 0
+  # Excepciones: allow_hosts: [10.0.5.20]   allow_services: [8080]
+
+false_positives:
+  - Un escáner de vulnerabilidades autorizado (Nessus, OpenVAS, nuclei del equipo de seguridad).
+  - Pruebas de intrusión programadas con el aviso correspondiente.
+investigation_steps:
+  - Confirmar si el origen es un equipo de escaneo autorizado (inventario, ticket de cambio).
+  - Ver qué rutas pidió (evidencia) y qué respondió el servidor.
+  - Si el origen es externo, evaluar bloquearlo y revisar los registros del servidor web.
+wireshark_filter: http.request

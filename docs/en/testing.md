@@ -20,17 +20,22 @@ Frontend:
 
 ```bash
 cd frontend
-npm test
+corepack pnpm test            # unit and component tests (vitest)
+corepack pnpm test:e2e:install # once: downloads Chromium
+corepack pnpm test:e2e         # 3 end-to-end flows against the real backend
 ```
 
-There are about 4,060 Python tests and about 1,310 frontend tests. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
+The test counts change with every commit, so they are not written here: see the latest [CI run](https://github.com/AlegreGonza/Tracewell/actions/workflows/ci.yml) or measure them with `python -m pytest -q` and `corepack pnpm test`. Besides normal cases, each module covers edge cases (empty files, truncated packets, invalid IPs, out-of-range ports) and expected errors. Several modules are also fuzzed with random and mutated packets to make sure bad input never crashes the analysis.
+
+The backend suite runs on Linux and Windows (Python 3.11 and 3.13) in GitHub Actions (`.github/workflows/ci.yml`) and can be reproduced locally in Docker with `./verificar.sh --linux`; the whole flow (ruff, bandit, pip-audit, pytest, frontend lint/test/build/audit) is described in [`docs/pruebas.md`](../pruebas.md) (Spanish). The CI also builds a CycloneDX SBOM of the pinned runtime dependencies.
 
 **Live capture is not tested against a real network in CI.** Its tests use a simulated interface. Real-hardware validation is a manual checklist: [`docs/checklist_hardware.md`](../checklist_hardware.md) (in Spanish).
 
 ### Linters
 
 - **Python:** `python -m ruff check backend main.py` (pyflakes rules: unused imports, undefined names). `ruff` is in the `dev` extra of `pyproject.toml`.
-- **Frontend:** `cd frontend && npm run lint` (ESLint, flat config in `frontend/eslint.config.js`).
+- **Security:** `bandit -r backend main.py -ll -c pyproject.toml` and `pip-audit --require-hashes -r requirements.lock`.
+- **Frontend:** `cd frontend && corepack pnpm run lint` (ESLint, flat config in `frontend/eslint.config.js`).
 - Details (including line-ending policy and security headers): [`docs/desarrollo.md`](../desarrollo.md) (in Spanish).
 
 ### Static analysis (optional)

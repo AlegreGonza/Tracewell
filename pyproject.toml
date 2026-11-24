@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tracewell"
-version = "0.3.0"
+version = "0.4.0"
 requires-python = ">=3.11"
 dependencies = [
     "dpkt>=1.9.8,<2",      # lectura de pcap/pcapng y decodificación de capas
@@ -14,6 +18,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=9.2,<10", "pytest-cov>=7.1,<8", "httpx2>=2.16.2,<3", "ruff>=0.17.6,<0.18"]  # httpx2: lo usa TestClient (Starlette); ruff: linter
+
+[tool.setuptools]
+py-modules = ["main"]  # punto de entrada de escritorio; rules/, samples/ y data/ no se empaquetan
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+exclude = ["*.tests", "*.tests.*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 # Los tests viven dentro de cada módulo; pythonpath "." permite `import backend...`.
@@ -31,3 +43,7 @@ select = ["F"]
 # El fixture `mk` se importa de test_engine y cada test lo recibe por nombre (idioma de pytest)
 "backend/domain/rules/tests/test_dns_ignore_suffixes.py" = ["F811"]
 "backend/domain/rules/tests/test_lentos_y_contenido.py" = ["F811"]
+
+[tool.bandit]
+# Los tests usan assert y datos falsos a propósito: se auditan solo los módulos de producción.
+exclude_dirs = ["tests", "**/tests"]

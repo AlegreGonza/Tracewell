@@ -66,3 +66,36 @@ alcanza un tope el archivo sale COMPLETO HASTA AHÍ y se avisa (`truncated`), nu
 
 - `<módulo>`: dpkt no recorta con este valor: es solo lo que se declara en la cabecera global
 
+## siem.py
+
+Exportación de alertas a un SIEM. Lógica pura: recibe `Alert` y devuelve texto, una línea por alerta. Ninguna
+línea lleva rutas ni nombres de archivo ni del equipo; la evidencia ya viene sin secretos (la contraseña de FTP
+va como `<oculta>`).
+
+| Formato (`format=`) | Salida | Archivo |
+|---|---|---|
+| `ecs` (defecto) | NDJSON de Elastic Common Schema 8.11, un documento por línea (`application/x-ndjson`) | `tracewell-alerts.ndjson` |
+| `cef` | ArcSight CEF:0 (`text/plain`) | `tracewell-alerts.cef` |
+| `syslog` | syslog RFC 5424 (facilidad local0) con el CEF dentro, HOSTNAME `-` (`text/plain`) | `tracewell-alerts.log` |
+
+### ECS
+
+Campos: `@timestamp` (UTC, ms, `Z`), `ecs.version`, `event.{kind: alert, category, type, severity, module:
+tracewell, dataset: tracewell.alert}`, `message`, `rule.{id,name,description}`, `source.ip`, `destination.ip`
+(y `destination.port` si la evidencia trae `destination_port` o `port`), `threat.framework`
+(`MITRE ATT&CK`), `threat.tactic.{id,name,reference}` (listas; `TA0043`...), `threat.technique.{id,name,reference}`
+(listas) y `threat.technique.subtechnique.*` cuando el ID es `T####.###` (el padre sale del nombre
+«Padre: Hija»). Lo propio de Tracewell va en `tracewell.severity` y `tracewell.evidence`; `tags: [tracewell]`.
+`event.severity` usa los puntajes de riesgo de Elastic: low 21, medium 47, high 73, critical 99.
+
+### CEF y syslog
+
+`CEF:0|Tracewell|Tracewell|<versión de la app>|<rule_id>|<nombre>|<severidad 0-10>|<extensión>`. Severidad CEF:
+low 3, medium 5, high 8, critical 10. Extensión: `rt` (epoch ms), `src`, `dst`, `dpt`, `cat` (táctica), `msg`
+(descripción), `cs1` táctica, `cs2` ID de técnica, `cs3` nombre de técnica, `cs4` severidad, `cs5` evidencia en
+JSON compacto (truncada a 900 caracteres, con `...`). Se escapan `\`, `|` en la cabecera y `\`, `=` y saltos de
+línea en la extensión, y se reemplazan los demás caracteres de control. Syslog: `<PRI>1 <ISO8601> - tracewell -
+ALERT - CEF:0|...` con PRI = 16*8 + severidad syslog (low 6, medium 5, high 4, critical 2).
+
+`render(alertas, formato, versión, min_severity)` es la fachada que usa la API; `media_info(formato)` da el tipo
+de contenido y el nombre del archivo; `filter_min_severity` conserva las alertas desde esa severidad.

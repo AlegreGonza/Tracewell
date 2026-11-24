@@ -1,0 +1,30 @@
+id: tls_certificate
+name: Certificado TLS autofirmado o vencido
+description: >
+  Un servidor público presentó un certificado autofirmado o ya vencido en el
+  handshake TLS. La infraestructura de malware suele usar certificados propios
+  o abandonados; un servicio legítimo en Internet los mantiene vigentes y firmados por una CA.
+severity: medium
+detector: tls_certificate
+mitre:
+  technique: T1573
+  name: Encrypted Channel
+  tactic: Command and Control
+params:
+  flag_self_signed: true
+  flag_expired: true
+  # Solo servidores públicos: routers, impresoras y servicios internos usan certificados propios.
+  external_only: true
+  # Excepciones: allow_hosts: [203.0.113.10]   allow_services: [8443]
+
+false_positives:
+  - Equipos de red, cámaras, VPN o aplicaciones de terceros que usan certificados autofirmados a propósito.
+  - Un servicio legítimo al que se le olvidó renovar el certificado.
+  - Capturas antiguas, donde el vencimiento se compara con la hora de la captura, no con la de hoy.
+  - En TLS 1.3 el certificado va cifrado, así que no se puede evaluar.
+investigation_steps:
+  - Mirar el sujeto, el emisor y las fechas de la evidencia.
+  - Comprobar si el dominio (SNI) y la IP pertenecen a un servicio conocido de la organización.
+  - Ver qué equipo se conectó y con qué proceso, y si hay beaconing hacia el mismo destino.
+  - Buscar el hash SHA-256 del certificado en fuentes de inteligencia de amenazas.
+wireshark_filter: tls.handshake.type == 11

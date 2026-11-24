@@ -1,6 +1,7 @@
 """API de «Soporte de red → Sistema»"""
 import json
 import sys
+import types
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,8 +20,16 @@ def client():
     return TestClient(create_app(sampler_factory=None))
 
 
+def _winreg_vacio():
+    def abrir(*_a, **_k):
+        raise OSError("clave inexistente")
+    return types.SimpleNamespace(HKEY_CURRENT_USER=1, HKEY_LOCAL_MACHINE=2, OpenKey=abrir)
+
+
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
+    if sys.platform != "win32":  # autostart forzado a Windows: winreg falso y vacío (solo lectura)
+        monkeypatch.setitem(sys.modules, "winreg", _winreg_vacio())
     exe = tmp_path / "prog.bin"
     exe.write_bytes(b"contenido")
     monkeypatch.setattr(procs.time, "sleep", lambda s: None)
