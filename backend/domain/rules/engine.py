@@ -361,9 +361,7 @@ class PortScanDetector(Detector):
 
     def _note_answer(self, d: Decoded) -> None:
         """Un SYN+ACK del servidor marca ese puerto como servicio real, no sondeo."""
-        if not self.p.get("long_window_seconds", 0) or d.proto != 6:
-            return
-        if d.flags & (TCP_SYN | TCP_ACK) != TCP_SYN | TCP_ACK:
+        if d.proto != 6 or d.flags & (TCP_SYN | TCP_ACK) != TCP_SYN | TCP_ACK:
             return
         key = (d.dst, d.src)  # el SYN+ACK va en sentido inverso al SYN
         answered = self._answered.get(key)
@@ -372,12 +370,15 @@ class PortScanDetector(Detector):
         if len(answered) < _MAX_ANSWERED_PORTS:
             answered.add(d.sport)
         self._answered[key] = answered
-        long_ports = self._seen_long.get(key)
-        if long_ports:
-            long_ports.pop(d.sport, None)
+        for seen in (self._seen, self._seen_long):  # lo que respondió no cuenta como sondeo
+            ports = seen.get(key)
+            if ports:
+                ports.pop(d.sport, None)
 
     def _feed_short(self, key, d: Decoded) -> List[Alert]:
-        """Ventana corta: muchos puertos en pocos segundos."""
+        """Ventana corta: muchos puertos sin respuesta en pocos segundos."""
+        if d.dport in self._answered.get(key, ()):
+            return []
         ports = self._record_port(key, d)
         minimum = self.p["min_ports"]
         if len(ports) < minimum:
@@ -458,7 +459,7 @@ class FtpCleartextDetector(Detector):
         self._alerted[(d.src, d.dst, user)] = True
         return [self._alert(d, {
             "username": user,
-            "password": "<oculta>",
+            "password": "<oculta>",  # nosec B105 - marcador de texto
             "password_length": len(value.strip()),
             "port": d.dport,
             "protocol": self._protocol(d),
@@ -508,6 +509,10 @@ def split_registrable(name: str) -> Tuple[str, str]:
     return ".".join(labels[:-keep]), ".".join(labels[-keep:])
 
 
+# Localizador de servicios (SRV): _ldap._tcp.<GUID>.domains._msdcs.corp.local lo hace todo Active Directory
+_SRV_NAME = re.compile(r"_[a-z0-9-]+\._(?:tcp|udp|tls)\.", re.IGNORECASE)
+
+
 class DnsSuspiciousDetector(Detector):
     """Consultas DNS con nombres que parecen datos y no nombres humanos."""
 
@@ -532,6 +537,8 @@ class DnsSuspiciousDetector(Detector):
     def _is_ignored(self, name: str) -> bool:
         """True si el nombre es un dominio ignorado o cuelga de uno (con límite de label)."""
         host = name.rstrip(".")
+        if _SRV_NAME.match(host):  # shortcut: un túnel podría imitar _x._tcp.; subirlo a parámetro si molesta
+            return True
         return any(host == s or host.endswith("." + s) for s in self.p.get("ignore_suffixes", ()))
 
     @staticmethod

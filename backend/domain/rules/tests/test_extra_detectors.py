@@ -236,9 +236,9 @@ def test_syn_flood_una_alerta_por_destino_y_puerto(tmp_path):
 
 
 def test_syn_flood_params(tmp_path):
-    assert len(run(tmp_path, "syn_flood", syns(20, step=0.1), {"min_syns": 20, "window_seconds": 5})) == 1
+    assert len(run(tmp_path, "syn_flood", syns(20, step=0.1), {"min_syns": 20, "window_seconds": 5, "min_pps": 0})) == 1
     assert run(tmp_path, "syn_flood", syns(20, step=1.0), {"min_syns": 20, "window_seconds": 5}) == []
-    assert len(run(tmp_path, "syn_flood", syns(20, step=1.0), {"min_syns": 20, "window_seconds": 30})) == 1
+    assert len(run(tmp_path, "syn_flood", syns(20, step=1.0), {"min_syns": 20, "window_seconds": 30, "min_pps": 0})) == 1
 
 
 def test_syn_flood_udp_y_syn_con_payload(tmp_path):
@@ -262,7 +262,7 @@ def test_suspicious_ports_syn_a_4444_alerta(tmp_path):
     assert (a[0].src_ip, a[0].dst_ip, a[0].evidence) == ("10.0.0.5", PUB, {"port": 4444, "source_port": 51000})
 
 
-@pytest.mark.parametrize("port", [4444, 31337, 1337, 12345, 54321, 9001])
+@pytest.mark.parametrize("port", [4444, 31337, 1337, 12345, 54321])
 def test_suspicious_ports_lista_por_defecto(tmp_path, port):
     assert len(run(tmp_path, "suspicious_ports", [tcp(1.0, dport=port)])) == 1
 
@@ -573,9 +573,9 @@ def test_parametros_validos_extremos_se_aceptan(tmp_path):
 def test_defaults_de_los_detectores(tmp_path):
     p = {d: make_rules(tmp_path, d)[0].params for d in X.DETECTORS}
     assert p["beaconing"] == {"min_events": 8, "min_interval_seconds": 5.0, "max_jitter": 0.15,
-                              "ignore_ports": [53, 123, 5353, 137, 138, 1900, 67, 68]}
-    assert p["syn_flood"] == {"min_syns": 200, "window_seconds": 10.0}
-    assert p["suspicious_ports"] == {"ports": [4444, 31337, 1337, 12345, 54321, 9001]}
+                              "ignore_ports": [53, 123, 5353, 137, 138, 1900, 67, 68], "max_pairs_per_port": 3}
+    assert p["syn_flood"] == {"min_syns": 200, "window_seconds": 10.0, "min_pps": 50.0}
+    assert p["suspicious_ports"] == {"ports": [4444, 31337, 1337, 12345, 54321], "min_hosts": 3}
     assert "8.8.8.8" in p["dns_unusual_resolver"]["allowed_resolvers"]
     assert p["large_upload"] == {"min_bytes": 10_000_000, "min_ratio": 5.0, "external_only": True}
 
@@ -584,7 +584,7 @@ def test_defaults_de_los_detectores(tmp_path):
 
 def test_reglas_reales_cargan_y_mapean_a_detectores_conocidos():
     rules = load_rules(ROOT / "rules")
-    assert len(rules) == 16
+    assert len(rules) == 17
     # "threshold" es la regla que arma el analista desde la interfaz
     assert {r.detector for r in rules} == set(X._engine.DETECTORS) - {"threshold"}
 
@@ -611,7 +611,7 @@ def _names(first):
 
 EXPECTED = sorted(["port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
                    "dns_unusual_resolver", "large_upload", "brute_force", "threshold", "dga_nxdomain",
-                   "ja4_blocklist", "tls_certificate", "user_agent", "smb_rpc_lateral", "icmp_tunnel"])
+                   "ja4_blocklist", "tls_certificate", "user_agent", "smb_rpc_lateral", "icmp_tunnel", "host_sweep"])
 
 
 @pytest.mark.parametrize("first", ["backend.domain.rules.engine", "backend.domain.rules.extra_detectors"])

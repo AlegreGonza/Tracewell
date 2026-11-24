@@ -87,7 +87,7 @@ def health():
 
 @router.post("/analyze")
 def analyze_file(req: AnalyzeRequest, ctx: CtxDep):
-    path = require_allowed_file(req.path, ctx.allowed_dirs, "archivo .pcap/.pcapng", ANALYZE_EXTENSIONS)
+    path = require_allowed_file(req.path, ctx.allowed_dirs, "archivo .pcap/.pcapng", ANALYZE_EXTENSIONS, ctx.grants)
     return _analyze_path(ctx, path)
 
 

@@ -112,7 +112,7 @@ def test_servicios_windows_un_servicio_ilegible_no_rompe(win, monkeypatch):
     patch_psutil(monkeypatch, FakePsutil(services=[svc("ok"), svc("roto", _fail=True)]))
     out = services()
     assert out["total"] == 2
-    broken = next(r for r in out["items"] if r["name"] is None)
+    broken = next(r for r in out["items"] if r["name"] == "roto")  # conserva el nombre
     assert broken["display"] is None and broken["hints"] == []
 
 

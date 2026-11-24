@@ -18,7 +18,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 # El token viaja SOLO en esta cabecera. Las descargas (<a download>, sin cabeceras) usan un ticket.
-TOKEN_HEADER = "X-Tracewell-Token"
+TOKEN_HEADER = "X-Tracewell-Token"  # nosec B105 - nombre de cabecera, no un secreto
 TICKET_QUERY = "ticket"
 TICKET_TTL = 30.0  # segundos de vida de un ticket de descarga
 MAX_TICKETS = 256  # tope de tickets pendientes (los más viejos se descartan)
@@ -55,7 +55,7 @@ class TicketStore:
             entry = self._items.pop(ticket, None)
         return entry is not None and entry[0] == path and entry[1] > self._clock()
 
-# Mantine pone estilos en línea (atributo `style` y <style>): por eso `style-src 'unsafe-inline'`;
+# Radix/sonner/cmdk ponen estilos en línea (atributo `style` y <style>): por eso `style-src 'unsafe-inline'` (probado: sin él se bloquean <style> y estilos en línea);
 # los scripts, en cambio, solo los propios.
 SECURITY_HEADERS = {
     "Content-Security-Policy": (

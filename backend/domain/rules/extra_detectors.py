@@ -8,7 +8,8 @@ from typing import Deque, Dict, List, Tuple, Type
 
 from backend.domain.rules import engine as _engine
 from backend.domain.rules.engine import (
-    Decoded, Detector, DnsSuspiciousDetector, _int_range, _LRU, _num_range, _port_list, is_pure_syn,
+    TCP_ACK, TCP_SYN, Decoded, Detector, DnsSuspiciousDetector, _int_range, _LRU, _num_range, _port_list,
+    is_pure_syn,
 )
 
 # Puertos de servicios que hablan a intervalos regulares de forma normal
@@ -74,12 +75,15 @@ class BeaconingDetector(Detector):
         "min_interval_seconds": (_num_range(0.1), 5.0),
         "max_jitter": (_num_range(0.0, 1.0), 0.15),  # desvío / promedio de los intervalos
         "ignore_ports": (_ports_or_empty, _REGULAR_PORTS),
+        # Más pares (origen, destino) con el mismo ritmo en un puerto = protocolo, no un beacon (0 = apagado).
+        "max_pairs_per_port": (_int_range(0, 1000), 3),
     }
 
     def __init__(self, rule):
         super().__init__(rule)
         self._times = _LRU()  # (proto, origen, destino, puerto) -> instantes
         self._alerted = _LRU()
+        self._rhythmic = _LRU()  # (proto, puerto) -> pares que ya muestran un ritmo regular
 
     def _is_event(self, d: Decoded) -> bool:
         return (is_pure_syn(d) or d.proto == 17) and d.dport not in self.p["ignore_ports"]
@@ -90,6 +94,17 @@ class BeaconingDetector(Detector):
         del times[:-_MAX_TRACKED_EVENTS]
         self._times[key] = times  # refresca la recencia
         return times
+
+    def _note_rhythm(self, d: Decoded, pair) -> None:
+        pairs = self._rhythmic.get((d.proto, d.dport)) or set()
+        if len(pairs) < 1000:  # tope por puerto
+            pairs.add(pair)
+        self._rhythmic[(d.proto, d.dport)] = pairs
+
+    def _is_protocol(self, d: Decoded) -> bool:
+        """Muchos pares con el mismo ritmo en un puerto: latidos de un protocolo (juegos, VPN, keepalive)."""
+        limit = self.p.get("max_pairs_per_port", 0)
+        return bool(limit) and len(self._rhythmic.get((d.proto, d.dport), ())) > limit
 
     def _regularity(self, times: List[float]) -> Tuple[float, float]:
         """(intervalo promedio, jitter) de los instantes dados."""
@@ -104,12 +119,18 @@ class BeaconingDetector(Detector):
         if key in self._alerted:
             return []
         times = self._record(key, d.ts)
-        if len(times) < self.p["min_events"]:
+        minimum = self.p["min_events"]
+        if len(times) < minimum // 2:
             return []
         mean, jitter = self._regularity(times)
-        if mean < self.p["min_interval_seconds"] or jitter > self.p["max_jitter"]:
+        regular = mean >= self.p["min_interval_seconds"] and jitter <= self.p["max_jitter"]
+        if regular and len(times) <= minimum:
+            self._note_rhythm(d, key)  # candidatos: así el primero que llega ya ve a los demás
+        if len(times) < minimum or not regular:
             return []
         self._alerted[key] = True
+        if self._is_protocol(d):
+            return []
         return [self._alert(d, {
             "events": len(times), "mean_interval_seconds": round(mean, 2), "jitter": round(jitter, 3),
             "destination_port": d.dport, "protocol": "TCP" if d.proto == 6 else "UDP",
@@ -124,6 +145,8 @@ class SynFloodDetector(Detector):
     PARAMS = {
         "min_syns": (_int_range(10, 1_000_000), 200),
         "window_seconds": (_num_range(0.001), 10.0),
+        # Ritmo mínimo (SYN por segundo): una ráfaga lenta de un origen no es una inundación (0 = sin mínimo).
+        "min_pps": (_num_range(0.0), 50.0),
     }
 
     def __init__(self, rule):
@@ -143,6 +166,8 @@ class SynFloodDetector(Detector):
         span = recent[-1][0] - recent[0][0]
         if span > self.p["window_seconds"]:
             return []  # los SYN más recientes no caben en la ventana
+        if len(recent) / max(span, 0.001) < self.p.get("min_pps", 0):
+            return []  # demasiado lento para ser una inundación; puede alcanzar el ritmo más adelante
         self._alerted[key] = True
         return [self._alert(d, {
             "syn_packets": len(recent), "distinct_sources": len({src for _, src in recent}),
@@ -155,21 +180,93 @@ class SynFloodDetector(Detector):
 class SuspiciousPortsDetector(Detector):
     """Intentos de conexión a puertos que usan herramientas de ataque o puertas traseras conocidas."""
 
-    PARAMS = {"ports": (_port_list, [4444, 31337, 1337, 12345, 54321, 9001])}
+    PARAMS = {
+        "ports": (_port_list, [4444, 31337, 1337, 12345, 54321]),
+        # Un origen público toca el puerto en muchos destinos = barrido de internet: una sola alerta
+        # al llegar a este número de destinos. Un origen interno alerta al primer SYN.
+        "min_hosts": (_int_range(1, 1000), 3),
+    }
 
     def __init__(self, rule):
         super().__init__(rule)
         self._alerted = _LRU()
+        self._hosts = _LRU()  # (origen público, puerto) -> destinos distintos vistos
+
+    def _external_hit(self, d: Decoded):
+        """Evidencia al llegar a `min_hosts` destinos distintos; antes solo cuenta (None)."""
+        key = (d.src, d.dport)
+        hosts = self._hosts.get(key) or {}
+        hosts.setdefault(d.dst, d.ts)
+        self._hosts[key] = hosts
+        if len(hosts) < self.p["min_hosts"]:
+            return None
+        self._hosts.pop(key, None)
+        self._alerted[key] = True
+        return {"port": d.dport, "source_port": d.sport, "distinct_hosts": len(hosts),
+                "first_destination": next(iter(hosts))}
 
     def feed(self, d):
         # Solo el SYN que inicia la conexión
         if not is_pure_syn(d) or d.dport not in self.p["ports"]:
             return []
-        key = (d.src, d.dst, d.dport)
+        external = _is_external(d.src)
+        key = (d.src, d.dport) if external else (d.src, d.dst, d.dport)
         if key in self._alerted:
             return []
+        if external:
+            evidence = self._external_hit(d)
+        else:
+            self._alerted[key] = True
+            evidence = {"port": d.dport, "source_port": d.sport}
+        return [self._alert(d, evidence)] if evidence else []
+
+
+# ------------------------------------------------------------ barrido de red
+
+class HostSweepDetector(Detector):
+    """Una IP prueba el mismo puerto en muchos equipos distintos sin que respondan (barrido de red)."""
+
+    PARAMS = {
+        "min_hosts": (_int_range(3, 100_000), 20),
+        "window_seconds": (_num_range(0.001), 60.0),
+    }
+
+    def __init__(self, rule):
+        super().__init__(rule)
+        self._seen = _LRU()  # (origen, puerto) -> {destino: instante} de los SYN sin respuesta
+        self._alerted = _LRU()
+
+    def _note_answer(self, d: Decoded) -> None:
+        """Un SYN+ACK marca ese destino como servicio real: no cuenta para el barrido."""
+        if d.proto != 6 or d.flags & (TCP_SYN | TCP_ACK) != TCP_SYN | TCP_ACK:
+            return
+        hosts = self._seen.get((d.dst, d.sport))
+        if hosts:
+            hosts.pop(d.src, None)
+
+    def feed(self, d):
+        if not is_pure_syn(d):
+            self._note_answer(d)
+            return []
+        key = (d.src, d.dport)
+        if key in self._alerted:
+            return []
+        hosts = self._seen.get(key) or {}
+        hosts[d.dst] = d.ts
+        self._seen[key] = hosts
+        minimum = self.p["min_hosts"]
+        if len(hosts) < minimum:
+            return []
+        for host in [h for h, t in hosts.items() if d.ts - t > self.p["window_seconds"]]:
+            del hosts[host]
+        if len(hosts) < minimum:
+            return []
         self._alerted[key] = True
-        return [self._alert(d, {"port": d.dport, "source_port": d.sport})]
+        self._seen.pop(key, None)
+        return [self._alert(d, {
+            "distinct_hosts": len(hosts), "sample_hosts": sorted(hosts)[:10],
+            "destination_port": d.dport, "window_seconds": self.p["window_seconds"], "threshold": minimum,
+        }, ts=min(hosts.values()))]
 
 
 # ------------------------------------------------------ DNS a resolvedor raro
@@ -373,6 +470,7 @@ DETECTORS: Dict[str, Type[Detector]] = {
     "beaconing": BeaconingDetector,
     "syn_flood": SynFloodDetector,
     "suspicious_ports": SuspiciousPortsDetector,
+    "host_sweep": HostSweepDetector,
     "dns_unusual_resolver": DnsUnusualResolverDetector,
     "large_upload": LargeUploadDetector,
     "brute_force": BruteForceDetector,

@@ -24,6 +24,7 @@ SYN, ACK, PSH, FIN, RST = (dpkt.tcp.TH_SYN, dpkt.tcp.TH_ACK, dpkt.tcp.TH_PUSH,
 
 ROUTER, SERVIDOR, MONITOR, CLIENTE = "10.0.0.1", "10.0.0.5", "10.0.0.10", "10.0.0.20"
 ATACANTE_LAN, ATACANTE_WAN = "10.0.0.66", "203.0.113.50"
+ESCANER_INTERNET = "45.155.205.7"  # IP pública de verdad (203.0.113.0/24 es de documentación)
 WEB, CDN, NUBE = "93.184.216.34", "151.101.1.69", "52.95.110.1"
 SEGMENTO_GRANDE = 65000  # bytes de datos por segmento en las subidas grandes
 SEGMENTOS_GRANDES = 156  # 156 * 65000 = 10,14 MB (> min_bytes de large_upload)
@@ -97,6 +98,14 @@ def _escaneo_rapido(tl, rng):
 def _escaneo_lento(tl, rng):
     for i in range(25):
         tl.add(tcp(ATACANTE_LAN, SERVIDOR, 40000, 2000 + i, SYN), rng.uniform(9, 11))
+
+
+def _barrido(origen, puerto, equipos):
+    """Un puerto probado en muchos equipos de la LAN, sin que ninguno responda."""
+    def construir(tl, rng):
+        for i in range(equipos):
+            tl.add(tcp(origen, f"10.0.{1 + i // 200}.{i % 200 + 1}", 40000 + i, puerto, SYN), rng.uniform(0.05, 0.2))
+    return construir
 
 
 def _fuerza_bruta(origen, destino, puerto, intentos, lo, hi):
@@ -218,6 +227,19 @@ def _login_ad(tl, rng):
         tl.conexion(CLIENTE, "10.0.0.2", 51000 + i, puerto, rng.uniform(0.05, 0.15))
 
 
+def _muchos_sitios(tl, rng):
+    """Navegar a 30 sitios públicos distintos: todos contestan."""
+    for i in range(30):
+        tl.conexion(CLIENTE, f"93.184.{i // 200}.{i % 200 + 1}", 52000 + i, 443, rng.uniform(0.05, 0.3))
+
+
+def _latidos_protocolo(tl, rng):
+    """8 pares distintos que se hablan por UDP/20001 cada 5 s (keepalive de un protocolo)."""
+    for i in range(10):
+        for par in range(8):
+            tl.add(udp(f"198.51.100.{par + 1}", f"192.0.2.{par + 1}", 43000 + par, 20001, b"hb"), 0.1 if par else 5.0)
+
+
 def _dns_normal(tl, rng):
     nombres = ["www.example.com", "mail.example.org", "api.github.com", "login.microsoftonline.com",
                "internal-svc-prod-alb-1234567890.us-east-1.elb.amazonaws.com"]
@@ -304,6 +326,14 @@ CASOS: List[Caso] = [
     Caso("pos_ataque_combinado", "escaneo + fuerza bruta SSH + FTP en claro del mismo origen", _ataque_combinado,
          [_esp("port_scan", ATACANTE_LAN, SERVIDOR), _esp("brute_force_remote", ATACANTE_LAN, SERVIDOR),
           _esp("ftp_cleartext", ATACANTE_LAN, SERVIDOR)], ["positivo"]),
+    Caso("pos_barrido_vnc", "una IP prueba el puerto 5900 en 30 equipos sin respuesta", _barrido(ATACANTE_WAN, 5900, 30),
+         [_esp("host_sweep", ATACANTE_WAN)], ["positivo"]),
+    Caso("pos_barrido_4444", "un escáner de internet prueba el 4444 en 40 equipos", _barrido(ESCANER_INTERNET, 4444, 40),
+         [_esp("host_sweep", ESCANER_INTERNET), _esp("suspicious_ports", ESCANER_INTERNET)], ["positivo"]),
+    Caso("ben_muchos_sitios", "navegar a 30 sitios públicos distintos (todos responden)", _muchos_sitios,
+         [], ["benigno", "dificil"]),
+    Caso("ben_latidos_protocolo", "8 pares con latidos UDP/20001 cada 5 s (protocolo)", _latidos_protocolo,
+         [], ["benigno", "dificil"]),
     Caso("ben_navegacion", "navegación normal: DNS local y 40 conexiones HTTPS irregulares", _navegacion, [], ["benigno"]),
     Caso("ben_cdn_rafaga", "70 conexiones HTTPS a un CDN en ~6 s (navegador)", _cdn_rafaga, [], ["benigno", "dificil"]),
     Caso("ben_pico_visitas", "250 clientes distintos a un servidor web en ~8 s (pico legítimo)", _pico_legitimo,

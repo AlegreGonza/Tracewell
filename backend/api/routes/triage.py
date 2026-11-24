@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from backend.domain.export.html_report import build_html, select_ids
 from backend.domain.export.json_export import build_report
-from backend.domain.files import require_allowed_file
+from backend.domain.files import IOC_EXTENSIONS, require_allowed_file
 from backend.domain.rules.iocs import load_iocs
 
 from backend.controllers.analysis import _process_of
@@ -63,7 +63,7 @@ def iocs_status(ctx: CtxDep):
 
 @router.post("/iocs")
 def iocs_load(req: IocRequest, ctx: CtxDep):
-    path = require_allowed_file(req.path, ctx.allowed_dirs, "archivo de texto")
+    path = require_allowed_file(req.path, ctx.allowed_dirs, "archivo de texto", IOC_EXTENSIONS, ctx.grants)
     ioc = load_iocs(path)  # IocError -> 422
     with ctx.state.lock:
         ctx.state.iocs, ctx.state.iocs_name = ioc, path.name  # solo el nombre: la ruta es del usuario

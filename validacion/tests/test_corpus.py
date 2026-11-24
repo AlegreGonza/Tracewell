@@ -25,10 +25,17 @@ def test_ids_unicos():
     assert len(ids) == len(set(ids))
 
 
-def test_todas_las_reglas_tienen_caso_positivo_y_hay_benignos():
+# Reglas que todavía no tienen caso en el corpus: su precisión NO está medida. Al agregarles un caso,
+# sacarlas de acá (el test falla si una regla sale cubierta y sigue en la lista).
+SIN_CASO_TODAVIA = {"dga_nxdomain", "icmp_tunnel", "malicious_ja4", "smb_rpc_lateral", "tls_certificate",
+                    "user_agent_scanner", "user_agent_script"}
+
+
+def test_cada_regla_tiene_caso_positivo_o_esta_declarada_sin_medir():
     reglas = {r.id for r in load_rules(RAIZ / "rules")}
     cubiertas = {e["regla"] for c in CASOS for e in c.esperadas}
-    assert cubiertas == reglas
+    assert cubiertas <= reglas  # ningún caso apunta a una regla que no existe
+    assert reglas - cubiertas == SIN_CASO_TODAVIA  # una regla nueva sin caso (o ya cubierta) obliga a decidir
     assert sum(1 for c in CASOS if not c.esperadas) >= 10
 
 

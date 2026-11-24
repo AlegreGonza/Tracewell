@@ -570,8 +570,8 @@ def test_scapy_permission_error_directo_mensaje_exacto(monkeypatch):
     msg = str(ei.value)
     assert msg == PERMISSION_HELP
     assert msg.startswith("permiso denegado: ejecutá Tracewell como administrador (Windows) o root (Linux)")
-    assert "sudo setcap cap_net_raw,cap_net_admin+eip $(readlink -f $(which python3))" in msg
-    assert "Restrict Npcap driver's access to Administrators only" in msg
+    assert "dumpcap" in msg and "grupo" in msg
+    assert "python3" not in msg  # nunca se aconseja dar el permiso al intérprete
     assert isinstance(ei.value, CaptureError)
 
 

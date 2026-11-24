@@ -88,9 +88,10 @@ uv pip compile requirements-dev.txt --universal --generate-hashes --no-annotate 
 
 `/api/analyze` y `/api/iocs` reciben una ruta que escribe el usuario. La ruta se resuelve con
 `Path.resolve()` (frena `..` y enlaces simbólicos) y debe quedar dentro de una carpeta permitida; si no, `403`
-con mensaje en español, aunque el archivo no exista (no se revela qué hay fuera). Por defecto: Descargas,
-Documentos y Escritorio del usuario (también los de OneDrive), la carpeta `samples/` del proyecto, la
-carpeta de captura en vivo y `<temp>/tracewell`. `/api/analyze` admite solo `.pcap`, `.pcapng` y `.cap`
+con mensaje en español, aunque el archivo no exista (no se revela qué hay fuera). Por defecto (mínimo
+privilegio): Descargas del usuario (también la de OneDrive), la carpeta `samples/` del proyecto y la
+carpeta de captura en vivo; además, cualquier archivo que el usuario elija en el diálogo nativo
+(`DesktopApi.pick_file` lo autoriza con `FileGrants`: solo ese archivo, no su carpeta). `/api/analyze` admite solo `.pcap`, `.pcapng` y `.cap`
 (`400` si no). Se configura con `create_app(allowed_dirs=[...])` o con la variable `TRACEWELL_ALLOWED_DIRS`
 (carpetas separadas por `;` en Windows o `:` en el resto): reemplaza la lista por defecto, y `samples/` y la
 carpeta de captura en vivo se suman siempre. El parámetro manda sobre la variable.

@@ -6,7 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.app import ROOT, create_app
-from backend.domain.files import ENV_ALLOWED_DIRS, default_allowed_dirs, resolve_allowed_dirs
+from pathlib import Path
+
+from backend.domain.files import ENV_ALLOWED_DIRS, FileGrants, default_allowed_dirs, resolve_allowed_dirs
 
 DEMO = ROOT / "samples" / "demo.pcap"
 
@@ -96,8 +98,76 @@ def test_varias_carpetas_en_la_variable_de_entorno(monkeypatch, zonas):
     assert set(resolve_allowed_dirs()) == {z.resolve() for z in zonas}
 
 
-def test_por_defecto_son_descargas_documentos_escritorio_sin_temporal_fija(monkeypatch):
-    monkeypatch.delenv(ENV_ALLOWED_DIRS)
+def test_por_defecto_solo_descargas_minimo_privilegio(monkeypatch):
+    monkeypatch.delenv(ENV_ALLOWED_DIRS, raising=False)
     nombres = {p.name for p in default_allowed_dirs()}
-    assert {"Downloads", "Documents", "Desktop"} <= nombres
+    assert nombres == {"Downloads"}  # Documentos y Escritorio enteros ya no se abren por defecto
     assert "tracewell" not in nombres  # <temp>/tracewell era predecible: otro usuario la crea antes
+
+
+# ------------------------------------------------------- permisos por archivo (diálogo nativo)
+@pytest.fixture
+def con_permisos(zonas):
+    grants = FileGrants()
+    return TestClient(create_app(sampler_factory=None, allowed_dirs=[zonas[0]], grants=grants)), grants
+
+
+def test_un_archivo_fuera_se_abre_solo_tras_elegirlo_en_el_dialogo(con_permisos, zonas):
+    c, grants = con_permisos
+    shutil.copy(DEMO, zonas[1] / "b.pcap")
+    assert analizar(c, zonas[1] / "b.pcap").status_code == 403
+    grants.grant(zonas[1] / "b.pcap")
+    assert analizar(c, zonas[1] / "b.pcap").status_code == 200
+
+
+def test_el_permiso_es_del_archivo_no_de_su_carpeta(con_permisos, zonas):
+    c, grants = con_permisos
+    shutil.copy(DEMO, zonas[1] / "b.pcap")
+    shutil.copy(DEMO, zonas[1] / "otra.pcap")
+    grants.grant(zonas[1] / "b.pcap")
+    assert analizar(c, zonas[1] / "otra.pcap").status_code == 403
+
+
+def test_el_permiso_no_salta_la_extension(con_permisos, zonas):
+    c, grants = con_permisos
+    (zonas[1] / "clave.pem").write_text("x", encoding="utf-8")
+    grants.grant(zonas[1] / "clave.pem")
+    r = analizar(c, zonas[1] / "clave.pem")
+    assert r.status_code == 400 and "extensión" in r.json()["detail"]
+
+
+def test_un_enlace_cambiado_despues_del_permiso_ya_no_vale(con_permisos, zonas):
+    c, grants = con_permisos
+    shutil.copy(DEMO, zonas[1] / "b.pcap")
+    shutil.copy(DEMO, zonas[1] / "secreto.pcap")
+    destino = zonas[1] / "enlace.pcap"
+    try:
+        destino.symlink_to(zonas[1] / "b.pcap")
+    except (OSError, NotImplementedError):
+        pytest.skip("este sistema no permite crear enlaces simbólicos")
+    grants.grant(destino)  # queda autorizado el archivo real (b.pcap)
+    destino.unlink()
+    destino.symlink_to(zonas[1] / "secreto.pcap")  # el enlace ahora apunta a otro archivo
+    assert analizar(c, destino).status_code == 403
+
+
+def test_los_permisos_estan_acotados():
+    grants = FileGrants()
+    for i in range(FileGrants.MAX + 10):
+        grants.grant(f"/tmp/a{i}.pcap")
+    assert not grants.allows(Path("/tmp/a0.pcap").resolve())  # los más viejos se olvidan
+    assert grants.allows(Path(f"/tmp/a{FileGrants.MAX + 9}.pcap").resolve())
+
+
+# ------------------------------------------------------------ listas de IOC: solo texto de listas
+@pytest.mark.parametrize("name", [".env", "id_rsa", "clave.pem", "notas.docx", "x.exe"])
+def test_iocs_rechaza_archivos_que_no_son_listas(client, zonas, name):
+    (zonas[0] / name).write_text("1.2.3.4\n", encoding="utf-8")
+    r = client.post("/api/iocs", json={"path": str(zonas[0] / name)})
+    assert r.status_code == 400 and "extensión" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("name", ["i.txt", "i.csv", "i.json", "i.stix", "i.ioc"])
+def test_iocs_acepta_las_extensiones_de_listas(client, zonas, name):
+    (zonas[0] / name).write_text("1.2.3.4\n", encoding="utf-8")
+    assert client.post("/api/iocs", json={"path": str(zonas[0] / name)}).status_code != 400

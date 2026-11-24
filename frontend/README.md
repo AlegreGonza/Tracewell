@@ -90,3 +90,17 @@ del backend solo permite `'self'`): se usa la pila del sistema.
 `renderWithProviders(ui, { capture })` y `renderHookWithProviders(hook, { capture })`. MSW (`test/server.ts`) responde
 todos los endpoints con datos de `samples/demo.pcap`; un pedido sin handler falla la prueba. Con `capture: true` el
 backend simulado ya tiene una captura cargada. Para un caso puntual: `server.use(http.get('/api/...', ...))`.
+
+## Código propio y código de la plantilla
+
+La licencia MIT de shadcn-admin (`LICENSE-shadcn-admin`) cubre lo que viene de la plantilla; el resto es de Tracewell.
+
+- **De la plantilla (adaptado):** `src/components/ui/`, `src/components/layout/`, `config-drawer`, `theme-switch`,
+  `search`, `command-menu`, `skip-to-main`, `navigation-progress`, `confirm-dialog`, `src/context/` (salvo
+  `capture-provider`), `src/hooks/use-dialog-state`, `use-mobile`, `use-table-url-state`, `src/lib/utils.ts`,
+  `src/lib/cookies.ts` y `src/styles/`.
+- **Propio de Tracewell:** `src/features/`, `src/lib/api/` (cliente y esquemas zod), `src/config/support-sections.ts`,
+  `src/context/capture-provider.tsx`, `src/components/` (`page`, `query-boundary`, `glossary`, `help-tip`,
+  `severity-badge`, `skeletons`, `empty-capture`), `src/lib/` (`format`, `help`, `severity`, `query-client`) y `src/test/`.
+- La lista sale de la estructura de la plantilla, no de una comparación línea por línea: si dudás de un archivo,
+  tratalo como de la plantilla y conservá el aviso de licencia.

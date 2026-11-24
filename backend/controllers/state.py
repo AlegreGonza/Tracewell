@@ -12,6 +12,7 @@ from typing import Annotated, Callable, Dict, Optional
 from fastapi import Depends, HTTPException, Request
 
 from backend.domain.analysis.analyzer import Analysis
+from backend.domain.files import FileGrants
 from backend.domain.rules.iocs import IocSet
 from backend.domain.pcap.live import LiveCapture, PacketSource
 from backend.domain.pcap.processes import ProcessSampler, ProcessTable
@@ -66,6 +67,7 @@ class Ctx:
     make_sampler: Optional[Callable[[], Optional[ProcessSampler]]] = None  # None: sin columna Proceso
     rules_dir: Optional[Path] = None  # carpeta de usuario donde el panel guarda las reglas nuevas
     allowed_dirs: tuple[Path, ...] = ()  # carpetas desde donde se abren archivos del usuario
+    grants: Optional[FileGrants] = None  # archivos elegidos en el diálogo nativo
 
 
 def get_ctx(request: Request) -> Ctx:

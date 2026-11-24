@@ -1,0 +1,24 @@
+id: host_sweep
+name: Barrido de red
+description: >
+  Una misma IP probó el mismo puerto en muchos equipos distintos sin que respondieran, patrón
+  típico de reconocimiento (buscar quién tiene abierto SMB, RDP, SSH...). En internet hay barridos
+  constantes: la alerta es una por origen y puerto, no una por destino.
+severity: medium
+detector: host_sweep
+mitre:
+  technique: T1046
+  name: Network Service Discovery
+  tactic: Discovery
+params:
+  min_hosts: 20        # destinos distintos sin respuesta para disparar
+  window_seconds: 60   # ventana de tiempo
+
+false_positives:
+  - Un escáner de inventario o de vulnerabilidades autorizado (Nessus, OpenVAS, nmap del equipo de TI).
+  - Herramientas de monitoreo que sondean muchos equipos a propósito (los que sí responden no cuentan).
+investigation_steps:
+  - Confirmar si el origen es un escáner autorizado (inventario, ticket de cambio).
+  - Revisar qué destinos respondieron después y con qué servicio.
+  - Si el origen es interno, buscarlo en otras alertas (fuerza bruta, subidas grandes) antes de contener.
+wireshark_filter: tcp.flags.syn==1 && tcp.flags.ack==0

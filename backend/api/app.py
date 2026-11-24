@@ -14,9 +14,10 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from backend.domain.analysis.analyzer import analyze
-from backend.domain.pcap.live import CaptureError, PacketSource, ScapySource
+from backend.domain.pcap.dumpcap import make_source
+from backend.domain.pcap.live import CaptureError, PacketSource
 from backend.domain.pcap.processes import ProcessSampler, make_default_sampler
-from backend.domain.files import resolve_allowed_dirs
+from backend.domain.files import FileGrants, resolve_allowed_dirs
 from backend.domain.rules.engine import load_all_rules
 from backend.domain.rules.paths import default_user_rules_dir
 from backend.domain.support.monitor import monitor
@@ -114,6 +115,7 @@ def create_app(
     api_token: Optional[str] = None,
     allowed_dirs: Optional[Sequence] = None,
     user_rules_dir=None,
+    grants: Optional[FileGrants] = None,
 ) -> FastAPI:
     """Fábrica de la app; toda ruta de la API exige token (si no se pasa, se genera uno al azar)."""
     # Falla al arrancar si una regla está mal, no a mitad de uso.
@@ -136,7 +138,7 @@ def create_app(
         rules=rules,
         samples_dir=Path(samples_dir),
         live_dir=Path(live_dir) if live_dir else None,
-        make_source=source_factory or (lambda iface: ScapySource(iface)),
+        make_source=source_factory or make_source,
         interface_lister=interface_lister,
         # Se resuelve al llamar (no al crear)
         analyze=lambda path, rls: analyze(path, rls),
@@ -144,6 +146,7 @@ def create_app(
         rules_dir=user_dir,
         allowed_dirs=resolve_allowed_dirs(
             allowed_dirs, extra=(Path(samples_dir), Path(live_dir) if live_dir else None)),
+        grants=grants if grants is not None else FileGrants(),
     )
     install_local_only(app, allowed_hosts)
     install_security_headers(app)  # al final: envuelve también los rechazos de Host/Origin

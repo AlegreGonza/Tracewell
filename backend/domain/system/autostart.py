@@ -35,6 +35,9 @@ def _windows_services() -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
     for s in safe(lambda: list(ps.win_service_iter()), []) or []:
         info = safe(s.as_dict, {}) or {}
+        info.setdefault("name", safe(s.name, None))  # as_dict falla en servicios protegidos
+        if not info["name"]:
+            continue
         binpath = info.get("binpath") or None
         rows.append({
             "name": info.get("name"), "display": info.get("display_name"), "status": info.get("status"),

@@ -111,6 +111,9 @@ class FakeService:
         self._info = info
         self.fail = info.pop("_fail", False)
 
+    def name(self):
+        return self._info.get("name")
+
     def as_dict(self):
         if self.fail:
             raise AccessDenied("service")

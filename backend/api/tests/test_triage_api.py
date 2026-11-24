@@ -250,7 +250,7 @@ def test_iocs_contenido_invalido_422_con_linea(client, tmp_path):
 
 def test_iocs_archivo_vacio_o_binario_422(client, tmp_path):
     assert client.post("/api/iocs", json={"path": str(ioc_file(tmp_path, "# nada\n"))}).status_code == 422
-    b = tmp_path / "b.bin"
+    b = tmp_path / "b.txt"
     b.write_bytes(b"\xff\xfe\x00\x80")
     assert client.post("/api/iocs", json={"path": str(b)}).status_code == 422
 

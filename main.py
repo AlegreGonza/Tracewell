@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Any, Dict, Optional, Sequence
 
-from backend.domain.files import resolve_allowed_dirs
+from backend.domain.files import FileGrants, resolve_allowed_dirs
 from backend.domain.pcap.live import cleanup_stale_temp_dirs
 from backend.domain.rules.engine import RuleError
 from backend.api.security import MIN_TOKEN_LENGTH
@@ -23,14 +23,16 @@ WINDOW_SIZE = (1280, 800)
 MIN_SIZE = (900, 600)
 FILE_TYPES = ("Capturas de red (*.pcap;*.pcapng)", "Todos los archivos (*.*)")
 LOAD_TIMEOUT = 20  # segundos que esperamos a que la ventana cargue la interfaz
+_GRANTS: Optional[FileGrants] = None  # los fija main(): la API y la ventana comparten los permisos
 
 
 class DesktopApi:
     """Métodos que la interfaz puede llamar desde JavaScript (`window.pywebview.api`)."""
 
-    def __init__(self, token: Optional[str] = None) -> None:
+    def __init__(self, token: Optional[str] = None, grants: Optional[FileGrants] = None) -> None:
         self._window: Any = None  # con "_": pywebview no expone atributos privados a la web
         self._token = token
+        self._grants = grants  # solo este lado (Python) puede autorizar archivos, la página no
 
     def get_token(self) -> Optional[str]:
         """Token de la API de este arranque: solo la ventana de Tracewell lo puede pedir."""
@@ -47,7 +49,11 @@ class DesktopApi:
         chosen = self._window.create_file_dialog(
             webview.FileDialog.OPEN, directory=_start_dir(), allow_multiple=False, file_types=FILE_TYPES
         )
-        return chosen[0] if chosen else None
+        if not chosen:
+            return None
+        if self._grants is not None:
+            self._grants.grant(chosen[0])  # mínimo privilegio: se autoriza ese archivo, no su carpeta
+        return chosen[0]
 
 
 def _start_dir() -> str:
@@ -158,7 +164,7 @@ def _open_window(
     import webview
 
     result: Dict[str, Any] = {"ok": False}
-    window = _create_window(url, DesktopApi(token), hidden)
+    window = _create_window(url, DesktopApi(token, _GRANTS), hidden)
     if self_test:
         webview.start(_self_test, (window, result))
     else:
@@ -196,7 +202,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"No se pudo iniciar la API: {exc}", file=sys.stderr)
         return 1
     try:
-        handle = start_in_thread(port=args.port, api_token=token)
+        global _GRANTS
+        _GRANTS = FileGrants()
+        handle = start_in_thread(port=args.port, api_token=token, grants=_GRANTS)
     except (ServerStartError, OSError, RuleError) as exc:  # RuleError: una regla YAML mal escrita
         print(f"No se pudo iniciar la API: {exc}", file=sys.stderr)
         return 1

@@ -41,7 +41,7 @@ def test_las_tacticas_canonicas_y_su_orden():
 
 def test_todas_las_reglas_incluidas_llevan_tactica_y_tecnica_validas():
     rules = load_rules(ROOT / "rules")
-    assert len(rules) == 16
+    assert len(rules) == 17
     for r in rules:
         assert r.mitre_tactic in MITRE_TACTICS, r.id
         assert TECHNIQUE.match(r.mitre_technique), r.id
