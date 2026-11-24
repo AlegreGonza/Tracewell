@@ -1,5 +1,6 @@
 """Tests de dumpcap.py con un dumpcap simulado (sin procesos ni permisos reales)."""
 import io
+import os
 import struct
 
 import pytest
@@ -7,6 +8,9 @@ import pytest
 from backend.domain.pcap import dumpcap
 from backend.domain.pcap.dumpcap import DUMPCAP_HELP, DumpcapSource, check_filter, find_dumpcap, make_source, parse_global_header
 from backend.domain.pcap.live import CaptureError, PermissionDenied, ScapySource
+
+# Ruta absoluta en cualquier SO (en Windows '/x' no lo es)
+EXE = os.path.abspath("/x/dumpcap")
 
 
 def header(linktype=1, magic=0xA1B2C3D4, order="<"):
@@ -52,11 +56,11 @@ def popen(monkeypatch):
 def test_entrega_los_paquetes_con_su_tiempo(popen):
     calls = popen(FakeProc(header() + record(b"abc") + record(b"de", sec=11, frac=0)))
     got = []
-    src = DumpcapSource("eth0", "tcp", dumpcap="/x/dumpcap")
+    src = DumpcapSource("eth0", "tcp", dumpcap=EXE)
     src.start(lambda ts, data: got.append((ts, data)))
     src._thread.join(2)
     assert got == [(10.5, b"abc"), (11.0, b"de")]
-    assert calls["cmd"] == ["/x/dumpcap", "-i", "eth0", "-P", "-q", "-w", "-", "-f", "tcp"]
+    assert calls["cmd"] == [EXE, "-i", "eth0", "-P", "-q", "-w", "-", "-f", "tcp"]
     src.stop()
 
 
@@ -78,7 +82,7 @@ def test_cabecera_invalida_o_no_ethernet(head):
 def test_salida_inmediata_por_permiso_es_permission_denied(popen, msg):
     popen(FakeProc(stderr=msg, exit_code=1))
     with pytest.raises(PermissionDenied) as ei:
-        DumpcapSource("eth0").start(lambda *a: None)
+        DumpcapSource("eth0", dumpcap=EXE).start(lambda *a: None)
     assert str(ei.value) == DUMPCAP_HELP
 
 
@@ -86,7 +90,7 @@ def test_salida_con_error_antes_de_la_cabecera_se_informa_en_stop(popen):
     proc = FakeProc(stderr=b"dumpcap: algo fallo")
     proc.wait = lambda timeout=None: setattr(proc, "code", 1)
     popen(proc)
-    src = DumpcapSource("eth0")
+    src = DumpcapSource("eth0", dumpcap=EXE)
     src.start(lambda *a: None)
     src._thread.join(2)
     with pytest.raises(CaptureError, match="algo fallo"):
@@ -96,12 +100,12 @@ def test_salida_con_error_antes_de_la_cabecera_se_informa_en_stop(popen):
 def test_salida_inmediata_otro_error_muestra_el_mensaje(popen):
     popen(FakeProc(stderr=b"dumpcap: There is no device named nope", exit_code=1))
     with pytest.raises(CaptureError, match="no device named nope"):
-        DumpcapSource("nope").start(lambda *a: None)
+        DumpcapSource("nope", dumpcap=EXE).start(lambda *a: None)
 
 
 def test_flujo_corrupto_se_informa_en_stop(popen):
     popen(FakeProc(header() + struct.pack("<IIII", 1, 0, 10_000_000, 10_000_000)))
-    src = DumpcapSource("eth0")
+    src = DumpcapSource("eth0", dumpcap=EXE)
     src.start(lambda *a: None)
     src._thread.join(2)
     with pytest.raises(CaptureError, match="corrupto"):
@@ -115,7 +119,7 @@ def test_interfaz_invalida_no_llega_a_la_linea_de_comandos(name):
 
 
 def test_make_source_elige_segun_find_dumpcap(monkeypatch):
-    monkeypatch.setattr(dumpcap, "find_dumpcap", lambda: "/usr/bin/dumpcap")
+    monkeypatch.setattr(dumpcap, "find_dumpcap", lambda: EXE)
     assert isinstance(make_source("eth0"), DumpcapSource)
     monkeypatch.setattr(dumpcap, "find_dumpcap", lambda: None)
     assert isinstance(make_source("eth0"), ScapySource)
