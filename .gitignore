@@ -36,3 +36,5 @@ validacion/corpus/
 # Cachés de herramientas de revisión
 .mypy_cache/
 .ruff_cache/
+
+CHANGELOG.md
