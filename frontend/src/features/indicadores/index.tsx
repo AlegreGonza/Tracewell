@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Loader2, Trash2, Upload } from 'lucide-react'
+import { FolderOpen, Loader2, Trash2, Upload } from 'lucide-react'
+import { toast } from 'sonner'
 import { errorMessage } from '@/lib/api/errors'
 import { useClearIocs, useLoadIocs } from '@/lib/api/mutations'
 import { useIocs } from '@/lib/api/queries'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Page } from '@/components/page'
+import { useNativePicker } from '@/hooks/use-native-picker'
 import { QueryBoundary } from '@/components/query-boundary'
 import { CardSkeleton } from '@/components/skeletons'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -33,6 +35,20 @@ export function Indicadores() {
   const clear = useClearIocs()
   const [path, setPath] = useState('')
   const [confirming, setConfirming] = useState(false)
+  const pickFile = useNativePicker()
+
+  async function browse() {
+    if (!pickFile) return
+    try {
+      const picked = await pickFile()
+      if (typeof picked === 'string' && picked) {
+        setPath(picked)
+        load.mutate(picked, { onSuccess: () => setPath('') })
+      }
+    } catch (e) {
+      toast.error(errorMessage(e) || 'No se pudo abrir el selector de archivos.')
+    }
+  }
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,8 +67,9 @@ export function Indicadores() {
           <CardHeader>
             <CardTitle>Cargar una lista</CardTitle>
             <CardDescription>
-              Escribí la ruta de un archivo que esté en una carpeta permitida
-              (Descargas, Documentos o Escritorio). Formatos aceptados:
+              Elegí el archivo con «Examinar…» (se autoriza solo ese archivo) o
+              escribí su ruta si está en Descargas. Extensiones: .txt, .csv,
+              .json, .stix o .ioc. Formatos aceptados:
             </CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
@@ -85,6 +102,16 @@ export function Indicadores() {
                 )}
                 Cargar lista
               </Button>
+              {pickFile && (
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={() => void browse()}
+                  disabled={load.isPending}
+                >
+                  <FolderOpen aria-hidden /> Examinar…
+                </Button>
+              )}
             </form>
             {load.isError && (
               <Alert variant='destructive' role='alert'>

@@ -546,3 +546,25 @@ def test_main_si_la_limpieza_lanza_se_propaga_y_no_arranca(monkeypatch):
     with pytest.raises(RuntimeError):
         main.main(["--serve-only"])
     assert arranco == []
+
+
+def test_pick_file_autoriza_solo_el_archivo_elegido(monkeypatch, tmp_path):
+    from backend.domain.files import FileGrants
+    elegido = tmp_path / "a.pcap"
+    elegido.write_bytes(b"x")
+    grants = FileGrants()
+    fake_webview(monkeypatch)
+    api = main.DesktopApi(grants=grants)
+    api._bind(FakeWindow(dialog=(str(elegido),)))
+    assert api.pick_file() == str(elegido)
+    assert grants.allows(elegido.resolve())
+    assert not grants.allows((tmp_path / "otro.pcap").resolve())  # ni su carpeta ni otros archivos
+
+
+def test_pick_file_cancelado_no_autoriza_nada(monkeypatch):
+    from backend.domain.files import FileGrants
+    grants = FileGrants()
+    fake_webview(monkeypatch)
+    api = main.DesktopApi(grants=grants)
+    api._bind(FakeWindow(dialog=None))
+    assert api.pick_file() is None and not grants._items

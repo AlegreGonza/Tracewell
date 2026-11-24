@@ -28,7 +28,7 @@ web (ventana pywebview o navegador). No es un servicio de red ni está pensado p
 | Una página web abierta en tu navegador llama a la API (CSRF, DNS rebinding) | Se aceptan solo `Host` locales (`127.0.0.1`, `localhost`, `[::1]`) y se rechaza todo `Origin` no local (403). Los sondeos que envían tráfico son `POST` para que un `GET` cruzado no los dispare. |
 | Otro programa o usuario del mismo equipo llama a la API (importa si corre con privilegios) | **Token aleatorio por arranque** en cada ruta `/api` (cabecera `X-Tracewell-Token`, comparación en tiempo constante; nunca en la URL). No hay modo sin autenticación. Las descargas usan tickets de un solo uso y 30 s. |
 | Inyección de script desde una captura | El contenido del tráfico se muestra como texto, nunca como HTML. CSP estricta (`default-src 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`. `/docs` y `/openapi.json` están apagados. |
-| Leer archivos arbitrarios con la API | `/api/analyze` e `/api/iocs` solo abren archivos regulares dentro de una **lista de carpetas permitidas** (`TRACEWELL_ALLOWED_DIRS`; por defecto Descargas, Documentos y Escritorio) y rechazan dispositivos y rutas que no son archivos. Los mensajes de error no repiten el contenido del archivo. |
+| Leer archivos arbitrarios con la API | `/api/analyze` e `/api/iocs` solo abren archivos regulares y siguen el **mínimo privilegio**: por defecto solo la carpeta Descargas (no Documentos ni Escritorio enteros), más cualquier archivo que el usuario elija en el diálogo nativo (se autoriza ese archivo, no su carpeta, y la página web no puede otorgar permisos). Además exigen extensión: `.pcap`, `.pcapng` o `.cap` para capturas y `.txt`, `.csv`, `.json`, `.stix` o `.ioc` para listas de IOC, así que no leen `.env`, claves ni documentos. Rechazan dispositivos y rutas que no son archivos; se resuelven `..` y enlaces simbólicos (un enlace cambiado después de elegir el archivo deja de valer). Los mensajes de error no repiten el contenido del archivo. |
 | Agotar memoria o disco con una captura o un ataque | Topes de sesiones seguidas, estado acotado en los detectores, tamaños máximos de lectura y límites en la captura en vivo (paquetes, tiempo, tamaño). Costo asumido: con muy pocos recursos un detector puede "olvidar" a los pares menos recientes. |
 | Secretos en informes | No se guardan contraseñas FTP; los informes llevan el nombre del archivo, no las carpetas. |
 | Dependencias alteradas | `requirements.lock` y `requirements-dev.lock` fijan versiones exactas **con hashes sha256** (`pip install --require-hashes`); el CI corre `pip-audit` y `bandit` y publica un **SBOM CycloneDX**. |
@@ -57,8 +57,10 @@ web (ventana pywebview o navegador). No es un servicio de red ni está pensado p
 - **La captura en vivo requiere privilegios** (administrador/root, Npcap o libpcap). Mientras corre, Tracewell
   y sus dependencias (Scapy) trabajan con esos privilegios: úsala solo en redes que estés autorizado a
   monitorear y evitá correr el resto de la interfaz como administrador cuando no haga falta.
-- **La lista de carpetas permitidas es una barrera de configuración, no un sandbox.** Si la ampliás con una
-  carpeta sensible, la API podrá leerla.
+- **La lista de carpetas permitidas es una barrera de configuración, no un sandbox.** Por defecto es solo
+  Descargas; si la ampliás con `TRACEWELL_ALLOWED_DIRS` y una carpeta sensible, la API podrá leer ahí cualquier
+  archivo con una extensión admitida. En el modo navegador (`--serve-only`) no hay diálogo nativo: solo vale Descargas
+  o lo que agregues a esa variable.
 - **No hay firma criptográfica de los lanzamientos** (ver abajo): el SHA-256 detecta corrupción y cambios si lo
   obtenés por un canal distinto del archivo, pero no prueba quién lo publicó.
 - **Las reglas de detección son orientativas.** Que no haya alertas no significa que no haya actividad

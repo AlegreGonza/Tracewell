@@ -28,19 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Page } from '@/components/page'
-
-const findPicker = () => window.pywebview?.api?.pick_file ?? null
-
-// Dentro de la ventana de escritorio pywebview expone un diálogo nativo para elegir archivo
-function useNativePicker() {
-  const [picker, setPicker] = useState(findPicker)
-  useEffect(() => {
-    const sync = () => setPicker(() => findPicker()) // () => f: guardar la función, no llamarla
-    window.addEventListener('pywebviewready', sync)
-    return () => window.removeEventListener('pywebviewready', sync)
-  }, [])
-  return picker
-}
+import { useNativePicker } from '@/hooks/use-native-picker'
 
 const STOP_REASON: Record<string, string> = {
   duration: 'se alcanzó el tiempo máximo',
@@ -95,8 +83,8 @@ function FileCard() {
       <CardHeader>
         <CardTitle>Archivo de captura</CardTitle>
         <CardDescription>
-          Un .pcap o .pcapng guardado en Descargas, Documentos, Escritorio o
-          samples.
+          Un .pcap o .pcapng. Con «Examinar…» se autoriza solo el archivo que
+          elijas; si escribís la ruta, tiene que estar en Descargas.
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-3'>
