@@ -15,3 +15,6 @@ params:
   min_events: 8
   min_interval_seconds: 5
   max_jitter: 0.15
+  # Si más de N pares (origen, destino) tienen el mismo ritmo en un mismo puerto, es un protocolo
+  # (latidos de un juego, VPN o keepalive) y no un beacon. 0 = apagado.
+  max_pairs_per_port: 3

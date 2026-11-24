@@ -72,3 +72,16 @@ def test_invalid_values_raise_ruleerror(tmp_path, bad):
 def test_normalized_on_load(tmp_path):
     f = write_rule(tmp_path, base("dns_suspicious", params={"ignore_suffixes": [".Foo.COM.", "bar.org"]}))
     assert load_rules(f)[0].params["ignore_suffixes"] == ["foo.com", "bar.org"]
+
+
+AD_SRV = "_ldap._tcp.05b5292b-34b8-4fb7-85a3-8beef5fd2069.domains._msdcs.utelsystems.local"
+
+
+def test_consulta_srv_de_active_directory_no_alerta(mk):
+    # Falso positivo medido con dns.cap (SampleCaptures de Wireshark): GUID de 36 caracteres en una consulta SRV
+    assert alerts(mk, [], AD_SRV) == []
+    assert alerts(mk, [], "_kerberos._udp." + LONG + ".corp.local") == []
+
+
+def test_srv_no_exime_un_nombre_normal_con_guion_bajo(mk):
+    assert len(alerts(mk, [], "_" + LONG + ".example.com")) == 1

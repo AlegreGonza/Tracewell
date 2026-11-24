@@ -248,6 +248,7 @@ Reglas incluidas (`rules/`):
 | `large_upload` | T1048 Exfiltration Over Alternative Protocol | Exfiltration |
 | `beaconing` | T1071 Application Layer Protocol | Command and Control |
 | `suspicious_ports` | T1571 Non-Standard Port | Command and Control |
+| `host_sweep` | T1046 Network Service Discovery | Discovery |
 | `dns_suspicious` | T1071.004 Application Layer Protocol: DNS | Command and Control |
 | `dns_unusual_resolver` | T1071.004 Application Layer Protocol: DNS | Command and Control |
 | `dga_nxdomain` | T1568.002 Dynamic Resolution: Domain Generation Algorithms | Command and Control |

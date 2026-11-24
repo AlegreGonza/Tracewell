@@ -13,3 +13,5 @@ mitre:
 params:
   min_syns: 200
   window_seconds: 10
+  # Ritmo mínimo en SYN por segundo: 200 SYN repartidos en 6 s desde un origen no son una inundación.
+  min_pps: 50

@@ -174,6 +174,38 @@ pcaps:
   - regla: ftp_cleartext
     origen: 10.0.0.66
     destino: 10.0.0.5
+- id: pos_barrido_vnc
+  ruta: corpus/pos_barrido_vnc.pcap
+  descripcion: una IP prueba el puerto 5900 en 30 equipos sin respuesta
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: host_sweep
+    origen: 203.0.113.50
+- id: pos_barrido_4444
+  ruta: corpus/pos_barrido_4444.pcap
+  descripcion: un escáner de internet prueba el 4444 en 40 equipos
+  etiquetas:
+  - positivo
+  esperadas:
+  - regla: host_sweep
+    origen: 45.155.205.7
+  - regla: suspicious_ports
+    origen: 45.155.205.7
+- id: ben_muchos_sitios
+  ruta: corpus/ben_muchos_sitios.pcap
+  descripcion: navegar a 30 sitios públicos distintos (todos responden)
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
+- id: ben_latidos_protocolo
+  ruta: corpus/ben_latidos_protocolo.pcap
+  descripcion: 8 pares con latidos UDP/20001 cada 5 s (protocolo)
+  etiquetas:
+  - benigno
+  - dificil
+  esperadas: ninguna
 - id: ben_navegacion
   ruta: corpus/ben_navegacion.pcap
   descripcion: 'navegación normal: DNS local y 40 conexiones HTTPS irregulares'

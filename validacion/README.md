@@ -12,6 +12,7 @@ No modifica código de producción.
 | `generar_corpus.py` | Genera el corpus **sintético** (pcaps + `manifiesto_sintetico.yaml`) con semilla fija. |
 | `manifiesto_sintetico.yaml` | Verdad terreno del corpus sintético (lo escribe el generador). |
 | `resultados.md` | Último resultado sobre el corpus sintético, marcado como tal. |
+| `volumen.py` | CLI para un pcap SIN etiquetas (por ejemplo MAWI): alertas por minuto, por regla y por origen. Sirve como guardia de ruido: `python validacion\volumen.py captura.pcap`. |
 | `tests/` | Tests del arnés (`python -m pytest -q -p no:cacheprovider validacion`). |
 | `corpus/` | Pcaps generados (~30 MB, ignorados por git: se regeneran). |
 

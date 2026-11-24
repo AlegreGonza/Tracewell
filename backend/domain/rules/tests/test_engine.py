@@ -114,7 +114,7 @@ def test_load_real_rules():
     assert set(rules) == {
         "port_scan", "ftp_cleartext", "dns_suspicious", "beaconing", "syn_flood", "suspicious_ports",
         "dns_unusual_resolver", "large_upload", "brute_force_remote", "dga_nxdomain", "malicious_ja4",
-        "tls_certificate", "user_agent_scanner", "user_agent_script", "smb_rpc_lateral", "icmp_tunnel",
+        "tls_certificate", "user_agent_scanner", "user_agent_script", "smb_rpc_lateral", "icmp_tunnel", "host_sweep",
     }
     ps, ftp, dns = rules["port_scan"], rules["ftp_cleartext"], rules["dns_suspicious"]
     assert (ps.severity, ps.mitre_technique, ps.mitre_tactic) == ("high", "T1046", "Discovery")

@@ -100,3 +100,14 @@ def test_manifiesto_valido(tmp_path):
 def test_manifiesto_invalido(tmp_path, texto):
     with pytest.raises(ManifiestoError):
         cargar_manifiesto(_manifiesto(tmp_path, texto), ["port_scan"])
+
+
+def test_volumen_alertas_por_minuto_y_por_regla():
+    from types import SimpleNamespace as N
+    from validacion.volumen import medir, texto
+    alertas = [N(rule_id="a", src_ip="1.1.1.1"), N(rule_id="a", src_ip="1.1.1.2"), N(rule_id="b", src_ip="1.1.1.1")]
+    m = medir(alertas, 30.0)
+    assert m["alertas"] == 3 and m["por_minuto"] == 6.0 and m["origenes"] == 2
+    assert m["reglas"]["a"] == {"alertas": 2, "por_minuto": 4.0, "origenes": 2}
+    assert "| `a` | 2 | 4.0 | 2 |" in texto(m)
+    assert medir([], 0.0)["por_minuto"] == 0.0

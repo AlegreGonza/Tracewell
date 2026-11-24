@@ -11,7 +11,7 @@ mitre:
   tactic: Discovery
 params:
   min_ports: 15        # puertos distintos para disparar
-  window_seconds: 60   # ventana de tiempo
+  window_seconds: 60   # ventana de tiempo; solo cuentan puertos que no respondieron SYN+ACK
   # Escaneo lento: segunda ventana larga con su propio umbral (0 = apagada). Solo cuenta
   # puertos que no respondieron SYN+ACK: un cliente que usa muchos servicios no suma.
   long_window_seconds: 900

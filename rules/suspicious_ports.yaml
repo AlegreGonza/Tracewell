@@ -11,4 +11,8 @@ mitre:
   name: "Non-Standard Port"
   tactic: Command and Control
 params:
-  ports: [4444, 31337, 1337, 12345, 54321, 9001]
+  # 9001 se quitó: lo usan Tor y servicios internos legítimos (era la cuarta parte del ruido medido).
+  ports: [4444, 31337, 1337, 12345, 54321]
+  # Un origen público que prueba el puerto en N destinos distintos da UNA alerta (barrido de internet);
+  # un origen interno alerta al primer intento. 1 = alertar siempre al primer intento.
+  min_hosts: 3
